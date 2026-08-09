@@ -8,7 +8,11 @@ let pvpState = {
     isPlayer1: null,
     mySkills: [],
     myCharacterName: "",
-    finished: false
+    finished: false,
+    myUsedSkillIds: [],
+    oppUsedSkillIds: [],
+    skillCache: {}, // skill_id -> سجل المهارة الكامل (اسم/نوع/effect...)
+    stealMenuOpen: false
 };
 
 function pvpGetToken(){
@@ -36,6 +40,9 @@ async function startPVPBattle(){
 
     openScreen("pvp-battle-screen");
     pvpState.finished = false;
+    pvpState.myUsedSkillIds = [];
+    pvpState.oppUsedSkillIds = [];
+    pvpCloseStealMenu();
 
     let arena = document.querySelector("#pvp-battle-screen .battle-arena");
     if(arena) arena.style.opacity = "0.3";
@@ -66,6 +73,10 @@ async function startPVPBattle(){
 
     pvpState.myCharacterName = pc.characters ? pc.characters.name : "";
     pvpState.mySkills = await loadCharacterSkills(pc.character_id);
+
+    // نخزّن مهارات شخصيتنا في كاش المهارات كذلك حتى نعرض أسماءها فورًا
+    // في شريط "مهارات استُخدمت" دون أي طلب شبكة إضافي
+    pvpState.mySkills.forEach(s => { pvpState.skillCache[s.id] = s; });
 
     let { data, error } =
     await supabaseClient
@@ -137,17 +148,22 @@ async function pvpRefreshState(isFirstLoad){
     if(error || !data) return;
 
     let myHp, oppHp, myMaxHp, oppMaxHp, myName, oppName, myImage, oppImage;
+    let myUsedIds, oppUsedIds;
 
     if(pvpState.isPlayer1){
         myHp = data.player1_hp; oppHp = data.player2_hp;
         myMaxHp = data.player1_max_hp; oppMaxHp = data.player2_max_hp;
         myName = data.player1_char_name; oppName = data.player2_char_name;
         myImage = data.player1_char_image; oppImage = data.player2_char_image;
+        myUsedIds = data.player1_used_skill_ids || [];
+        oppUsedIds = data.player2_used_skill_ids || [];
     } else {
         myHp = data.player2_hp; oppHp = data.player1_hp;
         myMaxHp = data.player2_max_hp; oppMaxHp = data.player1_max_hp;
         myName = data.player2_char_name; oppName = data.player1_char_name;
         myImage = data.player2_char_image; oppImage = data.player1_char_image;
+        myUsedIds = data.player2_used_skill_ids || [];
+        oppUsedIds = data.player1_used_skill_ids || [];
     }
 
     setFighterImage(document.getElementById("pvp-player-image"), myImage);
@@ -159,8 +175,18 @@ async function pvpRefreshState(isFirstLoad){
     updateHpDisplay("pvp-player", myHp, myMaxHp);
     updateHpDisplay("pvp-enemy", oppHp, oppMaxHp);
 
+    pvpState.myUsedSkillIds = myUsedIds;
+    pvpState.oppUsedSkillIds = oppUsedIds;
+    await pvpEnsureSkillsCached([...myUsedIds, ...oppUsedIds]);
+    pvpRenderUsedSkillsUI();
+
     let myTurn = (data.turn_player_id === (pvpState.isPlayer1 ? data.player1_id : data.player2_id));
     pvpSetSkillsEnabled(myTurn && data.status === "active");
+
+    // إن لم يعد دورنا (أو انتهت المباراة)، أي قائمة سرقة/نسخ مفتوحة لم تعد صالحة
+    if(!(myTurn && data.status === "active")){
+        pvpCloseStealMenu();
+    }
 
     let statusBox = document.getElementById("pvp-status-message");
     if(statusBox){
@@ -173,6 +199,7 @@ async function pvpRefreshState(isFirstLoad){
     if(data.status === "finished"){
         pvpState.finished = true;
         pvpStopPolling();
+        pvpCloseStealMenu();
         let iWon = data.winner_id === (pvpState.isPlayer1 ? data.player1_id : data.player2_id);
         pvpShowResult(iWon);
     }
@@ -193,7 +220,7 @@ function updateHpDisplay(prefix, hp, maxHp){
 }
 
 // ========================================
-// عرض أزرار المهارات (نسخة مبسطة بدون سرقة/نسخ)
+// عرض أزرار المهارات (تشمل الآن السرقة/النسخ)
 // ========================================
 function renderPVPSkillButtons(){
 
@@ -202,7 +229,7 @@ function renderPVPSkillButtons(){
 
     container.innerHTML = "";
 
-    let usable = pvpState.mySkills.filter(s => s.effect !== "steal" && s.effect !== "copy");
+    let usable = pvpState.mySkills;
 
     if(usable.length === 0){
         usable = [{id:"default_atk", name:"هجوم عادي", type:"attack", damage:100, cooldown:0, effect:null}];
@@ -215,7 +242,14 @@ function renderPVPSkillButtons(){
         let btn = document.createElement("button");
         btn.textContent = skill.name;
         btn.dataset.skillId = skill.id;
-        btn.onclick = () => pvpUseSkill(skill.id);
+
+        if(skill.effect === "steal" || skill.effect === "copy"){
+            btn.textContent = skill.name + (skill.effect === "steal" ? " 🕵️" : " 📋");
+            btn.onclick = () => pvpOpenStealMenu(skill);
+        } else {
+            btn.onclick = () => pvpUseSkill(skill.id);
+        }
+
         page.appendChild(btn);
     });
 
@@ -229,7 +263,7 @@ function pvpSetSkillsEnabled(enabled){
 }
 
 // ========================================
-// استخدام مهارة — كل الحساب الفعلي بيحصل في الدالة على السيرفر
+// استخدام مهارة عادية — كل الحساب الفعلي بيحصل في الدالة على السيرفر
 // ========================================
 async function pvpUseSkill(skillId){
 
@@ -241,6 +275,134 @@ async function pvpUseSkill(skillId){
         p_token: pvpGetToken(),
         p_match_id: pvpState.matchId,
         p_skill_id: skillId
+    })
+    .single();
+
+    if(error){
+        alert(error.message || "تعذر تنفيذ الحركة");
+        pvpRefreshState(false);
+        return;
+    }
+
+    pvpRefreshState(false);
+}
+
+// ========================================
+// جلب بيانات المهارات (الاسم/effect) للمهارات التي لم تُخزَّن بعد،
+// حتى نعرض أسماءها في شريط "مهارات استُخدمت" وفي قائمة السرقة/النسخ.
+// بيانات المهارات عامة وللقراءة فقط (نفس مبدأ GameCache)، لذا آمن طلبها.
+// ========================================
+async function pvpEnsureSkillsCached(ids){
+
+    let missing = [...new Set(ids)].filter(id => id && !pvpState.skillCache[id]);
+    if(missing.length === 0) return;
+
+    let { data, error } =
+    await supabaseClient
+    .from("skills")
+    .select("*")
+    .in("id", missing);
+
+    if(error || !data) return;
+
+    data.forEach(s => { pvpState.skillCache[s.id] = s; });
+}
+
+function pvpRenderUsedSkillsUI(){
+
+    let renderInto = (containerId, ids) => {
+        let box = document.getElementById(containerId);
+        if(!box) return;
+
+        box.innerHTML = "";
+
+        ids.forEach(id => {
+            let s = pvpState.skillCache[id];
+            if(!s) return;
+
+            let chip = document.createElement("span");
+            chip.className = "used-skill-chip";
+            chip.textContent = s.name;
+            box.appendChild(chip);
+        });
+    };
+
+    renderInto("pvp-player-used-skills", pvpState.myUsedSkillIds);
+    renderInto("pvp-enemy-used-skills", pvpState.oppUsedSkillIds);
+}
+
+// ========================================
+// قائمة السرقة/النسخ: نعرض فقط المهارات التي استخدمها الخصم بالفعل
+// في هذه المباراة (نفس ما تتحقق منه دالة السيرفر pvp_steal_or_copy_skill)
+// ========================================
+function pvpOpenStealMenu(abilitySkill){
+
+    pvpCloseStealMenu();
+
+    let candidates = pvpState.oppUsedSkillIds
+    .map(id => pvpState.skillCache[id])
+    .filter(s => s && s.effect !== "steal" && s.effect !== "copy");
+
+    if(candidates.length === 0){
+        alert("لم يستخدم الخصم أي مهارة قابلة للسرقة/النسخ بعد في هذه المباراة");
+        return;
+    }
+
+    pvpState.stealMenuOpen = true;
+
+    let verb = abilitySkill.effect === "steal" ? "سرقة" : "نسخ";
+
+    let modal = document.createElement("div");
+    modal.id = "pvp-steal-modal";
+    modal.className = "steal-modal";
+    modal.innerHTML = `
+        <div class="steal-modal-box">
+            <h3>${abilitySkill.effect === "steal" ? "🕵️" : "📋"} اختر مهارة الخصم لتُ${verb === "سرقة" ? "سرق" : "نسخ"}ها</h3>
+            <div class="steal-options-list" id="pvp-steal-options-list"></div>
+            <div class="steal-modal-buttons">
+                <button id="pvp-steal-cancel-btn">إلغاء</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    let list = modal.querySelector("#pvp-steal-options-list");
+    candidates.forEach(skill => {
+        let btn = document.createElement("button");
+        btn.className = "steal-option";
+        btn.textContent = skill.name;
+        btn.onclick = () => {
+            pvpCloseStealMenu();
+            pvpUseStealOrCopy(abilitySkill.id, skill.id);
+        };
+        list.appendChild(btn);
+    });
+
+    modal.querySelector("#pvp-steal-cancel-btn").onclick = pvpCloseStealMenu;
+}
+
+function pvpCloseStealMenu(){
+    pvpState.stealMenuOpen = false;
+    let modal = document.getElementById("pvp-steal-modal");
+    if(modal) modal.remove();
+}
+
+// ========================================
+// تنفيذ السرقة/النسخ — كل الحساب الفعلي (هل المهارة مملوكة، هل الدور
+// دورنا، هل الخصم استخدم فعلًا هذه المهارة، الضرر...) يحصل على السيرفر
+// ========================================
+async function pvpUseStealOrCopy(abilitySkillId, targetSkillId){
+
+    pvpSetSkillsEnabled(false);
+
+    let { data, error } =
+    await supabaseClient
+    .rpc("pvp_steal_or_copy_skill", {
+        p_token: pvpGetToken(),
+        p_match_id: pvpState.matchId,
+        p_ability_skill_id: abilitySkillId,
+        p_target_skill_id: targetSkillId
     })
     .single();
 
@@ -267,6 +429,7 @@ async function pvpLeaveMatch(){
         }catch(e){}
     }
 
+    pvpCloseStealMenu();
     pvpStopPolling();
     pvpState.matchId = null;
     pvpState.finished = false;
@@ -284,7 +447,8 @@ function pvpShowResult(iWon){
 
     setTimeout(() => {
         alert(iWon ? "فزت في المعركة! 🏆" : "خسرت هذه المرة 💔");
-        openScreen("pvp-screen");
+        // نعود لشاشة اختيار نوع المواجهة (PvE/PvP)، وليس شاشة "PvP" القديمة
+        // في الشاشة الرئيسية والتي أصبحت غير مستخدمة
+        openScreen("solo-battle-screen");
     }, 500);
 }
-
