@@ -694,16 +694,11 @@ async function login(){
         user.player_id
     );
 
-    // نُنشئ رمز جلسة آمن للاعب عبر RPC ونخزنه محليًا؛ هذا الرمز هو ما
-    // يُستخدم الآن لإثبات هويتك عند أي إجراء يغيّر بياناتك (اختيار شخصية،
-    // ترقية...)، بدل الاعتماد على player_id وحده الذي كان بإمكان أي شخص
-    // إرساله يدويًا لانتحال أي حساب آخر.
-    let {data:sessionToken, error:sessionError} =
-    await supabaseClient
-    .rpc("create_player_session", { p_player_id: user.player_id });
-
-    if(!sessionError && sessionToken){
-        localStorage.setItem("player_token", sessionToken);
+    // رمز الجلسة الآن يُعاد مباشرة ضمن login_user_and_get_player نفسها
+    // (بعد أن أثبتت هويتك عبر كلمة المرور)، بدل نداء منفصل كان بإمكان أي
+    // شخص يملك anon key استدعاءه بأي player_id لانتحال أي حساب آخر.
+    if(user.player_token){
+        localStorage.setItem("player_token", user.player_token);
     }
 
 
@@ -2420,15 +2415,11 @@ async function playAdminCharacter(characterId){
 
     localStorage.setItem("player_id", data.player_id);
 
-    // نفس ما يحصل عند تسجيل دخول لاعب عادي: باقي الشاشات (شخصيتي، مجموعتي،
-    // PvE...) كلها تعتمد على "player_token" (رمز جلسة) وليس على player_id
-    // مباشرة. كانت هذه الخطوة ناقصة هنا، فتبقى الشاشات تقول "لا توجد شخصية
-    // نشطة" رغم نجاح admin_play_character فعليًا.
-    let {data:sessionToken, error:sessionError} =
-    await supabaseClient
-    .rpc("create_player_session", { p_player_id: data.player_id });
-
-    if(sessionError || !sessionToken){
+    // رمز الجلسة الآن يُعاد مباشرة ضمن admin_play_character نفسها (بعد أن
+    // أثبتت هويتك عبر admin_token)، بدل نداء منفصل إلى create_player_session
+    // كان بإمكان أي شخص يملك anon key استدعاءه بأي player_id لانتحال أي
+    // حساب آخر — بما فيها حسابات اللاعبين العاديين.
+    if(!data.player_token){
 
         alert("تعذّر إنشاء جلسة اللعب بهذه الشخصية، حاول مرة أخرى");
 
@@ -2436,7 +2427,7 @@ async function playAdminCharacter(characterId){
 
     }
 
-    localStorage.setItem("player_token", sessionToken);
+    localStorage.setItem("player_token", data.player_token);
 
     localStorage.setItem("username", "🛠️ وضع الأدمن");
 
