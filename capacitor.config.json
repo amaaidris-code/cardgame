@@ -1,0 +1,13 @@
+{
+  "appId": "com.yourname.cardgame",
+  "appName": "CardGame",
+  "webDir": "www",
+  "server": {
+    "url": "https://beautiful-gingersnap-a87f1c.netlify.app",
+    "cleartext": false,
+    "androidScheme": "https"
+  },
+  "android": {
+    "allowMixedContent": false
+  }
+}

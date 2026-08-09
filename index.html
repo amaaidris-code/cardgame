@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Card Game</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div id="app">
+<button id="global-back" onclick="goBack()">
+    ‹
+</button>
+
+    <!-- الشريط العلوي -->
+    <header class="top-bar">
+
+        <div class="game-title">
+            CARD GAME
+        </div>
+
+        <div class="player-info">
+
+            <span id="player-name">
+                Player
+            </span>
+
+            <span id="player-gold">
+                🪙 1000
+            </span>
+
+        </div>
+
+    </header>
+
+<!-- شاشة تسجيل الدخول -->
+
+<section id="login-screen" class="screen active">
+
+    <h1>
+        CARD GAME
+    </h1>
+
+    <p class="subtitle">
+        تسجيل الدخول
+    </p>
+
+
+    <div class="form-box">
+
+        <label>
+            اسم المستخدم
+        </label>
+
+        <input 
+id="login-username"
+type="text"
+placeholder="اسم المستخدم"
+dir="auto"
+lang="ar">
+        
+
+
+        <label>
+            كلمة المرور
+        </label>
+
+        <input
+        id="login-password"
+        type="password"
+        placeholder="كلمة المرور">
+
+
+        <button onclick="login()">
+            دخول
+        </button>
+
+
+        <button onclick="openScreen('register-screen')">
+            إنشاء حساب جديد
+        </button>
+
+    </div>
+
+</section>
+
+
+
+<!-- شاشة إنشاء الحساب -->
+
+<section id="register-screen" class="screen">
+
+    <h2>
+        إنشاء حساب
+    </h2>
+
+
+    <div class="form-box">
+
+
+        <label>
+            اسم المستخدم
+        </label>
+
+        <input
+id="register-username"
+type="text"
+placeholder="اختر اسم مستخدم"
+dir="auto"
+lang="ar">
+
+        <label>
+            البريد الإلكتروني
+        </label>
+
+        <input
+        id="register-email"
+        type="email"
+        placeholder="بريدك الإلكتروني"
+        dir="ltr">
+
+        <label>
+            كلمة المرور
+        </label>
+
+        <input
+        id="register-password"
+        type="password"
+        placeholder="اختر كلمة مرور">
+
+
+        <button id="register-submit-btn" onclick="startRegisterOtp()">
+            إنشاء الحساب
+        </button>
+
+
+        <button onclick="openScreen('login-screen')">
+            العودة للدخول
+        </button>
+        
+        
+
+    </div>
+
+</section>
+
+
+<!-- لوحة الإدارة -->
+
+<section id="admin-panel-screen" class="screen">
+
+    <h2>
+🛠️ لوحة الإدارة
+</h2>
+
+<div id="admin-stats" class="admin-card">
+جاري تحميل الإحصائيات...
+</div>
+
+
+<hr>
+
+
+<h2>
+الشخصيات
+</h2>
+
+<div id="admin-content">
+
+</div>
+
+
+<hr>
+
+
+<h2>
+👹 الوحوش (PvE)
+</h2>
+
+<div id="admin-monsters-content">
+
+</div>
+
+
+<hr>
+
+
+<h3>
+➕ إضافة شخصية / وحش جديد
+</h3>
+
+<div class="form-box admin-add-form">
+
+    <input id="admin-character-name" type="text" placeholder="اسم الشخصية">
+
+    <input id="admin-character-anime" type="text" placeholder="اسم الأنمي (أو \"وحوش PvE\" للوحوش)">
+
+    <input id="admin-character-image" type="text" placeholder="رابط صورة الشخصية (أو ارفع من الجهاز)">
+
+    <input id="admin-character-image-file" type="file" accept="image/*" onchange="uploadCharacterImage('admin-character-image-file','admin-character-image','admin-image-status')">
+
+    <p id="admin-image-status" class="upload-status"></p>
+
+    <input id="admin-character-hp" type="number" placeholder="نقاط الحياة">
+
+    <input id="admin-character-atk" type="number" placeholder="قوة الهجوم">
+
+    <input id="admin-power-name" type="text" placeholder="اسم القوة الخاصة">
+
+    <textarea id="admin-power-description" placeholder="وصف القوة الخاصة"></textarea>
+
+    <input id="admin-character-quote" type="text" placeholder="اقتباس الشخصية">
+
+    <label class="admin-checkbox-label">
+        <input id="admin-character-is-monster" type="checkbox">
+        هذا وحش خاص بـ PvE (لن يظهر للاعبين كشخصية يمكن اختيارها)
+    </label>
+
+    <label class="admin-checkbox-label">
+        <input id="admin-character-admin-only" type="checkbox">
+        🔒 شخصية خاصة بي فقط (لن تظهر أبدًا للاعبين، وأقدر ألعب بها بنفسي)
+    </label>
+
+    <label class="admin-color-row">
+        🎨 لون التوهج
+        <input id="admin-character-glow-color" type="color" value="#3b82ff">
+    </label>
+
+    <label class="admin-checkbox-label">
+        <input id="admin-character-glow-locked" type="checkbox">
+        🔒 قفل اللون (يمنع اللاعب من تغييره)
+    </label>
+
+    <button onclick="addCharacter()">إضافة</button>
+
+</div>
+
+
+<hr>
+
+
+<button onclick="openScreen('admin-my-characters-screen')">
+🎮 شخصياتي الخاصة
+</button>
+
+
+<hr>
+
+
+<h2>
+اللاعبون
+</h2>
+
+<div id="admin-players">
+
+</div>
+
+
+<hr>
+
+
+<h2>
+طلبات الشخصيات
+</h2>
+
+<div id="admin-requests">
+
+</div>
+
+<button onclick="openScreen('login-screen')">
+    🚪 خروج الإدارة
+</button>
+
+</section>
+
+
+
+<section id="admin-my-characters-screen" class="screen">
+
+<h2>
+🎮 شخصياتي الخاصة
+</h2>
+
+<p class="subtitle">
+شخصيات صممتها لنفسك فقط، لا يراها أي لاعب آخر
+</p>
+
+<div id="admin-my-characters-content">
+
+</div>
+
+<button onclick="openScreen('admin-panel-screen')">
+↩ العودة للوحة الإدارة
+</button>
+
+</section>
+
+
+
+<section id="character-choice-screen" class="screen">
+
+    <h1>
+        اختر شخصيتك
+    </h1>
+
+
+    <div id="available-characters">
+
+        <!-- الشخصيات الجاهزة ستظهر هنا -->
+
+    </div>
+
+
+
+    <h2>
+        لم تجد شخصيتك؟
+    </h2>
+
+
+    <input
+    id="request-character-name"
+    type="text"
+    placeholder="اسم الشخصية">
+
+
+    <input
+    id="request-anime-name"
+    type="text"
+    placeholder="اسم الأنمي">
+
+
+    <textarea
+    id="request-note"
+    placeholder="ملاحظات إضافية">
+    </textarea>
+
+
+    <button onclick="sendCharacterRequest()">
+        إرسال الطلب
+    </button>
+
+
+</section>
+
+    <!-- محتوى اللعبة -->
+    <main id="main-content">
+
+
+        <!-- ========================= -->
+        <!-- الصفحة الرئيسية -->
+        <!-- ========================= -->
+
+        <section id="home-screen" class="screen">
+
+            <h1>
+                مرحبًا بك في اللعبة
+            </h1>
+
+            <p class="subtitle">
+                لعبة بطاقات تناوب أدوار
+            </p>
+
+
+            <div class="menu">
+
+                <button id="home-admin-panel-btn" onclick="openScreen('admin-panel-screen')" style="display:none;">
+🛠️ العودة للوحة الإدارة
+</button>
+
+                <button onclick="openScreen('character-profile-screen')">
+👤 شخصيتي
+</button>
+
+                <button onclick="openScreen('upgrade-screen')">
+    ⬆️ تطوير الشخصية
+</button>
+
+
+                <button onclick="openCollection()">
+    🎴 مجموعتي
+</button>
+
+
+                <button onclick="openScreen('battle-menu-screen')">
+    ⚔️ المعارك
+</button>
+
+
+                <button onclick="openScreen('story-screen')">
+                    📖 القصة
+                </button>
+
+
+                <button onclick="openScreen('pvp-screen')">
+                    🏆 PvP
+                </button>
+
+
+                <button onclick="openScreen('shop-screen')">
+                    🛒 المتجر
+                </button>
+                
+                
+                
+                
+                <button onclick="logout()">
+                 تسجيل الخروج
+                </button>
+
+            </div>
+
+        </section>
+
+
+
+        <!-- ========================= -->
+        <!-- اختيار الشخصية -->
+        <!-- ========================= -->
+
+        <section id="character-screen" class="screen">
+
+            <h2>
+                👤 اختر شخصيتك
+            </h2>
+
+
+            <p class="subtitle">
+                يمكنك امتلاك شخصية واحدة فقط
+            </p>
+
+
+            <!-- قائمة الشخصيات -->
+            <div id="character-list">
+
+                <!-- الشخصيات ستظهر هنا بواسطة JavaScript -->
+
+            </div>
+
+
+            <!-- طلب شخصية جديدة -->
+
+            <div class="request-character-box">
+
+                <h3>
+                    لا تجد الشخصية التي تريدها؟
+                </h3>
+
+                <button onclick="showCharacterRequest()">
+                    ➕ طلب شخصية جديدة
+                </button>
+
+            </div>
+
+
+            <button onclick="openScreen('home-screen')">
+                ↩ العودة
+            </button>
+
+        </section>
+
+
+
+        <!-- ========================= -->
+        <!-- نموذج طلب شخصية -->
+        <!-- ========================= -->
+
+        <section id="character-request-screen" class="screen">
+
+            <h2>
+                ➕ طلب شخصية جديدة
+            </h2>
+
+
+            <p class="subtitle">
+                اكتب معلومات الشخصية التي تريدها
+            </p>
+
+
+            <div class="form-box">
+
+
+                <label>
+                    اسم الشخصية
+                </label>
+
+                <input
+                    id="requested-character-name"
+                    type="text"
+                    placeholder="مثال: ريمورو"
+                >
+
+
+                <label>
+                    اسم الأنمي
+                </label>
+
+                <input
+                    id="requested-character-anime"
+                    type="text"
+                    placeholder="مثال: That Time I Got Reincarnated as a Slime"
+                >
+
+
+                <label>
+                    ملاحظات إضافية
+                </label>
+
+                <textarea
+                    id="requested-character-notes"
+                    placeholder="أي معلومات تريد إضافتها..."
+                ></textarea>
+
+
+                <button onclick="submitCharacterRequest()">
+                    📩 إرسال الطلب
+                </button>
+
+
+                <button onclick="openScreen('character-screen')">
+                    ↩ العودة
+                </button>
+                
+                <button onclick="logout()">
+    تسجيل الخروج
+</button>
+
+            </div>
+
+        </section>
+
+<section id="upgrade-screen" class="screen">
+
+    <h2>
+        ⬆️ تطوير الشخصية
+    </h2>
+
+
+    <div id="upgrade-character-info" class="empty-card">
+        جاري تحميل بيانات التطوير...
+    </div>
+
+
+    <button onclick="upgradeCharacter()">
+        ⬆️ تطوير
+    </button>
+
+
+    <button onclick="openScreen('home-screen')">
+        ↩ العودة
+    </button>
+
+</section>
+
+<!-- ========================= -->
+<!-- مجموعتي -->
+<!-- ========================= -->
+
+<section id="collection-screen" class="screen">
+
+    <h2>
+        🎴 مجموعتي
+    </h2>
+
+
+    <div id="my-characters">
+
+        جاري تحميل المجموعة...
+
+    </div>
+
+
+    <button onclick="openScreen('home-screen')">
+        ↩ العودة
+    </button>
+
+</section>
+
+
+
+<!-- ========================= -->
+<!-- المعارك -->
+<!-- ========================= -->
+
+<section id="battle-menu-screen" class="screen">
+
+<h2>
+⚔️ المعارك
+</h2>
+
+
+<div class="menu">
+
+<button onclick="openScreen('gate-screen')">
+🚪 البوابات
+</button>
+
+
+<button onclick="openScreen('solo-battle-screen')">
+👥 المواجهات الفردية
+</button>
+
+
+</div>
+
+
+<button onclick="openScreen('home-screen')">
+↩️ العودة
+</button>
+
+
+</section>
+
+
+
+<section id="gate-screen" class="screen">
+
+<h2>
+🚪 البوابات
+</h2>
+
+
+<div class="empty-card">
+
+نظام البوابات قيد التطوير
+
+</div>
+
+
+<button onclick="openScreen('battle-menu-screen')">
+↩️ العودة
+</button>
+
+
+</section>
+
+
+
+<section id="solo-battle-screen" class="screen">
+
+<h2>
+👥 المواجهات الفردية
+</h2>
+
+
+<div class="solo-buttons">
+
+    <button onclick="openScreen('pve-select-screen'); loadMonsterList();">
+    ⚔️ PvE
+</button>
+
+    <button onclick="startPVPBattle()">
+🏆 PvP
+</button>
+
+</div>
+
+
+
+<button onclick="openScreen('battle-menu-screen')">
+↩️ العودة
+</button>
+
+
+</section>
+
+
+
+<section id="pve-select-screen" class="screen">
+
+<h2>
+👹 اختر الوحش الذي تريد مواجهته
+</h2>
+
+<div id="pve-monster-list">
+
+</div>
+
+<button onclick="openScreen('solo-battle-screen')">
+↩️ العودة
+</button>
+
+</section>
+
+<!-- ========================= -->
+<!-- شاشة معركة PvP (IDs بادئة pvp-) -->
+<!-- ========================= -->
+
+<section id="pvp-battle-screen" class="screen">
+
+<h2>
+⚔️ المعركة
+</h2>
+
+
+<div class="battle-arena">
+
+
+<!-- الخصم -->
+
+<div class="battle-card enemy-card">
+
+<img id="pvp-enemy-image"
+class="battle-image">
+
+
+<h3 id="pvp-enemy-name">
+الوحش
+</h3>
+
+
+<div class="hp-bar">
+<div id="pvp-enemy-hp-bar"
+class="hp-fill">
+</div>
+</div>
+
+
+<p>
+❤️
+<span id="pvp-enemy-hp">
+300 / 300
+</span>
+</p>
+
+
+<!-- مهارات الخصم المستخدمة -->
+
+<div class="used-skills"
+id="pvp-enemy-used-skills">
+
+</div>
+
+
+</div>
+
+
+
+<!-- الوسط -->
+
+<div class="battle-middle">
+
+
+<div class="vs-divider">
+<span class="vs-line vs-line-left"></span>
+<span class="vs-text">VS</span>
+<span class="vs-line vs-line-right"></span>
+</div>
+
+
+<div id="pvp-battle-timer">
+
+60
+
+</div>
+
+
+<div class="attack-button-wrap">
+
+<button id="pvp-attack-button">
+🔴
+</button>
+
+<div id="pvp-count-overlay" class="count-overlay"></div>
+
+</div>
+
+
+</div>
+
+
+
+<!-- اللاعب -->
+
+
+<div class="battle-card player-card">
+
+
+<img id="pvp-player-image"
+class="battle-image">
+
+
+<h3 id="pvp-player-name-battle">
+ريمورو
+</h3>
+
+
+<div class="hp-bar">
+
+<div id="pvp-player-hp-bar"
+class="hp-fill">
+
+</div>
+
+</div>
+
+
+<p>
+❤️
+<span id="pvp-player-hp">
+300 / 300
+</span>
+</p>
+
+
+
+<!-- مهارات اللاعب المستخدمة -->
+
+<div class="used-skills"
+id="pvp-player-used-skills">
+
+</div>
+
+
+
+<div class="skills-container">
+
+    <div class="skills-pages" id="pvp-player-skills-pages">
+
+        <div class="skills-page active">
+            <button>هجوم</button>
+            <button>دفاع</button>
+            <button>مفترس</button>
+            <button>مهارة</button>
+        </div>
+
+        <div class="skills-page">
+            <button>نسخ</button>
+            <button>ختم</button>
+            <button>مهارة</button>
+            <button>مهارة</button>
+        </div>
+
+    </div>
+
+    <div class="skill-dots">
+        <span class="active"></span>
+        <span></span>
+    </div>
+
+</div>
+
+</div>
+
+
+</div>
+
+
+<button onclick="openScreen('solo-battle-screen')">
+↩ العودة
+</button>
+
+</section>
+
+<!-- ========================= -->
+<!-- شاشة معركة PvE (IDs بادئة pve-) -->
+<!-- ========================= -->
+
+<section id="pve-battle-screen" class="screen">
+
+<h2>
+⚔️ المعركة
+</h2>
+
+
+<div class="battle-arena">
+
+
+<!-- الخصم -->
+
+<div class="battle-card enemy-card">
+
+<img id="pve-enemy-image"
+class="battle-image">
+
+
+<h3 id="pve-enemy-name">
+الوحش
+</h3>
+
+
+<div class="hp-bar">
+<div id="pve-enemy-hp-bar"
+class="hp-fill">
+</div>
+</div>
+
+
+<p>
+❤️
+<span id="pve-enemy-hp">
+300 / 300
+</span>
+</p>
+
+
+<!-- مهارات الخصم المستخدمة -->
+
+<div class="used-skills"
+id="pve-enemy-used-skills">
+
+</div>
+
+
+</div>
+
+
+
+<!-- الوسط -->
+
+<div class="battle-middle">
+
+
+<div class="vs-divider">
+<span class="vs-line vs-line-left"></span>
+<span class="vs-text">VS</span>
+<span class="vs-line vs-line-right"></span>
+</div>
+
+
+<div id="pve-battle-timer">
+
+60
+
+</div>
+
+
+<div class="attack-button-wrap">
+
+<button id="pve-attack-button">
+🔴
+</button>
+
+<div id="pve-count-overlay" class="count-overlay"></div>
+
+</div>
+
+
+</div>
+
+
+
+<!-- اللاعب -->
+
+
+<div class="battle-card player-card">
+
+
+<img id="pve-player-image"
+class="battle-image">
+
+
+<h3 id="pve-player-name-battle">
+ريمورو
+</h3>
+
+
+<div class="hp-bar">
+
+<div id="pve-player-hp-bar"
+class="hp-fill">
+
+</div>
+
+</div>
+
+
+<p>
+❤️
+<span id="pve-player-hp">
+300 / 300
+</span>
+</p>
+
+
+
+<!-- مهارات اللاعب المستخدمة -->
+
+<div class="used-skills"
+id="pve-player-used-skills">
+
+</div>
+
+
+
+<div class="skills-container">
+
+    <div class="skills-pages" id="pve-player-skills-pages">
+
+        <div class="skills-page active">
+            <button>هجوم</button>
+            <button>دفاع</button>
+            <button>مفترس</button>
+            <button>مهارة</button>
+        </div>
+
+        <div class="skills-page">
+            <button>نسخ</button>
+            <button>ختم</button>
+            <button>مهارة</button>
+            <button>مهارة</button>
+        </div>
+
+    </div>
+
+    <div class="skill-dots">
+        <span class="active"></span>
+        <span></span>
+    </div>
+
+</div>
+
+</div>
+
+
+</div>
+
+
+<button onclick="openScreen('solo-battle-screen')">
+↩ العودة
+</button>
+
+
+
+
+
+</section>
+
+
+        <!-- ========================= -->
+        <!-- القصة -->
+        <!-- ========================= -->
+
+        <section id="story-screen" class="screen">
+
+            <h2>
+                📖 القصة
+            </h2>
+
+            <div class="empty-card">
+                طور القصة قيد التطوير
+            </div>
+
+            <button onclick="openScreen('home-screen')">
+                ↩ العودة
+            </button>
+
+        </section>
+
+
+
+        <!-- ========================= -->
+        <!-- PvP -->
+        <!-- ========================= -->
+
+        <section id="pvp-screen" class="screen">
+
+            <h2>
+                🏆 PvP
+            </h2>
+
+            <div class="empty-card">
+                قائمة منافسي PvP قيد التطوير
+            </div>
+
+            <button onclick="openScreen('home-screen')">
+                ↩ العودة
+            </button>
+
+        </section>
+
+
+
+        <!-- ========================= -->
+        <!-- المتجر -->
+        <!-- ========================= -->
+
+        <section id="shop-screen" class="screen">
+
+            <h2>
+                🛒 المتجر
+            </h2>
+
+            <div class="empty-card">
+                المتجر قيد التطوير
+            </div>
+
+            <button onclick="openScreen('home-screen')">
+                ↩ العودة
+            </button>
+
+        </section>
+        <section id="character-profile-screen" class="screen">
+
+    <h2>👤 شخصيتي</h2>
+
+    <div id="character-profile" class="empty-card">
+        جاري تحميل الشخصية...
+    </div>
+
+
+    <button onclick="openScreen('home-screen')">
+        ↩ العودة
+    </button>
+   
+
+</section>
+
+
+    </main>
+
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script src="supabase.js"></script>
+
+<script src="characters.js"></script>
+
+<script src="cache.js"></script>
+
+<script src="game.js"></script>
+
+<script src="battle.js"></script>
+
+
+  </body>
+
+</html>
