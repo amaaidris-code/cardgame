@@ -2538,7 +2538,7 @@ function renderAdminCharacterCards(list, emptyMessage){
 
                 <p class="admin-character-stats">❤️ ${character.hp || 0} &nbsp;·&nbsp; ⚔️ ${character.atk || 0} &nbsp;·&nbsp; LV ${character.level || 1}</p>
 
-                <p class="admin-character-owner">${character.admin_only ? "🔒 خاصة بالأدمن" : (character.is_monster ? "👹 وحش PvE" : "🟢 متاحة للجميع")}</p>
+                <p class="admin-character-owner">${character.admin_only ? "🔒 خاصة بالأدمن" : (character.is_monster ? "👹 وحش PvE" : (character.owner_id ? "🔴 مأخوذة (لدى لاعب)" : "🟢 متاحة للاختيار"))}</p>
 
             </div>
 
