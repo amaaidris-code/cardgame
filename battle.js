@@ -626,15 +626,7 @@ async function startPVEBattle(monsterId){
 
 
 
-function startPVPBattle(){
-
-    openScreen("pvp-battle-screen");
-
-    alert("نظام PvP قيد التطوير حاليًا، جرّب PvE أولاً");
-
-    openScreen("solo-battle-screen");
-
-}
+// تنفيذ startPVPBattle الفعلي موجود الآن في pvp.js
 
 
 
