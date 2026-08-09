@@ -18,7 +18,12 @@ let pvpState = {
 
     // تهدئة مهاراتي في هذه المباراة: skill_id -> last_used_turn
     myCooldowns: {},
-    myTurnsTaken: 0
+    myTurnsTaken: 0,
+
+    // حالة مرحلة السباق (بعد استعداد الطرفين، قبل بداية النزال الفعلي)
+    raceStarted: false,
+    raceResolvedLocally: false,
+    raceLockedUntil: 0
 };
 
 // حالة الردهة (اختيار الخصم) والتحدي، منفصلة عن حالة النزال نفسه
@@ -276,6 +281,9 @@ async function pvpEnterReadyPhase(matchId, _unused){
     pvpState.oppUsedSkillIds = [];
     pvpState.myCooldowns = {};
     pvpState.myTurnsTaken = 0;
+    pvpState.raceStarted = false;
+    pvpState.raceResolvedLocally = false;
+    pvpState.raceLockedUntil = 0;
     pvpCloseStealMenu();
 
     let token = pvpGetToken();
@@ -461,29 +469,33 @@ async function pvpRunIntroSequence(data){
     arena.style.overflow = "hidden";
 }
 
-// زر الاستعداد الأحمر: كل لاعب يضغطه بنفسه، والنزال يبدأ فور استعداد الاثنين
+// زر الاستعداد الأحمر: كل لاعب يضغطه بنفسه، وبعد استعداد الطرفين يبدأ سباق
+// الضغط (نفس نظام PvE: عدّ 1-2-3 فوق الزر، والضغط المبكر يُعاقَب)
 function pvpShowReadyButton(data){
 
     let btn = document.getElementById("pvp-attack-button");
-    let statusBox = document.getElementById("pvp-status-message");
-
-    let myReady = pvpState.isPlayer1 ? data.player1_ready : data.player2_ready;
 
     if(!btn) { pvpAfterReadyPollStart(); return; }
+
+    resetBattleVisuals("pvp");
 
     btn.style.visibility = "visible";
     btn.disabled = false;
     btn.classList.add("racing-live");
     btn.classList.remove("locked");
 
+    let myReady = pvpState.isPlayer1 ? data.player1_ready : data.player2_ready;
+
     if(myReady){
+
         collapseRaceButton("pvp");
-        if(statusBox) statusBox.textContent = "⏳ بانتظار استعداد الخصم...";
+
     } else {
-        if(statusBox) statusBox.textContent = "اضغط الزر عند استعدادك!";
-        btn.onclick = async () => {
+
+        let readyClickHandler = async () => {
             btn.disabled = true;
             btn.onclick = null;
+
             let { error } =
             await supabaseClient
             .rpc("pvp_ready_up", { p_token: pvpGetToken(), p_match_id: pvpState.matchId });
@@ -491,20 +503,163 @@ function pvpShowReadyButton(data){
             if(error){
                 alert(error.message || "تعذر تأكيد الاستعداد");
                 btn.disabled = false;
+                btn.onclick = readyClickHandler;
                 return;
             }
 
             collapseRaceButton("pvp");
-            if(statusBox) statusBox.textContent = "⏳ بانتظار استعداد الخصم...";
+            pvpSetLobbyStatus("");
+            pvpUpdateReadyStatusText({
+                player1_ready: pvpState.isPlayer1 ? true : data.player1_ready,
+                player2_ready: pvpState.isPlayer1 ? data.player2_ready : true
+            });
         };
+
+        btn.onclick = readyClickHandler;
+
     }
+
+    pvpUpdateReadyStatusText(data);
 
     pvpAfterReadyPollStart();
 }
 
+// يحدّث رسالة الحالة أثناء الاستعداد، ويُظهر للاعب إذا كان الخصم قد ضغط
+// الاستعداد بالفعل حتى يعرف أنه عليه الضغط الآن أيضًا
+function pvpUpdateReadyStatusText(data){
+
+    let statusBox = document.getElementById("pvp-status-message");
+    if(!statusBox) return;
+
+    let myReady = pvpState.isPlayer1 ? data.player1_ready : data.player2_ready;
+    let oppReady = pvpState.isPlayer1 ? data.player2_ready : data.player1_ready;
+
+    statusBox.style.display = "block";
+
+    if(myReady){
+        statusBox.textContent = "⏳ بانتظار استعداد الخصم...";
+    } else if(oppReady){
+        statusBox.textContent = "🔥 الخصم استعد! اضغط الزر الآن";
+    } else {
+        statusBox.textContent = "اضغط الزر عند استعدادك!";
+    }
+}
+
 function pvpAfterReadyPollStart(){
     pvpStopPolling();
-    pvpState.pollTimer = setInterval(() => pvpRefreshState(false), 2000);
+    pvpState.pollTimer = setInterval(() => pvpRefreshState(false), 1200);
+}
+
+// ========================================
+// مرحلة السباق: تُشغَّل مرة واحدة عندما تتحول حالة المباراة إلى "race"
+// (بعد استعداد الطرفين)، بنفس آلية PvE تمامًا
+// ========================================
+async function pvpStartRacePhase(){
+
+    let btn = document.getElementById("pvp-attack-button");
+    let statusBox = document.getElementById("pvp-status-message");
+    let countOverlay = document.getElementById("pvp-count-overlay");
+
+    resetBattleVisuals("pvp");
+
+    if(statusBox){
+        statusBox.style.display = "block";
+        statusBox.textContent = "استعدا...!";
+    }
+
+    pvpState.raceLockedUntil = 0;
+
+    btn.style.visibility = "visible";
+    btn.disabled = false;
+    btn.onclick = () => pvpHandleEarlyPress();
+
+    for(let n = 1; n <= 3; n++){
+
+        if(countOverlay){
+            countOverlay.textContent = n;
+            countOverlay.classList.remove("show");
+            void countOverlay.offsetWidth;
+            countOverlay.classList.add("show");
+        }
+
+        await wait(750);
+
+        // الخصم فاز بالسباق أثناء العد نفسه (سرّع الضغط عنده)؟ لا داعي نكمل
+        if(pvpState.raceResolvedLocally) return;
+    }
+
+    if(countOverlay){
+        countOverlay.textContent = "";
+        countOverlay.classList.remove("show");
+    }
+
+    if(pvpState.raceResolvedLocally) return;
+
+    let remainingLock = pvpState.raceLockedUntil - Date.now();
+
+    if(remainingLock > 0){
+        await wait(remainingLock);
+        if(pvpState.raceResolvedLocally) return;
+    }
+
+    btn.disabled = false;
+    btn.classList.remove("locked");
+    btn.classList.add("racing-live");
+    btn.onclick = () => pvpHandleRacePress();
+
+    if(statusBox) statusBox.textContent = "اضغط الآن!";
+}
+
+// ضغط مبكر (أثناء العد): عقوبة "شلل" مؤقتة على الزر لثانية كاملة، بدون
+// إلغاء السباق نفسه
+function pvpHandleEarlyPress(){
+
+    let btn = document.getElementById("pvp-attack-button");
+    if(!btn || btn.disabled) return;
+
+    btn.disabled = true;
+    btn.classList.add("locked");
+
+    pvpState.raceLockedUntil = Date.now() + 1000;
+
+    setTimeout(() => {
+        if(pvpState.raceResolvedLocally) return;
+        btn.disabled = false;
+        btn.classList.remove("locked");
+    }, 1000);
+}
+
+// ضغط صحيح بعد انتهاء العد: نرسل للسيرفر، وهو الحكم الوحيد في من يبدأ أولًا
+async function pvpHandleRacePress(){
+
+    if(pvpState.raceResolvedLocally) return;
+
+    let btn = document.getElementById("pvp-attack-button");
+    if(btn) btn.onclick = null;
+
+    let { data, error } =
+    await supabaseClient
+    .rpc("pvp_race_press", { p_token: pvpGetToken(), p_match_id: pvpState.matchId });
+
+    if(pvpState.raceResolvedLocally) return;
+
+    let statusBox = document.getElementById("pvp-status-message");
+
+    if(error || data === "too_early"){
+        // نادرًا ما تصل هنا (العقوبة محلية أصلًا)، لكن احتياطًا: أعد تفعيل الزر
+        if(btn){ btn.onclick = () => pvpHandleRacePress(); }
+        return;
+    }
+
+    pvpState.raceResolvedLocally = true;
+
+    if(data === "won"){
+        if(statusBox) statusBox.textContent = "🏆 لقد بدأت أنت أولاً!";
+    } else {
+        if(statusBox) statusBox.textContent = "⏳ الخصم كان أسرع! يبدأ هو أولاً";
+    }
+
+    collapseRaceButton("pvp");
 }
 
 // ========================================
@@ -535,10 +690,27 @@ async function pvpRefreshState(isFirstLoad){
 
     // لا نزال في مرحلة الاستعداد: حدّث فقط رسالة الانتظار (بدون لمس الأزرار/التصادم)
     if(data.status === "ready_wait"){
-        let statusBox = document.getElementById("pvp-status-message");
-        let myReady = pvpState.isPlayer1 ? data.player1_ready : data.player2_ready;
-        if(statusBox && myReady) statusBox.textContent = "⏳ بانتظار استعداد الخصم...";
+        pvpUpdateReadyStatusText(data);
         return;
+    }
+
+    // تحول الطرفان لمرحلة السباق: نشغّل واجهة السباق مرة واحدة فقط
+    if(data.status === "race"){
+        if(!pvpState.raceStarted){
+            pvpState.raceStarted = true;
+            pvpStartRacePhase();
+        }
+        return;
+    }
+
+    // إذا وصلنا هنا والحالة نشطة لكننا لم نحسم السباق محليًا (الخصم كان
+    // أسرع مني بالضغط، أو ضغطتُ ولم يصل الرد بعد): نظّف واجهة السباق الآن
+    if(pvpState.raceStarted && !pvpState.raceResolvedLocally){
+        pvpState.raceResolvedLocally = true;
+        collapseRaceButton("pvp");
+        let statusBox = document.getElementById("pvp-status-message");
+        let myTurnNow = (data.turn_player_id === (pvpState.isPlayer1 ? data.player1_id : data.player2_id));
+        if(statusBox) statusBox.textContent = myTurnNow ? "🏆 لقد بدأت أنت أولاً!" : "⏳ الخصم كان أسرع! يبدأ هو أولاً";
     }
 
     let myHp, oppHp, myMaxHp, oppMaxHp, myName, oppName, myImage, oppImage;
