@@ -120,34 +120,48 @@ async function pvpRefreshLobby(){
         supabaseClient.rpc("pvp_get_incoming_challenge", { p_token: pvpGetToken() }).single()
     ]);
 
-    if(!listError){
-        pvpRenderLobbyList(players || []);
-    }
+    let incomingChallenge = (!incomingError && incoming && incoming.match_id) ? incoming : null;
 
-    if(!incomingError && incoming && incoming.match_id){
-        if(pvpLobby.incomingShown !== incoming.match_id){
-            pvpLobby.incomingShown = incoming.match_id;
-            pvpShowChallengeModal(incoming);
-        }
-    } else {
-        // التحدي الوارد لم يعد موجودًا (ألغاه صاحبه أو انتهت صلاحيته)
-        if(pvpLobby.incomingShown){
-            pvpLobby.incomingShown = null;
-            pvpCloseChallengeModal();
-        }
+    pvpLobby.incomingShown = incomingChallenge ? incomingChallenge.match_id : null;
+
+    if(!listError){
+        pvpRenderLobbyList(players || [], incomingChallenge);
     }
 }
 
-function pvpRenderLobbyList(players){
+function pvpRenderLobbyList(players, incomingChallenge){
     let box = document.getElementById("pvp-lobby-list");
     if(!box) return;
 
-    if(players.length === 0){
-        box.innerHTML = "<p style='text-align:center;padding:15px;'>لا يوجد لاعبون متاحون الآن، انتظر قليلاً...</p>";
-        return;
+    box.innerHTML = "";
+
+    // التحدي الوارد يظهر كأول بطاقة بزر "قبول التحدي" بدل نافذة منبثقة،
+    // بحيث تصبح تجربة اللاعبين متماثلة: كل واحد يشوف زر تحدٍّ للآخر، ومن
+    // يضغط أولًا يتحول زره عند الطرف الثاني تلقائيًا إلى "قبول التحدي"
+    if(incomingChallenge){
+        let card = document.createElement("div");
+        card.className = "character-card pvp-incoming-card";
+        card.innerHTML = `
+        <div class="character-info">
+            <h3>⚔️ ${incomingChallenge.challenger_name || "لاعب"}</h3>
+            <p class="pvp-incoming-note">تحدّاك هذا اللاعب!</p>
+        </div>
+        <div class="pvp-incoming-buttons">
+            <button class="pvp-accept-btn">✅ قبول التحدي</button>
+            <button class="pvp-decline-btn">❌ رفض</button>
+        </div>
+        `;
+        card.querySelector(".pvp-accept-btn").onclick = () => pvpRespondChallenge(incomingChallenge.match_id, true);
+        card.querySelector(".pvp-decline-btn").onclick = () => pvpRespondChallenge(incomingChallenge.match_id, false);
+        box.appendChild(card);
     }
 
-    box.innerHTML = "";
+    if(players.length === 0){
+        if(!incomingChallenge){
+            box.innerHTML = "<p style='text-align:center;padding:15px;'>لا يوجد لاعبون متاحون الآن، انتظر قليلاً...</p>";
+        }
+        return;
+    }
 
     players.forEach(p => {
         let card = document.createElement("div");
@@ -224,31 +238,8 @@ async function pvpPollOutgoingChallenge(){
 }
 
 // ========================================
-// مودال التحدي الوارد: قبول أو رفض
+// إغلاق أي بقايا من نافذة تحدٍّ قديمة (لم تعد تُستخدم، الاستجابة الآن مباشرة من القائمة)
 // ========================================
-function pvpShowChallengeModal(challenge){
-
-    pvpCloseChallengeModal();
-
-    let modal = document.createElement("div");
-    modal.id = "pvp-challenge-modal";
-    modal.className = "steal-modal";
-    modal.innerHTML = `
-        <div class="steal-modal-box">
-            <h3>⚔️ تحدٍّ من ${challenge.challenger_name || "لاعب"}</h3>
-            <div class="steal-modal-buttons">
-                <button id="pvp-challenge-accept-btn">✅ قبول</button>
-                <button id="pvp-challenge-decline-btn">❌ رفض</button>
-            </div>
-        </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    modal.querySelector("#pvp-challenge-accept-btn").onclick = () => pvpRespondChallenge(challenge.match_id, true);
-    modal.querySelector("#pvp-challenge-decline-btn").onclick = () => pvpRespondChallenge(challenge.match_id, false);
-}
-
 function pvpCloseChallengeModal(){
     let modal = document.getElementById("pvp-challenge-modal");
     if(modal) modal.remove();
