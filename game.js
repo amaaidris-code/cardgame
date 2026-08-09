@@ -1166,7 +1166,8 @@ async function loadAvailableCharacters(){
     .select("*")
     .eq("available",true)
     .eq("admin_only",false)
-    .eq("is_monster",false);
+    .eq("is_monster",false)
+    .is("owner_id",null);
 
 
 
