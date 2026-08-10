@@ -1053,6 +1053,25 @@ async function pvpLeaveMatch(){
     pvpState.finished = false;
 }
 
+// ========================================
+// زر "العودة" داخل شاشة معركة PvP: كان سابقًا مجرد تبديل شاشة بدون تنظيف
+// المباراة على السيرفر (bug)، فتبقى المباراة عالقة وتمنع اللاعبَين من
+// الظهور لبعضهما لاحقًا في الردهة. الآن ننسحب فعليًا من المباراة أولاً
+// (استسلام إن كانت نشطة، أو حذفها إن كانت لا تزال بانتظار/استعداد) ثم
+// نعود للشاشة الرئيسية.
+// ========================================
+async function pvpLeaveBattleClicked(){
+
+    let btn = document.getElementById("pvp-leave-battle-button");
+    if(btn) btn.disabled = true;
+
+    await pvpLeaveMatch();
+
+    if(btn) btn.disabled = false;
+
+    openScreen("solo-battle-screen");
+}
+
 function pvpShowResult(iWon){
 
     let statusBox = document.getElementById("pvp-status-message");
