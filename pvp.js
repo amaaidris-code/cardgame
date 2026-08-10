@@ -35,6 +35,11 @@ let pvpState = {
     // (وتُستخدم للنسخ)
     oppEverUsedSkillIds: [],
 
+    // المهارات المختومة حتى نهاية المباراة (skill_id) لكل طرف — تُمنع
+    // من الاستخدام، وتظهر مقفلة بشارة 🔒
+    mySealedSkillIds: [],
+    oppSealedSkillIds: [],
+
     // آخر HP معروف للطرفين — تُستخدم لاكتشاف حدوث ضرر فعلي بين استطلاع
     // وآخر (لعرض شارة الحدث المناسبة)، undefined يعني لم نحمّل الحالة بعد
     lastMyHp: undefined,
@@ -840,11 +845,14 @@ async function pvpRefreshState(isFirstLoad){
     let myUsedIds, oppUsedIds, myTurnsTaken, myCooldownsRaw;
     let myFrozenTurns, oppFrozenTurns;
     let myReflectMult, oppReflectMult;
+    let mySealedIds, oppSealedIds;
 
     // نلتقط القوائم القديمة (قبل هذا التحديث) لنكتشف لاحقًا هل استُخدمت
     // مهارة تجميد جديدة هذا الاستطلاع تحديدًا (لإظهار رسالة واضحة)
     let prevMyUsedIds = pvpState.myUsedSkillIds || [];
     let prevOppUsedIds = pvpState.oppUsedSkillIds || [];
+    let prevMySealed = pvpState.mySealedSkillIds || [];
+    let prevOppSealed = pvpState.oppSealedSkillIds || [];
 
     // نلتقط الـHP قبل هذا التحديث حتى نكتشف حصول ضرر فعلي هذا الاستطلاع
     // تحديدًا (وليس فقط عرض الرقم النهائي) — أول تحميل للمباراة undefined
@@ -869,6 +877,8 @@ async function pvpRefreshState(isFirstLoad){
         oppFrozenTurns = data.player2_frozen_turns || 0;
         myReflectMult = data.player1_reflect_multiplier || 0;
         oppReflectMult = data.player2_reflect_multiplier || 0;
+        mySealedIds = data.player1_sealed_skill_ids || [];
+        oppSealedIds = data.player2_sealed_skill_ids || [];
     } else {
         myHp = data.player2_hp; oppHp = data.player1_hp;
         myMaxHp = data.player2_max_hp; oppMaxHp = data.player1_max_hp;
@@ -881,6 +891,8 @@ async function pvpRefreshState(isFirstLoad){
         oppFrozenTurns = data.player1_frozen_turns || 0;
         myReflectMult = data.player2_reflect_multiplier || 0;
         oppReflectMult = data.player1_reflect_multiplier || 0;
+        mySealedIds = data.player2_sealed_skill_ids || [];
+        oppSealedIds = data.player1_sealed_skill_ids || [];
     }
 
     setFighterImage(document.getElementById("pvp-player-image"), myImage);
@@ -895,6 +907,8 @@ async function pvpRefreshState(isFirstLoad){
     pvpState.myUsedSkillIds = myUsedIds;
     pvpState.oppUsedSkillIds = oppUsedIds;
     pvpState.oppEverUsedSkillIds = data.opponent_ever_used_skill_ids || [];
+    pvpState.mySealedSkillIds = mySealedIds;
+    pvpState.oppSealedSkillIds = oppSealedIds;
     pvpState.myTurnsTaken = myTurnsTaken;
     pvpState.lastMyHp = myHp;
     pvpState.lastOppHp = oppHp;
@@ -906,11 +920,12 @@ async function pvpRefreshState(isFirstLoad){
         pvpState.myCooldowns[c.skill_id] = c.last_used_turn;
     });
 
-    await pvpEnsureSkillsCached([...myUsedIds, ...oppUsedIds, ...pvpState.oppEverUsedSkillIds]);
+    await pvpEnsureSkillsCached([...myUsedIds, ...oppUsedIds, ...pvpState.oppEverUsedSkillIds, ...mySealedIds, ...oppSealedIds]);
     pvpRenderUsedSkillsUI();
 
     let myTurn = (data.turn_player_id === (pvpState.isPlayer1 ? data.player1_id : data.player2_id));
     pvpSetSkillsEnabled(myTurn && data.status === "active");
+    pvpApplySealedBadges();
 
     pvpUpdateTurnTimer(data.status === "active" ? data.turn_deadline : null);
 
@@ -934,6 +949,16 @@ async function pvpRefreshState(isFirstLoad){
     let newMySkillIds = myUsedIds.filter(id => !prevMyUsedIds.includes(id));
     let iGotFrozenNow = newOppSkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].effect === "freeze");
     let iFrozeOppNow = newMySkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].effect === "freeze");
+
+    // كشف أحداث الختم/فك الختم هذا الاستطلاع تحديدًا (بمقارنة قائمتي
+    // المختوم عندي وعند الخصم بالقديمة): ختمُّ الخصم لي، ختمي للخصم،
+    // أو فكّي للختم عن مهارتي المختومة
+    let newMySealed = mySealedIds.filter(id => !prevMySealed.includes(id));
+    let newOppSealed = oppSealedIds.filter(id => !prevOppSealed.includes(id));
+    let freedMySealed = prevMySealed.filter(id => !mySealedIds.includes(id));
+    let iGotSealedNow = newMySealed.length > 0;
+    let iSealedOppNow = newOppSealed.length > 0;
+    let iUnsealedNow = freedMySealed.length > 0;
 
     // هل استخدمتُ مهارة امتصاص (lifesteal) هذا الاستطلاع، وارتفعت صحتي
     // فعلاً؟ نعرض شارة شفاء مميزة بدل شارة الضربة العادية فقط
@@ -960,6 +985,15 @@ async function pvpRefreshState(isFirstLoad){
                 statusBox.classList.add("frozen-note");
             } else if(iFrozeOppNow && myTurn){
                 statusBox.textContent = "🧊 جمّدت الخصم! العب دورك مجددًا";
+                statusBox.classList.add("frozen-note");
+            } else if(iGotSealedNow && !myTurn){
+                statusBox.textContent = "🔒 الخصم ختم إحدى مهاراتك!";
+                statusBox.classList.add("frozen-note");
+            } else if(iSealedOppNow && myTurn){
+                statusBox.textContent = "🔒 ختمتَ مهارة من مهارات الخصم!";
+                statusBox.classList.add("frozen-note");
+            } else if(iUnsealedNow && myTurn){
+                statusBox.textContent = "🔓 فككتَ الختم عن مهارتك المختومة!";
                 statusBox.classList.add("frozen-note");
             } else {
                 statusBox.textContent = myTurn ? "🟢 دورك الآن" : "⏳ دور الخصم...";
@@ -992,6 +1026,18 @@ async function pvpRefreshState(isFirstLoad){
         } else if(iFrozeOppNow){
 
             showBattleEffectBanner("pvp", "❄️ جمّدتَ الخصم!", "freeze");
+
+        } else if(iGotSealedNow){
+
+            showBattleEffectBanner("pvp", "🔒 الخصم ختم مهارتك حتى نهاية المباراة!", "seal");
+
+        } else if(iSealedOppNow){
+
+            showBattleEffectBanner("pvp", "🔒 ختمتَ مهارة الخصم حتى نهاية المباراة!", "seal");
+
+        } else if(iUnsealedNow){
+
+            showBattleEffectBanner("pvp", "🔓 فككتَ الختم عن مهارتك!", "unseal");
 
         } else if(lifestealHeal > 0){
 
@@ -1107,9 +1153,41 @@ function renderPVPSkillButtons(){
 
                 btn.onclick = () => pvpOpenStealMenu(skill);
 
+            } else if(skill.effect === "seal"){
+
+                btn.querySelector(".skill-name").textContent =
+                    skill.name + " 🔒";
+
+                btn.onclick = () => pvpOpenSealMenu(skill);
+
+            } else if(skill.effect === "unseal"){
+
+                btn.querySelector(".skill-name").textContent =
+                    skill.name + " 🔓";
+
+                btn.onclick = () => pvpOpenUnsealMenu(skill);
+
             } else {
 
                 btn.onclick = () => pvpUseSkill(skill.id);
+
+            }
+
+            // المهارة المختومة تُعرض مقفلة بشارة 🔒 (الحماية الحقيقية على
+            // السيرفر — pvp_use_skill يرفض أي مهارة في قائمة المختومة)
+            if((pvpState.mySealedSkillIds || []).includes(skill.id)){
+
+                btn.classList.add("skill-sealed");
+
+                btn.classList.add("skill-locked");
+
+                let badge = document.createElement("span");
+
+                badge.className = "sealed-badge";
+
+                badge.textContent = "🔒";
+
+                btn.appendChild(badge);
 
             }
 
@@ -1241,6 +1319,32 @@ function pvpApplyCooldownBadges(){
     });
 }
 
+// يحدّث شارة الختم 🔒 على أزرار المهارات دون إعادة بناء القائمة كلها —
+// نفس نمط pvpApplyCooldownBadges تمامًا، لأنه لا يعاد بناء الأزرار مع كل
+// استطلاع (الختم/فك الختم يحدثان أثناء المباراة بعد بناء الأزرار)
+function pvpApplySealedBadges(){
+    let container = document.getElementById("pvp-player-skills-pages");
+    if(!container) return;
+
+    container.querySelectorAll("button[data-skill-id]").forEach(btn => {
+        let skill = pvpState.skillCache[btn.dataset.skillId];
+        if(!skill) return;
+
+        let existingBadge = btn.querySelector(".sealed-badge");
+        if(existingBadge) existingBadge.remove();
+        btn.classList.remove("skill-sealed");
+
+        if((pvpState.mySealedSkillIds || []).includes(skill.id)){
+            btn.classList.add("skill-sealed");
+            btn.classList.add("skill-locked");
+            let badge = document.createElement("span");
+            badge.className = "sealed-badge";
+            badge.textContent = "🔒";
+            btn.appendChild(badge);
+        }
+    });
+}
+
 function pvpSetSkillsEnabled(enabled){
     let container = document.getElementById("pvp-player-skills-pages");
     if(!container) return;
@@ -1255,7 +1359,8 @@ function pvpSetSkillsEnabled(enabled){
     container.querySelectorAll("button[data-skill-id]").forEach(btn => {
         let skill = pvpState.skillCache[btn.dataset.skillId];
         let onCooldown = skill ? pvpCooldownRemaining(skill) > 0 : false;
-        btn.classList.toggle("skill-locked", !enabled || onCooldown);
+        let sealed = skill ? (pvpState.mySealedSkillIds || []).includes(skill.id) : false;
+        btn.classList.toggle("skill-locked", !enabled || onCooldown || sealed);
     });
 }
 
@@ -1313,11 +1418,13 @@ function pvpRenderUsedSkillsUI(){
     // أثناء الضغط نفسه، فيُطلق المتصفح pointercancel ويُلغي المؤقّت قبل
     // أن يصل لل500ms المطلوبة لعرض الوصف — وهذا كان يجعل الضغط المطوّل
     // يبدو معطّلاً تمامًا على مهارات الخصم رغم أن الكود صحيح
-    let renderInto = (containerId, ids, cacheKey) => {
+    let renderInto = (containerId, ids, cacheKey, sealedIds) => {
         let box = document.getElementById(containerId);
         if(!box) return;
 
-        let key = ids.join(",");
+        sealedIds = sealedIds || [];
+
+        let key = ids.map(id => id + (sealedIds.includes(id) ? ":S" : "")).join(",");
         if(box.dataset[cacheKey] === key) return;
         box.dataset[cacheKey] = key;
 
@@ -1327,21 +1434,23 @@ function pvpRenderUsedSkillsUI(){
             let s = pvpState.skillCache[id];
             if(!s) return;
 
+            let sealed = sealedIds.includes(id);
+
             let chip = document.createElement("span");
-            chip.className = "used-skill-chip";
-            chip.textContent = s.name;
+            chip.className = "used-skill-chip" + (sealed ? " sealed" : "");
+            chip.textContent = s.name + (sealed ? " 🔒" : "");
             attachSkillLongPress(chip, s);
             box.appendChild(chip);
         });
     };
 
-    renderInto("pvp-player-used-skills", pvpState.myUsedSkillIds, "renderedIds");
+    renderInto("pvp-player-used-skills", pvpState.myUsedSkillIds, "renderedIds", pvpState.mySealedSkillIds);
 
     // نعرض تحت بطاقة الخصم كل ما استخدمه ضدك ولو في مباراة سابقة (نفس ما
     // يُتاح للسرقة)، لا فقط ما استخدمه في هذه المباراة تحديدًا — الضغط
     // المطوّل على أي منها يعرض وصفها وتأثيرها تمامًا كمهاراتك أنت
     let oppIds = [...new Set([...pvpState.oppUsedSkillIds, ...pvpState.oppEverUsedSkillIds])];
-    renderInto("pvp-enemy-used-skills", oppIds, "renderedIds");
+    renderInto("pvp-enemy-used-skills", oppIds, "renderedIds", pvpState.oppSealedSkillIds);
 }
 
 // ========================================
@@ -1420,6 +1529,126 @@ async function pvpUseStealOrCopy(abilitySkillId, targetSkillId){
     let { data, error } =
     await supabaseClient
     .rpc("pvp_steal_or_copy_skill", {
+        p_token: pvpGetToken(),
+        p_match_id: pvpState.matchId,
+        p_ability_skill_id: abilitySkillId,
+        p_target_skill_id: targetSkillId
+    })
+    .single();
+
+    if(error){
+        alert(error.message || "تعذر تنفيذ الحركة");
+        pvpRefreshState(false);
+        return;
+    }
+
+    pvpRefreshState(false);
+}
+
+// ========================================
+// قائمة الختم: نعرض فقط المهارات التي استخدمها الخصم في هذه المباراة
+// وغير المختومة مسبقًا (نفس ما تتحقق منه دالة السيرفر)
+// ========================================
+function pvpOpenSealMenu(abilitySkill){
+
+    pvpCloseSealMenu();
+
+    let candidates = pvpState.oppUsedSkillIds
+    .map(id => pvpState.skillCache[id])
+    .filter(s => s && !(pvpState.oppSealedSkillIds || []).includes(s.id));
+
+    if(candidates.length === 0){
+        alert("لا توجد مهارة قابلة للختم الآن (الخصم لم يستخدم أي مهارة غير مختومة في هذه المباراة)");
+        return;
+    }
+
+    let modal = document.createElement("div");
+    modal.id = "pvp-steal-modal";
+    modal.className = "steal-modal";
+    modal.innerHTML = `
+        <div class="steal-modal-box">
+            <h3>🔒 اختر مهارة الخصم لتختمها حتى نهاية المباراة</h3>
+            <div class="steal-options-list" id="pvp-steal-options-list"></div>
+            <div class="steal-modal-buttons">
+                <button id="pvp-steal-cancel-btn">إلغاء</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    let list = modal.querySelector("#pvp-steal-options-list");
+    candidates.forEach(skill => {
+        let btn = document.createElement("button");
+        btn.className = "steal-option";
+        btn.textContent = skill.name;
+        btn.onclick = () => {
+            pvpCloseSealMenu();
+            pvpUseSealOrUnseal(abilitySkill.id, skill.id);
+        };
+        list.appendChild(btn);
+    });
+
+    modal.querySelector("#pvp-steal-cancel-btn").onclick = pvpCloseSealMenu;
+}
+
+// ========================================
+// قائمة فك الختم: نعرض مهاراتي المختومة لاختيار ما يُفك ختمه
+// ========================================
+function pvpOpenUnsealMenu(abilitySkill){
+
+    pvpCloseSealMenu();
+
+    let candidates = (pvpState.mySealedSkillIds || [])
+    .map(id => pvpState.skillCache[id])
+    .filter(s => s);
+
+    if(candidates.length === 0){
+        alert("لا توجد أي مهارة مختومة لديك لفك ختمها");
+        return;
+    }
+
+    let modal = document.createElement("div");
+    modal.id = "pvp-steal-modal";
+    modal.className = "steal-modal";
+    modal.innerHTML = `
+        <div class="steal-modal-box">
+            <h3>🔓 اختر مهارة من مهاراتك المختومة لفك ختمها</h3>
+            <div class="steal-options-list" id="pvp-steal-options-list"></div>
+            <div class="steal-modal-buttons">
+                <button id="pvp-steal-cancel-btn">إلغاء</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    let list = modal.querySelector("#pvp-steal-options-list");
+    candidates.forEach(skill => {
+        let btn = document.createElement("button");
+        btn.className = "steal-option";
+        btn.textContent = skill.name;
+        btn.onclick = () => {
+            pvpCloseSealMenu();
+            pvpUseSealOrUnseal(abilitySkill.id, skill.id);
+        };
+        list.appendChild(btn);
+    });
+
+    modal.querySelector("#pvp-steal-cancel-btn").onclick = pvpCloseSealMenu;
+}
+
+// ========================================
+// تنفيذ الختم/فك الختم — كل التحقق الفعلي (هل المهارة مملوكة، هل الدور
+// دورنا، هل المهارة قابلة للختم/مختومة...) يحصل على السيرفر
+// ========================================
+async function pvpUseSealOrUnseal(abilitySkillId, targetSkillId){
+
+    pvpSetSkillsEnabled(false);
+
+    let { data, error } =
+    await supabaseClient
+    .rpc("pvp_seal_or_unseal_skill", {
         p_token: pvpGetToken(),
         p_match_id: pvpState.matchId,
         p_ability_skill_id: abilitySkillId,

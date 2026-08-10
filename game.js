@@ -622,9 +622,14 @@ async function login(){
 
 
 
-    // دخول الأدمن
+    // دخول الأدمن — نتعرف على اسم الأدمن بأي حالة أحرف (Admin/admin/ADMIN)
+    // ليتطابق مع الصف المخزن في قاعدة البيانات مهما كان المستخدم حروف الكتابة.
+    // الأهم: إذا فشل دخول الأدمن لأي سبب (كلمة مرور خاطئة، قفل مؤقت بسبب
+    // محاولات فاشلة، انقطاع شبكة...) نعرض الخطأ الحقيقي ونخرج فورًا ولا
+    // ننتقل أبدًا إلى دخول اللاعب — كانت الرسالة الناتجة "اسم المستخدم أو
+    // كلمة المرور خاطئة" تخفي السبب الفعلي (مثل قفل الحساب أو خطأ الشبكة)
 
-    if(username === "Admin"){
+    if(username.toLowerCase() === "admin"){
 
 
         let {data:admin,error:adminError}=
@@ -641,37 +646,59 @@ async function login(){
 
 
 
-        if(!adminError && admin){
+        if(adminError){
 
-            // لا نمنح الدخول فورًا: نرسل أولاً رمز تحقق إلى البريد الإداري
-            // ولا نُدخل لوحة الإدارة إلا بعد التحقق من الرمز
-            pendingAdminId = admin.id;
+            // PGRST116 = لا يوجد صف مرتجع من الدالة، أي كلمة المرور/الاسم
+            // غير متطابقين. أي خطأ آخر (قفل الحساب، الشبكة...) نعرض رسالته
+            if(adminError.code === "PGRST116"){
 
-            let otpBtn = document.getElementById("login-btn");
+                alert("اسم المستخدم أو كلمة مرور الأدمن غير صحيحة");
 
-            if(otpBtn) otpBtn.disabled = true;
+            } else {
 
-            let otpError = await sendAdminOtp();
-
-            if(otpBtn) otpBtn.disabled = false;
-
-            if(otpError){
-
-                console.log(otpError);
-
-                alert("تعذّر إرسال رمز التحقق إلى البريد الإداري، حاول لاحقًا");
-
-                pendingAdminId = null;
-
-                return;
+                alert(adminError.message || "تعذّر تسجيل دخول الإدارة");
 
             }
-
-            openAdminOtpModal();
 
             return;
 
         }
+
+        if(!admin){
+
+            alert("اسم المستخدم أو كلمة مرور الأدمن غير صحيحة");
+
+            return;
+
+        }
+
+        // لا نمنح الدخول فورًا: نرسل أولاً رمز تحقق إلى البريد الإداري
+        // ولا نُدخل لوحة الإدارة إلا بعد التحقق من الرمز
+        pendingAdminId = admin.id;
+
+        let otpBtn = document.getElementById("login-btn");
+
+        if(otpBtn) otpBtn.disabled = true;
+
+        let otpError = await sendAdminOtp();
+
+        if(otpBtn) otpBtn.disabled = false;
+
+        if(otpError){
+
+            console.log(otpError);
+
+            alert("تعذّر إرسال رمز التحقق إلى البريد الإداري، حاول لاحقًا");
+
+            pendingAdminId = null;
+
+            return;
+
+        }
+
+        openAdminOtpModal();
+
+        return;
 
     }
 
@@ -3069,6 +3096,18 @@ function skillTypeChoiceToFields(typeChoice){
 
         effect = "reflect";
 
+    } else if(typeChoice === "seal"){
+
+        type = "special";
+
+        effect = "seal";
+
+    } else if(typeChoice === "unseal"){
+
+        type = "special";
+
+        effect = "unseal";
+
     }
 
     return {type, effect, unblockable};
@@ -3092,6 +3131,10 @@ function skillFieldsToTypeChoice(skill){
 
     if(skill.effect === "reflect") return "reflect";
 
+    if(skill.effect === "seal") return "seal";
+
+    if(skill.effect === "unseal") return "unseal";
+
     if(skill.type === "defense") return "defense";
 
     return "attack";
@@ -3110,7 +3153,9 @@ function skillTypeOptionsHtml(selected){
         ["unblockable", "💥 ضربة لا تُصد"],
         ["freeze", "🧊 تجميد (شلل دور كامل)"],
         ["lifesteal", "🩸 امتصاص (شفاء بقدر الضرر)"],
-        ["reflect", "🔁 انعكاس (الضرر القادم يرتد على المهاجم ×المضاعف)"]
+        ["reflect", "🔁 انعكاس (الضرر القادم يرتد على المهاجم ×المضاعف)"],
+        ["seal", "🔒 ختم (منع مهارة استخدمها الخصم حتى نهاية النزال)"],
+        ["unseal", "🔓 فك الختم (إزالة ختم عن مهارة من مهاراتك)"]
     ];
 
     return options.map(([val, label]) =>
@@ -3133,6 +3178,10 @@ function skillTypeLabel(skill){
     if(skill.effect === "lifesteal") return "امتصاص";
 
     if(skill.effect === "reflect") return "انعكاس";
+
+    if(skill.effect === "seal") return "ختم";
+
+    if(skill.effect === "unseal") return "فك الختم";
 
     if(skill.type === "defense") return "دفاع";
 
@@ -3157,6 +3206,10 @@ function skillNumberFieldLabel(skill){
 
     if(skill.effect === "reflect") return "مضاعف ارتداد الضرر";
 
+    if(skill.effect === "seal") return "عدد المهارات القابلة للختم (من مهارات الخصم المستخدمة)";
+
+    if(skill.effect === "unseal") return "عدد المهارات القابلة لفك الختم عنها (من مهاراتك المختومة)";
+
     return "الضرر";
 
 }
@@ -3177,6 +3230,10 @@ function newSkillNumberFieldLabel(typeChoice){
     if(typeChoice === "lifesteal") return "الضرر (= الشفاء)";
 
     if(typeChoice === "reflect") return "مضاعف ارتداد الضرر";
+
+    if(typeChoice === "seal") return "عدد المهارات القابلة للختم (من مهارات الخصم المستخدمة)";
+
+    if(typeChoice === "unseal") return "عدد المهارات القابلة لفك الختم عنها (من مهاراتك المختومة)";
 
     return "الضرر";
 

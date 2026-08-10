@@ -1245,6 +1245,22 @@ border-color: rgba(255,190,70,0.5);
 
 }
 
+.battle-effect-banner.effect-seal{
+
+color:#ffd27d;
+
+border-color: rgba(255,200,80,0.5);
+
+}
+
+.battle-effect-banner.effect-unseal{
+
+color:#9dff9d;
+
+border-color: rgba(120,255,140,0.5);
+
+}
+
 .battle-effect-banner.effect-info{
 
 color:#e8e8e8;
@@ -1363,6 +1379,65 @@ border-color: rgba(255,150,80,0.6);
 box-shadow: 0 0 15px rgba(255,150,80,0.4);
 
 transform: scale(0.96);
+
+}
+
+
+/* شارة الختم (مهارة مختومة حتى نهاية النزال) */
+
+.skills-page button.skill-sealed{
+
+filter:grayscale(.5) brightness(.55) !important;
+
+border-color: rgba(255,200,80,0.45);
+
+box-shadow: inset 0 0 0 2px rgba(255,180,60,0.25), 0 0 8px rgba(255,170,50,0.25);
+
+opacity:0.85;
+
+}
+
+.sealed-badge{
+
+position: absolute;
+
+top: -6px;
+
+left: -6px;
+
+min-width: 20px;
+
+height: 20px;
+
+padding: 0 4px;
+
+border-radius: 50%;
+
+background: #d99a1f;
+
+color: #fff;
+
+font-size: 12px;
+
+display: flex;
+
+align-items: center;
+
+justify-content: center;
+
+box-shadow: 0 0 6px rgba(0,0,0,0.5);
+
+}
+
+.used-skill-chip.sealed{
+
+opacity:0.55;
+
+filter:grayscale(.4);
+
+text-decoration: line-through;
+
+border-color: rgba(255,200,80,0.4);
 
 }
 

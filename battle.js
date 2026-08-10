@@ -458,6 +458,10 @@ function buildFighter(pc, skills, isPlayer){
         // حالة التجميد/الشلل: عدد الأدوار القادمة التي يخسرها هذا المقاتل بالكامل
         frozenTurns: 0,
 
+        // المهارات المختومة (بمهارة "ختم"): لا يمكن استخدامها حتى نهاية
+        // النزال، إلا إذا فُكّ ختمها بمهارة "فك الختم"
+        sealedSkillIds: [],
+
         playerCharacterId: pc.id,
 
         isPlayer: isPlayer,
@@ -486,6 +490,12 @@ function calcDamage(skill){
 
     // مهارة الانعكاس لا تُلحق ضررًا مباشرًا؛ رقمها يمثّل مضاعف ارتداد الضرر
     if(skill.effect === "reflect") return 0;
+
+    // مهارتا الختم/فك الختم لا تُلحقان ضررًا؛ رقمهما يمثّل عدد المهارات
+    // القابلة للختم/فك الختم في التفعيل الواحد
+    if(skill.effect === "seal") return 0;
+
+    if(skill.effect === "unseal") return 0;
 
     if(skill.type === "attack" || skill.type === "special")
         return Number(skill.damage) || 0;
@@ -532,6 +542,15 @@ function cooldownTurnsRemaining(fighter, skill){
     let remaining = skill.cooldown - (fighter.turnsTaken - lastUsed);
 
     return remaining > 0 ? remaining : 0;
+
+}
+
+
+// هل هذه المهارة مختومة على صاحبها (بمهارة "ختم")؟ المهارة المختومة لا
+// يمكن استخدامها إطلاقًا حتى نهاية النزال، إلا بفك ختمها بمهارة "فك الختم"
+function isSkillSealed(fighter, skill){
+
+    return !!(fighter && fighter.sealedSkillIds && fighter.sealedSkillIds.includes(skill.id));
 
 }
 
@@ -595,6 +614,9 @@ function buildMonsterFighter(character, skills){
 
         // حالة التجميد/الشلل: عدد الأدوار القادمة التي يخسرها هذا المقاتل بالكامل
         frozenTurns: 0,
+
+        // المهارات المختومة حتى نهاية النزال (تُمنع بإضافة معرّفاتها هنا)
+        sealedSkillIds: [],
 
         isPlayer: false,
 
@@ -1310,8 +1332,11 @@ function buildSkillButton(skill){
 
     let remaining = cooldownTurnsRemaining(battle.player, skill);
 
+    // هل خُتمت هذه المهارة بمهارة ختم من الخصم؟ لا يمكن استخدامها إطلاقًا
+    let sealed = isSkillSealed(battle.player, skill);
+
     // الدفاع أصبح يستهلك الدور تمامًا مثل الهجوم، لذا يُقفل خارج دور اللاعب أيضًا.
-    // السرقة والنسخ فقط تبقيان متاحتين في أي وقت.
+    // السرقة والنسخ فقط تبقيان متاحتين في أي وقت. الختم/فك الختم فعلان يستهلكان الدور.
     let isTurnLocked =
     skill.effect !== "steal"
     && skill.effect !== "copy"
@@ -1324,9 +1349,23 @@ function buildSkillButton(skill){
     // دورك أو تكون المهارة في تهدئة. الحماية الفعلية من الاستخدام غير
     // المسموح تبقى داخل handleSkillClick نفسها (تتحقق من الدور/التهدئة
     // وتتجاهل الضغط أو تُنبّه)، ونكتفي هنا بمظهر بصري "مقفل" فقط
-    let locked = !ready || isTurnLocked || battle.finished;
+    let locked = sealed || !ready || isTurnLocked || battle.finished;
 
     btn.classList.toggle("skill-locked", locked);
+
+    if(sealed){
+
+        btn.classList.add("skill-sealed");
+
+        let badge = document.createElement("span");
+
+        badge.className = "sealed-badge";
+
+        badge.textContent = "🔒";
+
+        btn.appendChild(badge);
+
+    }
 
     if(!ready && remaining > 0){
 
@@ -1507,6 +1546,15 @@ function handleSkillClick(skill){
 
     if(battle.finished) return;
 
+    // المهارة المختومة لا يمكن استخدامها إطلاقًا حتى نهاية النزال
+    if(isSkillSealed(battle.player, skill)){
+
+        alert("هذه المهارة مختومة 🔒 ولا يمكن استخدامها حتى نهاية النزال");
+
+        return;
+
+    }
+
     if(skill.type === "defense"){
 
         if(battle.turnOwner !== "player") return;
@@ -1536,6 +1584,22 @@ function handleSkillClick(skill){
     if(skill.effect === "copy"){
 
         openCopyMenu(skill);
+
+        return;
+
+    }
+
+    if(skill.effect === "seal"){
+
+        openSealMenu(skill);
+
+        return;
+
+    }
+
+    if(skill.effect === "unseal"){
+
+        openUnsealMenu(skill);
 
         return;
 
@@ -1822,6 +1886,7 @@ async function enemyAct(){
     let canDefend =
     defenseSkill
     && isSkillReady(enemy, defenseSkill)
+    && !isSkillSealed(enemy, defenseSkill)
     && enemy.lastHitSnapshot
     && !enemy.lastHitSnapshot.consumed;
 
@@ -1879,17 +1944,50 @@ async function enemyAct(){
 
     let special =
     enemy.skills.find(s =>
-        s.type === "special" && s.effect !== "steal" && s.effect !== "copy" && s.effect !== "reflect" && isSkillReady(enemy, s));
+        s.type === "special"
+        && s.effect !== "steal" && s.effect !== "copy" && s.effect !== "reflect"
+        && s.effect !== "seal" && s.effect !== "unseal"
+        && !isSkillSealed(enemy, s)
+        && isSkillReady(enemy, s));
 
     // مهارة الانعكاس تُستخدم كخيار احتياطي فقط: إذا لم تكن هناك مهارة مميزة
     // أخرى جاهزة، ولم يكن الخصم في وضع انعكاس فعلًا (حتى لا يُجدّدها بلا فائدة)
     let reflectSkill =
     (enemy.reflectMultiplier <= 0) &&
     enemy.skills.find(s =>
-        s.type === "special" && s.effect === "reflect" && isSkillReady(enemy, s));
+        s.type === "special" && s.effect === "reflect" && !isSkillSealed(enemy, s) && isSkillReady(enemy, s));
+
+    // مهارة الختم: يختم الخصم مهارة عشوائية استخدمها اللاعب في هذا النزال
+    // (غير مختومة). مهارة فك الختم: يحرر عشوائيًا إحدى مهاراته المختومة.
+    // كلتاهما خيارات احتمالية (لا يُستخدمان في كل دور) حتى لا تصيرا
+    // المهارة الوحيدة التي يكررها الخصم
+    let sealSkill =
+    enemy.skills.find(s =>
+        s.type === "special" && s.effect === "seal" && !isSkillSealed(enemy, s) && isSkillReady(enemy, s));
+
+    let unsealSkill =
+    enemy.skills.find(s =>
+        s.type === "special" && s.effect === "unseal" && !isSkillSealed(enemy, s) && isSkillReady(enemy, s));
+
+    let sealablePlayerSkills =
+    battle.playerUsedSkills.filter(s => !isSkillSealed(battle.player, s));
+
+    let sealChoice =
+    (sealSkill && sealablePlayerSkills.length > 0 && Math.random() < 0.6)
+    ? sealSkill
+    : null;
+
+    let unsealChoice =
+    (unsealSkill && (enemy.sealedSkillIds || []).length > 0 && Math.random() < 0.8)
+    ? unsealSkill
+    : null;
 
     let chosen =
-    special || reflectSkill || enemy.skills.find(s => s.type === "attack");
+    special
+    || sealChoice
+    || unsealChoice
+    || reflectSkill
+    || enemy.skills.find(s => s.type === "attack" && !isSkillSealed(enemy, s));
 
     // نُسجّل الدور والتهدئة قبل resolveAction لأنها هي من تُحدّث الواجهة
     // (renderUsedSkillsUI / updateBattleScreen)، وإلا تظهر شارة التهدئة
@@ -1899,7 +1997,91 @@ async function enemyAct(){
     if(chosen.cooldown > 0)
         enemy.cooldownUsedAt[chosen.id] = enemy.turnsTaken;
 
+    if(chosen.effect === "seal" || chosen.effect === "unseal"){
+
+        enemyUseSealOrUnseal(chosen);
+
+        return;
+
+    }
+
     resolveAction(enemy, battle.player, chosen);
+
+    if(checkBattleEnd()) return;
+
+    battle.turnOwner = "player";
+
+    processTurn();
+
+}
+
+
+// تطبيق مهارتي الختم/فك الختم من جانب الخصم: تختاران هدفًا عشوائيًا صالحًا
+// وتُطبّقان أثرهما مباشرة (يُسجَّل الدور والتهدئة من قِبل المتصل)
+function enemyUseSealOrUnseal(skill){
+
+    let enemy = battle.enemy;
+
+    markEnemySkillUsed(skill);
+
+    if(skill.effect === "seal"){
+
+        let sealable =
+        battle.playerUsedSkills.filter(s => !isSkillSealed(battle.player, s));
+
+        let target = sealable[Math.floor(Math.random() * sealable.length)];
+
+        if(!target){
+
+            addBattleLog(`${enemy.name} حاول ختم مهارة لكن لا توجد مهارة قابلة للختم الآن`);
+
+        } else {
+
+            battle.player.sealedSkillIds = battle.player.sealedSkillIds || [];
+
+            if(!battle.player.sealedSkillIds.includes(target.id)){
+
+                battle.player.sealedSkillIds.push(target.id);
+
+            }
+
+            addBattleLog(`${enemy.name} ختم مهارة "${target.name}" حتى نهاية النزال!`);
+
+            showBattleEffectBanner(battle.prefix, `🔒 الخصم ختم مهارة "${target.name}"!`, "seal");
+
+        }
+
+    } else {
+
+        let sealedList = enemy.sealedSkillIds || [];
+
+        let targetId = sealedList[Math.floor(Math.random() * sealedList.length)];
+
+        if(!targetId){
+
+            addBattleLog(`${enemy.name} حاول فك الختم لكن لا توجد مهارة مختومة لديه`);
+
+        } else {
+
+            enemy.sealedSkillIds = sealedList.filter(id => id !== targetId);
+
+            let skillObj = enemy.skills.find(s => s.id === targetId);
+
+            let skillName = skillObj ? skillObj.name : "مهارة";
+
+            addBattleLog(`${enemy.name} فك الختم عن مهارة "${skillName}"!`);
+
+            showBattleEffectBanner(battle.prefix, `🔓 الخصم فك الختم عن "${skillName}"!`, "unseal");
+
+        }
+
+    }
+
+    renderUsedSkillsUI(battle.prefix);
+
+    renderSkillButtons(battle.prefix);
+
+    updateBattleScreen();
 
     if(checkBattleEnd()) return;
 
@@ -1930,7 +2112,8 @@ function renderUsedSkillsUI(prefix){
         let key = battle.enemyUsedSkills.map(s => {
             let ready = isSkillReady(battle.enemy, s);
             let remaining = cooldownTurnsRemaining(battle.enemy, s);
-            return s.id + ":" + (!ready && remaining > 0 ? remaining : "0");
+            let sealed = isSkillSealed(battle.enemy, s) ? "S" : "0";
+            return s.id + ":" + (!ready && remaining > 0 ? remaining : "0") + ":" + sealed;
         }).join(",");
 
         if(enemyBox.dataset.renderedKey !== key){
@@ -1945,11 +2128,13 @@ function renderUsedSkillsUI(prefix){
 
             let remaining = cooldownTurnsRemaining(battle.enemy, s);
 
+            let sealed = isSkillSealed(battle.enemy, s);
+
             let chip = document.createElement("span");
 
-            chip.className = "used-skill-chip" + ((!ready && remaining > 0) ? " on-cooldown" : "");
+            chip.className = "used-skill-chip" + ((!ready && remaining > 0) ? " on-cooldown" : "") + (sealed ? " sealed" : "");
 
-            chip.textContent = s.name;
+            chip.textContent = s.name + (sealed ? " 🔒" : "");
 
             if(!ready && remaining > 0){
 
@@ -1975,7 +2160,9 @@ function renderUsedSkillsUI(prefix){
 
     if(playerBox){
 
-        let key = battle.playerUsedSkills.map(s => s.id).join(",");
+        let key = battle.playerUsedSkills.map(s => {
+            return s.id + ":" + (isSkillSealed(battle.player, s) ? "S" : "0");
+        }).join(",");
 
         if(playerBox.dataset.renderedKey !== key){
 
@@ -1985,11 +2172,13 @@ function renderUsedSkillsUI(prefix){
 
         battle.playerUsedSkills.forEach(s => {
 
+            let sealed = isSkillSealed(battle.player, s);
+
             let chip = document.createElement("span");
 
-            chip.className = "used-skill-chip";
+            chip.className = "used-skill-chip" + (sealed ? " sealed" : "");
 
-            chip.textContent = s.name;
+            chip.textContent = s.name + (sealed ? " 🔒" : "");
 
             attachSkillLongPress(chip, s);
 
@@ -2990,6 +3179,499 @@ function runCopiedSkillsQueue(queue, index, consumesPlayerTurn){
 }
 
 
+
+
+// ========================================
+// مهارة "ختم": يختار اللاعب حتى N من مهارات الخصم التي استخدمها فعليًا
+// في هذا النزال ويختمها حتى نهاية النزال (لا يمكن للخصم استخدامها بعدها).
+// رقم المهارة = عدد المهارات القابلة للختم في التفعيل الواحد. فعل يستهلك
+// الدور بالكامل (بعكس السرقة/النسخ اللتين تبقىان متاحتين في أي وقت).
+// ========================================
+
+function openSealMenu(sealSkill){
+
+    if(battle.turnOwner !== "player") return;
+
+    if(battle.finished) return;
+
+    if(isSkillSealed(battle.player, sealSkill)){
+
+        alert("مهارة الختم هذه مختومة 🔒");
+
+        return;
+
+    }
+
+    if(!isSkillReady(battle.player, sealSkill)){
+
+        alert("مهارة الختم ما زالت في التهدئة");
+
+        return;
+
+    }
+
+    closeSealMenu();
+
+    let maxSeal = Math.max(1, Number(sealSkill.damage) || 1);
+
+    let selectedNames = [];
+
+    // تُختم فقط المهارات التي استخدمها الخصم في هذا النزال بالذات وغير
+    // المختومة مسبقًا (لا فائدة من ختم ما هو مختوم فعلًا)
+    let sealableSkills =
+    battle.enemyUsedSkillsThisBattle.filter(s => !isSkillSealed(battle.enemy, s));
+
+    let usedListHtml = sealableSkills.length > 0
+    ? sealableSkills
+        .map(s => `<button class="steal-option" data-name="${escapeHtml(s.name)}">${escapeHtml(s.name)}</button>`)
+        .join("")
+    : "<p>لم يستخدم الخصم أي مهارة في هذه المعركة بعد لتُختم</p>";
+
+    let modal = document.createElement("div");
+
+    modal.id = "seal-modal";
+
+    modal.className = "steal-modal";
+
+    modal.innerHTML = `
+
+        <div class="steal-modal-box">
+
+            <h3>🔒 اختر حتى ${maxSeal} ${maxSeal === 1 ? "مهارة" : "مهارات"} من الخصم لختمها حتى نهاية النزال</h3>
+
+            <div class="steal-options-list">
+                ${usedListHtml}
+            </div>
+
+            <p class="steal-or" id="seal-selected-label">لم تُختر أي مهارة بعد (0/${maxSeal})</p>
+
+            <div class="steal-modal-buttons">
+
+                <button id="seal-confirm-btn">ختم</button>
+
+                <button id="seal-cancel-btn">إلغاء</button>
+
+            </div>
+
+        </div>
+
+    `;
+
+    document.body.appendChild(modal);
+
+
+    function refreshSelectedLabel(){
+
+        let label = document.getElementById("seal-selected-label");
+
+        if(!label) return;
+
+        label.textContent =
+        selectedNames.length > 0
+        ? `المختارة: ${selectedNames.join("، ")} (${selectedNames.length}/${maxSeal})`
+        : `لم تُختر أي مهارة بعد (0/${maxSeal})`;
+
+    }
+
+    function toggleSelect(name, btn){
+
+        let idx = selectedNames.indexOf(name);
+
+        if(idx >= 0){
+
+            selectedNames.splice(idx, 1);
+
+            if(btn) btn.classList.remove("steal-selected");
+
+        } else {
+
+            if(selectedNames.length >= maxSeal){
+
+                alert(`لا يمكن اختيار أكثر من ${maxSeal} ${maxSeal === 1 ? "مهارة" : "مهارات"} في نفس الختم`);
+
+                return;
+
+            }
+
+            selectedNames.push(name);
+
+            if(btn) btn.classList.add("steal-selected");
+
+        }
+
+        refreshSelectedLabel();
+
+    }
+
+
+    modal.querySelectorAll(".steal-option").forEach(btn => {
+
+        btn.onclick = () => {
+
+            toggleSelect(btn.dataset.name, btn);
+
+        };
+
+    });
+
+
+    modal.querySelector("#seal-cancel-btn").onclick = closeSealMenu;
+
+    modal.querySelector("#seal-confirm-btn").onclick = () => {
+
+        if(selectedNames.length === 0){
+
+            alert("اختر مهارة واحدة على الأقل");
+
+            return;
+
+        }
+
+        attemptSealMulti(sealSkill, selectedNames);
+
+    };
+
+}
+
+
+function closeSealMenu(){
+
+    let modal = document.getElementById("seal-modal");
+
+    if(modal) modal.remove();
+
+}
+
+
+// يتحقق من كل الأسماء المختارة (مهارات استخدمها الخصم فعلًا في هذا النزال
+// وغير مختومة)، ثم يستهلك دور/تهدئة مهارة الختم مرة واحدة فقط لهذه الدفعة
+// بالكامل، ويختم كل المهارات المختارة، ثم يسلّم الدور للخصم
+function attemptSealMulti(sealSkill, names){
+
+    if(battle.turnOwner !== "player") return;
+
+    if(battle.finished) return;
+
+    let uniqueNames = [...new Set(names.map(n => n.trim()).filter(Boolean))];
+
+    let resolvedSkills = [];
+
+    for(let name of uniqueNames){
+
+        let targetSkill =
+        battle.enemyUsedSkillsThisBattle.find(s => s.name.trim() === name);
+
+        if(!targetSkill){
+
+            alert(`لا توجد مهارة بهذا الاسم ظهرت من الخصم بعد: "${name}"`);
+
+            return;
+
+        }
+
+        if(isSkillSealed(battle.enemy, targetSkill)){
+
+            alert(`مهارة "${name}" مختومة مسبقًا`);
+
+            return;
+
+        }
+
+        resolvedSkills.push(targetSkill);
+
+    }
+
+    closeSealMenu();
+
+    clearTurnTimer();
+
+    battle.enemy.sealedSkillIds = battle.enemy.sealedSkillIds || [];
+
+    resolvedSkills.forEach(s => {
+
+        if(!battle.enemy.sealedSkillIds.includes(s.id)){
+
+            battle.enemy.sealedSkillIds.push(s.id);
+
+        }
+
+    });
+
+    battle.player.turnsTaken++;
+
+    if(sealSkill.cooldown > 0)
+        battle.player.cooldownUsedAt[sealSkill.id] = battle.player.turnsTaken;
+
+    if(!battle.playerUsedSkills.find(s => s.id === sealSkill.id)){
+
+        battle.playerUsedSkills.push(sealSkill);
+
+    }
+
+    renderUsedSkillsUI(battle.prefix);
+
+    renderSkillButtons(battle.prefix);
+
+    updateBattleScreen();
+
+    let namesList = resolvedSkills.map(s => `"${s.name}"`).join("، ");
+
+    addBattleLog(`${battle.player.name} ختم ${resolvedSkills.length > 1 ? "مهارات" : "مهارة"} ${namesList} حتى نهاية النزال!`);
+
+    showBattleEffectBanner(battle.prefix, `🔒 ختمتَ مهارة ${namesList}!`, "seal");
+
+    if(checkBattleEnd()) return;
+
+    battle.turnOwner = "enemy";
+
+    setTimeout(processTurn, 900);
+
+}
+
+
+// ========================================
+// مهارة "فك الختم": يزيل اللاعب الختم عن حتى N من مهاراته المختومة حتى
+// يستطيع استخدامها من جديد. رقم المهارة = عدد المهارات القابلة لفك الختم
+// عنها في التفعيل الواحد. فعل يستهلك الدور بالكامل.
+// ========================================
+
+function openUnsealMenu(unsealSkill){
+
+    if(battle.turnOwner !== "player") return;
+
+    if(battle.finished) return;
+
+    if(isSkillSealed(battle.player, unsealSkill)){
+
+        alert("مهارة فك الختم هذه مختومة 🔒");
+
+        return;
+
+    }
+
+    if(!isSkillReady(battle.player, unsealSkill)){
+
+        alert("مهارة فك الختم ما زالت في التهدئة");
+
+        return;
+
+    }
+
+    closeUnsealMenu();
+
+    let maxUnseal = Math.max(1, Number(unsealSkill.damage) || 1);
+
+    let selectedNames = [];
+
+    let mySealedSkills =
+    (battle.player.sealedSkillIds || [])
+        .map(id => battle.player.skills.find(s => s.id === id))
+        .filter(Boolean);
+
+    let usedListHtml = mySealedSkills.length > 0
+    ? mySealedSkills
+        .map(s => `<button class="steal-option" data-name="${escapeHtml(s.name)}">${escapeHtml(s.name)}</button>`)
+        .join("")
+    : "<p>لا توجد أي مهارة مختومة لديك لفك ختمها</p>";
+
+    let modal = document.createElement("div");
+
+    modal.id = "unseal-modal";
+
+    modal.className = "steal-modal";
+
+    modal.innerHTML = `
+
+        <div class="steal-modal-box">
+
+            <h3>🔓 اختر حتى ${maxUnseal} ${maxUnseal === 1 ? "مهارة" : "مهارات"} من مهاراتك المختومة لفك ختمها</h3>
+
+            <div class="steal-options-list">
+                ${usedListHtml}
+            </div>
+
+            <p class="steal-or" id="unseal-selected-label">لم تُختر أي مهارة بعد (0/${maxUnseal})</p>
+
+            <div class="steal-modal-buttons">
+
+                <button id="unseal-confirm-btn">فك الختم</button>
+
+                <button id="unseal-cancel-btn">إلغاء</button>
+
+            </div>
+
+        </div>
+
+    `;
+
+    document.body.appendChild(modal);
+
+
+    function refreshSelectedLabel(){
+
+        let label = document.getElementById("unseal-selected-label");
+
+        if(!label) return;
+
+        label.textContent =
+        selectedNames.length > 0
+        ? `المختارة: ${selectedNames.join("، ")} (${selectedNames.length}/${maxUnseal})`
+        : `لم تُختر أي مهارة بعد (0/${maxUnseal})`;
+
+    }
+
+    function toggleSelect(name, btn){
+
+        let idx = selectedNames.indexOf(name);
+
+        if(idx >= 0){
+
+            selectedNames.splice(idx, 1);
+
+            if(btn) btn.classList.remove("steal-selected");
+
+        } else {
+
+            if(selectedNames.length >= maxUnseal){
+
+                alert(`لا يمكن اختيار أكثر من ${maxUnseal} ${maxUnseal === 1 ? "مهارة" : "مهارات"} في نفس الفك`);
+
+                return;
+
+            }
+
+            selectedNames.push(name);
+
+            if(btn) btn.classList.add("steal-selected");
+
+        }
+
+        refreshSelectedLabel();
+
+    }
+
+
+    modal.querySelectorAll(".steal-option").forEach(btn => {
+
+        btn.onclick = () => {
+
+            toggleSelect(btn.dataset.name, btn);
+
+        };
+
+    });
+
+
+    modal.querySelector("#unseal-cancel-btn").onclick = closeUnsealMenu;
+
+    modal.querySelector("#unseal-confirm-btn").onclick = () => {
+
+        if(selectedNames.length === 0){
+
+            alert("اختر مهارة واحدة على الأقل");
+
+            return;
+
+        }
+
+        attemptUnsealMulti(unsealSkill, selectedNames);
+
+    };
+
+}
+
+
+function closeUnsealMenu(){
+
+    let modal = document.getElementById("unseal-modal");
+
+    if(modal) modal.remove();
+
+}
+
+
+// يتحقق من الأسماء المختارة (مهارات اللاعب المختومة فعلًا)، ثم يستهلك
+// دور/تهدئة مهارة فك الختم مرة واحدة لهذه الدفعة، ويفك الختم عن كل المهارات
+// المختارة، ثم يسلّم الدور للخصم
+function attemptUnsealMulti(unsealSkill, names){
+
+    if(battle.turnOwner !== "player") return;
+
+    if(battle.finished) return;
+
+    let uniqueNames = [...new Set(names.map(n => n.trim()).filter(Boolean))];
+
+    let resolvedSkills = [];
+
+    for(let name of uniqueNames){
+
+        let targetSkill =
+        battle.player.skills.find(s => s.name.trim() === name);
+
+        if(!targetSkill){
+
+            alert(`لا توجد مهارة بهذا الاسم لديك: "${name}"`);
+
+            return;
+
+        }
+
+        if(!isSkillSealed(battle.player, targetSkill)){
+
+            alert(`مهارة "${name}" ليست مختومة أصلًا`);
+
+            return;
+
+        }
+
+        resolvedSkills.push(targetSkill);
+
+    }
+
+    closeUnsealMenu();
+
+    clearTurnTimer();
+
+    let sealedList = battle.player.sealedSkillIds || [];
+
+    resolvedSkills.forEach(s => {
+
+        sealedList = sealedList.filter(id => id !== s.id);
+
+    });
+
+    battle.player.sealedSkillIds = sealedList;
+
+    battle.player.turnsTaken++;
+
+    if(unsealSkill.cooldown > 0)
+        battle.player.cooldownUsedAt[unsealSkill.id] = battle.player.turnsTaken;
+
+    if(!battle.playerUsedSkills.find(s => s.id === unsealSkill.id)){
+
+        battle.playerUsedSkills.push(unsealSkill);
+
+    }
+
+    renderUsedSkillsUI(battle.prefix);
+
+    renderSkillButtons(battle.prefix);
+
+    updateBattleScreen();
+
+    let namesList = resolvedSkills.map(s => `"${s.name}"`).join("، ");
+
+    addBattleLog(`${battle.player.name} فك الختم عن ${resolvedSkills.length > 1 ? "مهارات" : "مهارة"} ${namesList}!`);
+
+    showBattleEffectBanner(battle.prefix, `🔓 فككت الختم عن ${namesList}!`, "unseal");
+
+    if(checkBattleEnd()) return;
+
+    battle.turnOwner = "enemy";
+
+    setTimeout(processTurn, 900);
+
+}
 
 
 // ========================================
