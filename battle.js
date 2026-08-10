@@ -2282,20 +2282,26 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
 
     let hpBefore = defender.hp;
 
-    // انعكاس الخصم: يُحسب على أساس الضرر الوارد قبل امتصاص الدرع — إن كان
-    // المدافع في وضع انعكاس والهجوم ليس "لا تُصد" وسبّب ضررًا فعلًا، يرتد
-    // الضرر كاملًا × مضاعف انعكاسه على المهاجم نفسه (حتى لو امتصّ الدرع
-    // الضربة عن المدافع، فالهجوم الحقيقي ما زال انعكس على مصدره)، وتُستهلك
-    // حالة الانعكاس (وضع مرّة واحدة فقط) — نفس سلوك سيرفر PvP
+    // انعكاس الخصم: يُحسب على أساس الضرر الوارد قبل امتصاص الدرع — أي ضربة
+    // ضاربة فعلية تُستهلك حالة الانعكاس (وضع مرّة واحدة فقط)، لكن ردّ الضرر
+    // على المهاجم لا يحدث إلا ضد الهجمات القابلة للصد. هكذا لا يبقى وضع
+    // الانعكاس نشطًا بلا فائدة بعد تلقي ضربة "لا تُصد" فينفذ في الجولة
+    // القادمة ضد هجوم عادي — نفس سلوك سيرفر PvP
     let reflectedDmg = 0;
 
-    if(!skill.unblockable && dmg > 0 && (defender.reflectMultiplier || 0) > 0){
+    if(dmg > 0 && (defender.reflectMultiplier || 0) > 0){
 
-        reflectedDmg = dmg * defender.reflectMultiplier;
+        let reflectMult = defender.reflectMultiplier;
 
         defender.reflectMultiplier = 0;
 
-        attacker.hp = Math.max(0, attacker.hp - reflectedDmg);
+        if(!skill.unblockable){
+
+            reflectedDmg = dmg * reflectMult;
+
+            attacker.hp = Math.max(0, attacker.hp - reflectedDmg);
+
+        }
 
     }
 
