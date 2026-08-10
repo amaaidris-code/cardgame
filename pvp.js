@@ -23,7 +23,17 @@ let pvpState = {
     // حالة مرحلة السباق (بعد استعداد الطرفين، قبل بداية النزال الفعلي)
     raceStarted: false,
     raceResolvedLocally: false,
-    raceLockedUntil: 0
+    raceLockedUntil: 0,
+
+    // مؤقت الـ60 ثانية للدور الحالي (متزامن مع turn_deadline على السيرفر)
+    turnDeadline: null,
+    turnTimerInterval: null,
+    skipTurnRequested: false,
+
+    // كل مهارات الخصم التي استُخدمت ضدي ولو في مباراة سابقة (تُستخدم
+    // للسرقة)، بخلاف oppUsedSkillIds التي تبقى خاصة بهذه المباراة فقط
+    // (وتُستخدم للنسخ)
+    oppEverUsedSkillIds: []
 };
 
 // حالة الردهة (اختيار الخصم) والتحدي، منفصلة عن حالة النزال نفسه
@@ -51,6 +61,77 @@ function pvpLobbyStopPolling(){
         clearInterval(pvpLobby.pollTimer);
         pvpLobby.pollTimer = null;
     }
+}
+
+// ========================================
+// مؤقت الدور (60 ثانية) — يعرض العدّ التنازلي المتزامن مع turn_deadline
+// القادم من السيرفر (وليس عدّادًا محليًا مستقلاً، حتى يبقى الطرفان متفقين
+// حتى لو تأخر أحدهما في استقبال التحديثات). عند الوصول للصفر، يطلب من
+// السيرفر تخطّي الدور (pvp_skip_turn) — السيرفر هو من يتحقق فعليًا من
+// انتهاء المهلة، فلا ضرر من استدعائها أكثر من مرة أو من كلا الطرفين
+// ========================================
+function pvpStopTurnTimer(){
+    if(pvpState.turnTimerInterval){
+        clearInterval(pvpState.turnTimerInterval);
+        pvpState.turnTimerInterval = null;
+    }
+    let box = document.getElementById("pvp-battle-timer");
+    if(box) box.textContent = "";
+}
+
+function pvpUpdateTurnTimer(turnDeadlineIso){
+
+    pvpState.turnDeadline = turnDeadlineIso || null;
+    pvpState.skipTurnRequested = false;
+
+    if(pvpState.turnTimerInterval){
+        clearInterval(pvpState.turnTimerInterval);
+        pvpState.turnTimerInterval = null;
+    }
+
+    if(!pvpState.turnDeadline){
+        let box = document.getElementById("pvp-battle-timer");
+        if(box) box.textContent = "";
+        return;
+    }
+
+    let deadlineMs = new Date(pvpState.turnDeadline).getTime();
+
+    let tick = () => {
+
+        let box = document.getElementById("pvp-battle-timer");
+        if(!box) return;
+
+        let remainingMs = deadlineMs - Date.now();
+        let seconds = Math.max(0, Math.ceil(remainingMs / 1000));
+
+        let m = Math.floor(seconds / 60);
+        let s = seconds % 60;
+        box.textContent = m + ":" + (s < 10 ? "0" + s : s);
+
+        if(remainingMs <= 0 && !pvpState.skipTurnRequested){
+            pvpState.skipTurnRequested = true;
+            pvpRequestSkipTurn();
+        }
+    };
+
+    tick();
+    pvpState.turnTimerInterval = setInterval(tick, 1000);
+}
+
+async function pvpRequestSkipTurn(){
+    if(!pvpState.matchId) return;
+    try{
+        await supabaseClient.rpc("pvp_skip_turn", {
+            p_token: pvpGetToken(),
+            p_match_id: pvpState.matchId
+        });
+    }catch(e){
+        // قد تفشل لأن الطرف الآخر تخطّى الدور أولاً أو المهلة لم تنتهِ
+        // فعليًا بعد على السيرفر (فرق توقيت بسيط) — لا مشكلة، الاستطلاع
+        // القادم سيُحدّث الحالة والمؤقت من جديد
+    }
+    pvpRefreshState(false);
 }
 
 // ========================================
@@ -301,11 +382,13 @@ async function pvpEnterReadyPhase(matchId, _unused){
     pvpState.finished = false;
     pvpState.myUsedSkillIds = [];
     pvpState.oppUsedSkillIds = [];
+    pvpState.oppEverUsedSkillIds = [];
     pvpState.myCooldowns = {};
     pvpState.myTurnsTaken = 0;
     pvpState.raceStarted = false;
     pvpState.raceResolvedLocally = false;
     pvpState.raceLockedUntil = 0;
+    pvpStopTurnTimer();
     pvpCloseStealMenu();
 
     let token = pvpGetToken();
@@ -777,6 +860,7 @@ async function pvpRefreshState(isFirstLoad){
 
     pvpState.myUsedSkillIds = myUsedIds;
     pvpState.oppUsedSkillIds = oppUsedIds;
+    pvpState.oppEverUsedSkillIds = data.opponent_ever_used_skill_ids || [];
     pvpState.myTurnsTaken = myTurnsTaken;
 
     pvpState.myCooldowns = {};
@@ -784,11 +868,13 @@ async function pvpRefreshState(isFirstLoad){
         pvpState.myCooldowns[c.skill_id] = c.last_used_turn;
     });
 
-    await pvpEnsureSkillsCached([...myUsedIds, ...oppUsedIds]);
+    await pvpEnsureSkillsCached([...myUsedIds, ...oppUsedIds, ...pvpState.oppEverUsedSkillIds]);
     pvpRenderUsedSkillsUI();
 
     let myTurn = (data.turn_player_id === (pvpState.isPlayer1 ? data.player1_id : data.player2_id));
     pvpSetSkillsEnabled(myTurn && data.status === "active");
+
+    pvpUpdateTurnTimer(data.status === "active" ? data.turn_deadline : null);
 
     if(!(myTurn && data.status === "active")){
         pvpCloseStealMenu();
@@ -824,6 +910,7 @@ async function pvpRefreshState(isFirstLoad){
     if(data.status === "finished"){
         pvpState.finished = true;
         pvpStopPolling();
+        pvpStopTurnTimer();
         pvpCloseStealMenu();
         let iWon = data.winner_id === (pvpState.isPlayer1 ? data.player1_id : data.player2_id);
         pvpShowResult(iWon);
@@ -875,6 +962,8 @@ function renderPVPSkillButtons(){
         } else {
             btn.onclick = () => pvpUseSkill(skill.id);
         }
+
+        attachSkillLongPress(btn, skill);
 
         page.appendChild(btn);
     });
@@ -992,12 +1081,18 @@ function pvpRenderUsedSkillsUI(){
             let chip = document.createElement("span");
             chip.className = "used-skill-chip";
             chip.textContent = s.name;
+            attachSkillLongPress(chip, s);
             box.appendChild(chip);
         });
     };
 
     renderInto("pvp-player-used-skills", pvpState.myUsedSkillIds);
-    renderInto("pvp-enemy-used-skills", pvpState.oppUsedSkillIds);
+
+    // نعرض تحت بطاقة الخصم كل ما استخدمه ضدك ولو في مباراة سابقة (نفس ما
+    // يُتاح للسرقة)، لا فقط ما استخدمه في هذه المباراة تحديدًا — الضغط
+    // المطوّل على أي منها يعرض وصفها وتأثيرها تمامًا كمهاراتك أنت
+    let oppIds = [...new Set([...pvpState.oppUsedSkillIds, ...pvpState.oppEverUsedSkillIds])];
+    renderInto("pvp-enemy-used-skills", oppIds);
 }
 
 // ========================================
@@ -1008,12 +1103,20 @@ function pvpOpenStealMenu(abilitySkill){
 
     pvpCloseStealMenu();
 
-    let candidates = pvpState.oppUsedSkillIds
+    // النسخ يتطلب أن يكون الخصم استخدم المهارة في هذه المباراة بالذات؛
+    // السرقة يكفي فيها أن يكون استخدمها ضدك ولو في مباراة سابقة
+    let sourceIds = (abilitySkill.effect === "steal")
+        ? pvpState.oppEverUsedSkillIds
+        : pvpState.oppUsedSkillIds;
+
+    let candidates = sourceIds
     .map(id => pvpState.skillCache[id])
     .filter(s => s && s.effect !== "steal" && s.effect !== "copy");
 
     if(candidates.length === 0){
-        alert("لم يستخدم الخصم أي مهارة قابلة للسرقة/النسخ بعد في هذه المباراة");
+        alert(abilitySkill.effect === "steal"
+            ? "لم يستخدم الخصم أي مهارة قابلة للسرقة ضدك من قبل"
+            : "لم يستخدم الخصم أي مهارة قابلة للنسخ بعد في هذه المباراة");
         return;
     }
 
@@ -1100,6 +1203,7 @@ async function pvpLeaveMatch(){
 
     pvpCloseStealMenu();
     pvpStopPolling();
+    pvpStopTurnTimer();
     pvpState.matchId = null;
     pvpState.finished = false;
 }

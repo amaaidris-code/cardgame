@@ -29,11 +29,96 @@ let battle = {
 
     botRaceTimeout: null,
 
-    enemyUsedSkills: [], // المهارات التي استخدمها الخصم فعليًا ضد اللاعب (تبقى ظاهرة طالما نفس الخصم)
+    enemyUsedSkills: [], // كل مهارات هذا الخصم التي كُشفت ضد هذا اللاعب — تشمل النزالات
+    // السابقة (محفوظة محليًا) + هذا النزال، وهي ما تُستخدم أساسًا لتحديد
+    // ما يمكن "سرقته": يكفي أن يكون الخصم استخدمها ضدك في أي نزال سابق
+
+    enemyUsedSkillsThisBattle: [], // فقط ما استخدمه الخصم فعليًا في هذا النزال
+    // بالذات — هذه (لا enemyUsedSkills) هي ما يُستخدم لتحديد ما يمكن "نسخه"،
+    // فالنسخ يتطلب أن يكون الخصم استخدم المهارة أمامك الآن، لا في نزال سابق
+
+    currentMonsterId: null, // معرّف الوحش الحالي، يُستخدم كمفتاح لحفظ/تحميل
+    // مهارات هذا الخصم المكشوفة سابقًا من التخزين المحلي
 
     playerUsedSkills: []
 
 };
+
+
+
+// ========================================
+// حفظ/تحميل مهارات كل وحش التي كُشفت سابقًا (للسرقة عبر نزالات متعددة)
+// ========================================
+
+function pveRevealedSkillsStorageKey(monsterId){
+
+    return "pve_revealed_skills_" + monsterId;
+
+}
+
+
+function pveLoadRevealedSkillIds(monsterId){
+
+    if(!monsterId) return [];
+
+    try{
+
+        let raw = localStorage.getItem(pveRevealedSkillsStorageKey(monsterId));
+
+        let ids = raw ? JSON.parse(raw) : [];
+
+        return Array.isArray(ids) ? ids : [];
+
+    }catch(e){
+
+        return [];
+
+    }
+
+}
+
+
+function pveSaveRevealedSkillIds(monsterId, ids){
+
+    if(!monsterId) return;
+
+    try{
+
+        localStorage.setItem(pveRevealedSkillsStorageKey(monsterId), JSON.stringify(ids));
+
+    }catch(e){}
+
+}
+
+
+// يُستدعى في كل مرة يستخدم فيها الخصم مهارة فعليًا ضد اللاعب: يضيفها لقائمة
+// هذا النزال (للنسخ) ولقائمة كل المهارات المكشوفة تاريخيًا (للسرقة)، ثم
+// يحفظ القائمة التاريخية محليًا حتى تبقى متاحة للسرقة في النزالات القادمة
+function markEnemySkillUsed(skill){
+
+    if(!battle.enemyUsedSkillsThisBattle.find(s => s.id === skill.id)){
+
+        battle.enemyUsedSkillsThisBattle.push(skill);
+
+    }
+
+    if(!battle.enemyUsedSkills.find(s => s.id === skill.id)){
+
+        battle.enemyUsedSkills.push(skill);
+
+        let ids = pveLoadRevealedSkillIds(battle.currentMonsterId);
+
+        if(!ids.includes(skill.id)){
+
+            ids.push(skill.id);
+
+            pveSaveRevealedSkillIds(battle.currentMonsterId, ids);
+
+        }
+
+    }
+
+}
 
 
 
@@ -448,7 +533,8 @@ function allPlayerSkills(fighter){
 
 // ملاحظة: مهارات الخصم الظاهرة لم تعد تُحفظ بين النزالات — كل نزال جديد
 // يبدأ بقائمة فارغة، ويجب أن يستخدم الخصم المهارة فعليًا في هذا النزال
-// نفسه حتى تظهر ويمكن سرقتها/نسخها (battle.enemyUsedSkills = [] عند البدء)
+// نفسه حتى يمكن نسخها؛ للسرقة يكفي أن يكون استخدمها في أي نزال سابق ضد هذا
+// الوحش (battle.enemyUsedSkillsThisBattle = [] عند بدء كل نزال جديد)
 
 
 
@@ -602,9 +688,19 @@ async function startPVEBattle(monsterId){
 
     battle.raceButtonLockedUntil = 0;
 
-    // مهارات الخصم الظاهرة تبدأ فارغة في كل نزال جديد — يجب أن يستخدم
-    // الخصم المهارة فعليًا في هذا النزال نفسه حتى تظهر ويمكن سرقتها/نسخها
-    battle.enemyUsedSkills = [];
+    // مهارات هذا النزال بالذات (تُستخدم لتحديد ما يمكن نسخه) تبدأ فارغة
+    // دائمًا — يجب أن يستخدم الخصم المهارة فعليًا في هذا النزال نفسه حتى
+    // يمكن نسخها. أما قائمة "كل ما كُشف من قبل" (تُستخدم للسرقة) فتُحمَّل
+    // من التخزين المحلي الخاص بهذا الوحش تحديدًا، فتبقى مهارات سبق أن
+    // استخدمها هذا الخصم ضدك في نزالات سابقة قابلة للسرقة حتى لو لم
+    // يستخدمها في هذا النزال بعد
+    battle.currentMonsterId = monsterId;
+
+    battle.enemyUsedSkillsThisBattle = [];
+
+    let revealedIds = pveLoadRevealedSkillIds(monsterId);
+
+    battle.enemyUsedSkills = monsterSkills.filter(s => revealedIds.includes(s.id));
 
     battle.playerUsedSkills = [];
 
@@ -1662,11 +1758,7 @@ async function enemyAct(){
         if(defenseSkill.cooldown > 0)
             enemy.cooldownUsedAt[defenseSkill.id] = enemy.turnsTaken;
 
-        if(!battle.enemyUsedSkills.find(s => s.id === defenseSkill.id)){
-
-            battle.enemyUsedSkills.push(defenseSkill);
-
-        }
+        markEnemySkillUsed(defenseSkill);
 
         renderUsedSkillsUI(battle.prefix);
 
@@ -1831,11 +1923,7 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
 
     } else if(attacker === battle.enemy){
 
-        if(!battle.enemyUsedSkills.find(s => s.id === skill.id)){
-
-            battle.enemyUsedSkills.push(skill);
-
-        }
+        markEnemySkillUsed(skill);
 
     } else if(attacker === battle.player){
 
@@ -2355,9 +2443,11 @@ function openCopyMenu(copySkill){
     modal.className = "steal-modal";
 
 
-    // بخلاف السرقة: كل مهارات الخصم الظاهرة تبقى قابلة للاختيار دائمًا،
-    // حتى لو كانت حاليًا في تهدئة عند الخصم — النسخ يتجاوز تهدئته عمدًا
-    let copyableSkills = battle.enemyUsedSkills;
+    // بخلاف السرقة: النسخ يتطلب أن يكون الخصم استخدم المهارة في هذا
+    // النزال بالذات (لا يكفي أن يكون استخدمها في نزال سابق)، لكن ضمن هذا
+    // النزال تبقى كل مهاراته الظاهرة قابلة للاختيار دائمًا حتى لو كانت
+    // حاليًا في تهدئة عنده — النسخ يتجاوز تهدئته عمدًا
+    let copyableSkills = battle.enemyUsedSkillsThisBattle;
 
     let usedListHtml = copyableSkills.length > 0
     ? copyableSkills
@@ -2488,9 +2578,9 @@ function attemptCopyMulti(copySkill, names){
 
     for(let name of uniqueNames){
 
-        // النسخ يكون فقط من المهارات التي ظهرت (كُشفت) فعليًا من الخصم
+        // النسخ يكون فقط من المهارات التي استخدمها الخصم فعليًا في هذا النزال
         let targetSkill =
-        battle.enemyUsedSkills.find(s => s.name.trim() === name);
+        battle.enemyUsedSkillsThisBattle.find(s => s.name.trim() === name);
 
         if(!targetSkill){
 
