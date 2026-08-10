@@ -1082,16 +1082,14 @@ async function pvpLeaveMatch(){
 // (استسلام إن كانت نشطة، أو حذفها إن كانت لا تزال بانتظار/استعداد) ثم
 // نعود للشاشة الرئيسية.
 // ========================================
-async function pvpLeaveBattleClicked(){
+function pvpLeaveBattleClicked(){
 
-    let btn = document.getElementById("pvp-leave-battle-button");
-    if(btn) btn.disabled = true;
-
-    await pvpLeaveMatch();
-
-    if(btn) btn.disabled = false;
-
+    // نُبدّل الشاشة فورًا دون انتظار الشبكة — زر العودة يجب أن يعمل دائمًا
+    // فورًا حتى لو كان الاتصال بطيئًا أو معلّقًا. تنظيف/استسلام المباراة
+    // على السيرفر يحصل في الخلفية بعد ذلك ولا يوقف عودة اللاعب للقائمة.
     openScreen("solo-battle-screen");
+
+    pvpLeaveMatch().catch(() => {});
 }
 
 function pvpShowResult(iWon){
