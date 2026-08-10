@@ -1244,7 +1244,16 @@ function buildSkillButton(skill){
     && skill.effect !== "copy"
     && battle.turnOwner !== "player";
 
-    btn.disabled = !ready || isTurnLocked || battle.finished;
+    // ملاحظة مهمة: لا نستخدم btn.disabled هنا رغم أن المهارة مقفلة فعليًا.
+    // العنصر disabled في المتصفح يمنع كل أحداث الإصبع/الفأرة عنه تمامًا
+    // (بما فيها pointerdown)، فيصبح الضغط المطوّل لعرض الوصف مستحيلاً على
+    // زر مقفل — وهذا بالذات كان يمنع رؤية وصف مهاراتك كل مرة لا يكون
+    // دورك أو تكون المهارة في تهدئة. الحماية الفعلية من الاستخدام غير
+    // المسموح تبقى داخل handleSkillClick نفسها (تتحقق من الدور/التهدئة
+    // وتتجاهل الضغط أو تُنبّه)، ونكتفي هنا بمظهر بصري "مقفل" فقط
+    let locked = !ready || isTurnLocked || battle.finished;
+
+    btn.classList.toggle("skill-locked", locked);
 
     if(!ready && remaining > 0){
 

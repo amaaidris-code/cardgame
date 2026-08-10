@@ -2735,7 +2735,8 @@ filter:brightness(0.92);
 }
 
 button:disabled,
-button.on-cooldown{
+button.on-cooldown,
+button.skill-locked{
 
 filter:grayscale(.25) brightness(.75);
 

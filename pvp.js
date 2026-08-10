@@ -81,6 +81,14 @@ function pvpStopTurnTimer(){
 
 function pvpUpdateTurnTimer(turnDeadlineIso){
 
+    // لا نعيد تشغيل المؤقّت إن كان نفس الموعد الذي نعرضه أصلاً (يحدث هذا
+    // في كل استطلاع تقريبًا طالما لم يتغيّر الدور) — إعادة التشغيل غير
+    // الضرورية كل 1.2 ثانية غير مضرة بصريًا (لأن tick تحسب الوقت من موعد
+    // الانتهاء الحقيقي دائمًا) لكنها تبقي المؤقّت يعمل بكفاءة أقل بلا داعٍ
+    if(turnDeadlineIso === pvpState.turnDeadline && pvpState.turnTimerInterval){
+        return;
+    }
+
     pvpState.turnDeadline = turnDeadlineIso || null;
     pvpState.skipTurnRequested = false;
 
@@ -390,6 +398,13 @@ async function pvpEnterReadyPhase(matchId, _unused){
     pvpState.raceLockedUntil = 0;
     pvpStopTurnTimer();
     pvpCloseStealMenu();
+
+    // نمسح ذاكرة آخر رسم لشرائح المهارات المستخدمة حتى لا تبقى شرائح
+    // المباراة السابقة ظاهرة لو تطابقت قوائم المعرّفات صدفة
+    let p1Box = document.getElementById("pvp-player-used-skills");
+    let p2Box = document.getElementById("pvp-enemy-used-skills");
+    if(p1Box) delete p1Box.dataset.renderedIds;
+    if(p2Box) delete p2Box.dataset.renderedIds;
 
     let token = pvpGetToken();
 
@@ -1013,10 +1028,15 @@ function pvpSetSkillsEnabled(enabled){
 
     pvpApplyCooldownBadges();
 
+    // نفس ملاحظة battle.js: لا نستخدم btn.disabled لأنها تمنع pointerdown
+    // بالكامل فيصبح الضغط المطوّل لعرض وصف المهارة مستحيلاً وقت الانتظار
+    // (دور الخصم أو التهدئة) — وهو بالضبط الوقت الذي يرغب فيه اللاعب
+    // بمراجعة الوصف غالبًا. الحماية الفعلية موجودة أصلاً على السيرفر
+    // (pvp_use_skill / pvp_steal_or_copy_skill يرفضان أي محاولة خارج دورك)
     container.querySelectorAll("button[data-skill-id]").forEach(btn => {
         let skill = pvpState.skillCache[btn.dataset.skillId];
         let onCooldown = skill ? pvpCooldownRemaining(skill) > 0 : false;
-        btn.disabled = !enabled || onCooldown;
+        btn.classList.toggle("skill-locked", !enabled || onCooldown);
     });
 }
 
@@ -1068,9 +1088,19 @@ async function pvpEnsureSkillsCached(ids){
 
 function pvpRenderUsedSkillsUI(){
 
-    let renderInto = (containerId, ids) => {
+    // نتفادى إعادة بناء الشرائح إذا لم تتغيّر قائمة المعرّفات فعليًا منذ
+    // آخر رسم — إعادة البناء غير المشروطة (innerHTML="" في كل استطلاع كل
+    // 1.2 ثانية) كانت تُزيل العنصر الذي يضغط عليه اللاعب مطوّلاً من الـ DOM
+    // أثناء الضغط نفسه، فيُطلق المتصفح pointercancel ويُلغي المؤقّت قبل
+    // أن يصل لل500ms المطلوبة لعرض الوصف — وهذا كان يجعل الضغط المطوّل
+    // يبدو معطّلاً تمامًا على مهارات الخصم رغم أن الكود صحيح
+    let renderInto = (containerId, ids, cacheKey) => {
         let box = document.getElementById(containerId);
         if(!box) return;
+
+        let key = ids.join(",");
+        if(box.dataset[cacheKey] === key) return;
+        box.dataset[cacheKey] = key;
 
         box.innerHTML = "";
 
@@ -1086,13 +1116,13 @@ function pvpRenderUsedSkillsUI(){
         });
     };
 
-    renderInto("pvp-player-used-skills", pvpState.myUsedSkillIds);
+    renderInto("pvp-player-used-skills", pvpState.myUsedSkillIds, "renderedIds");
 
     // نعرض تحت بطاقة الخصم كل ما استخدمه ضدك ولو في مباراة سابقة (نفس ما
     // يُتاح للسرقة)، لا فقط ما استخدمه في هذه المباراة تحديدًا — الضغط
     // المطوّل على أي منها يعرض وصفها وتأثيرها تمامًا كمهاراتك أنت
     let oppIds = [...new Set([...pvpState.oppUsedSkillIds, ...pvpState.oppEverUsedSkillIds])];
-    renderInto("pvp-enemy-used-skills", oppIds);
+    renderInto("pvp-enemy-used-skills", oppIds, "renderedIds");
 }
 
 // ========================================
