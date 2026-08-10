@@ -2940,6 +2940,7 @@ async function openEditCharacterModal(characterId){
                     <option value="copy">📋 نسخ (نسخ مهارة الخصم واستخدامها)</option>
                     <option value="unblockable">💥 ضربة لا تُصد</option>
                     <option value="freeze">🧊 تجميد (شلل دور كامل)</option>
+                    <option value="lifesteal">🩸 امتصاص (شفاء بقدر الضرر)</option>
                 </select>
 
                 <input id="new-skill-damage" type="number" placeholder="الضرر" value="0">
@@ -2983,6 +2984,8 @@ function skillTypeLabel(skill){
 
     if(skill.effect === "freeze") return "تجميد";
 
+    if(skill.effect === "lifesteal") return "امتصاص";
+
     if(skill.type === "defense") return "دفاع";
 
     return "هجوم";
@@ -3002,6 +3005,8 @@ function skillNumberFieldLabel(skill){
 
     if(skill.effect === "freeze") return "عدد أدوار الشلل";
 
+    if(skill.effect === "lifesteal") return "الضرر (= الشفاء)";
+
     return "الضرر";
 
 }
@@ -3018,6 +3023,8 @@ function newSkillNumberFieldLabel(typeChoice){
     if(typeChoice === "defense") return "عدد الضربات الممكن تحمّلها";
 
     if(typeChoice === "freeze") return "عدد أدوار الشلل";
+
+    if(typeChoice === "lifesteal") return "الضرر (= الشفاء)";
 
     return "الضرر";
 
@@ -3088,6 +3095,12 @@ async function addSkillToCharacter(characterId){
         type = "special";
 
         effect = "freeze";
+
+    } else if(typeChoice === "lifesteal"){
+
+        type = "special";
+
+        effect = "lifesteal";
 
     }
 

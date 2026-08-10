@@ -1971,6 +1971,19 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
     // امتصّها الدرع، فلا يوجد ضرر جديد يحتاج اللاعب لإلغائه يدويًا
     defender.lastHitSnapshot = { hpBefore: hpBefore, consumed: !!skill.unblockable || absorbedByShield };
 
+    // مهارة "امتصاص" (lifesteal): يعالج المهاجم نفسه بمقدار الضرر الفعلي
+    // الذي تسبّبه (بعد الدرع/الصد)، أي إن مُنع الضرر كله فلا شفاء — وصولاً
+    // للحد الأقصى من الصحة فقط
+    let healedAmount = 0;
+
+    if(skill.effect === "lifesteal" && dmg > 0 && attacker.hp < attacker.maxHp){
+
+        healedAmount = Math.min(dmg, attacker.maxHp - attacker.hp);
+
+        attacker.hp += healedAmount;
+
+    }
+
     if(!trackUsed){
 
         // مهارة مسروقة: لا تُضاف إلى قائمة "مهاراتي المستخدمة"، فقط
@@ -2001,6 +2014,18 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
 
     applyDamageEffect(battle.prefix, defenderPrefix, dmg, false);
 
+    // رقم شفاء الامتصاص يظهر فوق بطاقة المهاجم نفسه (قيمة خضراء +)
+    if(healedAmount > 0){
+
+        let attackerPrefix =
+        (attacker === battle.player)
+        ? battle.prefix + "-player"
+        : battle.prefix + "-enemy";
+
+        showDamagePopup(attackerPrefix, healedAmount, true);
+
+    }
+
     // شارة الحدث في منتصف الساحة: توضّح فورًا هل الضربة نجحت، أم امتصّها
     // الدرع، أم كانت تجميدًا — دون الحاجة لفتح سجل المعركة
     let iAmDefender = (defender === battle.player);
@@ -2021,6 +2046,16 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
             "freeze"
         );
 
+    } else if(skill.effect === "lifesteal" && healedAmount > 0){
+
+        showBattleEffectBanner(
+            battle.prefix,
+            iAmDefender
+            ? `🩸 تعرّضتَ لهجوم! -${dmg} والخصم امتصّ ${healedAmount} صحة`
+            : `🩸 ضربة موفّقة! -${dmg} وامتصصتَ ${healedAmount} صحة`,
+            "hit"
+        );
+
     } else if(dmg > 0){
 
         showBattleEffectBanner(
@@ -2034,6 +2069,10 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
     if(absorbedByShield){
 
         addBattleLog(`${attacker.name} استخدم ${skill.name}، لكن ${defender.name} امتصّها بدرعه! (متبقٍ ${defender.shieldCharges} من التحمّل)`);
+
+    } else if(skill.effect === "lifesteal" && healedAmount > 0){
+
+        addBattleLog(`${attacker.name} استخدم ${skill.name} → ${dmg} ضرر وامتصّ ${healedAmount} صحة`);
 
     } else {
 

@@ -915,6 +915,11 @@ async function pvpRefreshState(isFirstLoad){
     let iGotFrozenNow = newOppSkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].effect === "freeze");
     let iFrozeOppNow = newMySkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].effect === "freeze");
 
+    // هل استخدمتُ مهارة امتصاص (lifesteal) هذا الاستطلاع، وارتفعت صحتي
+    // فعلاً؟ نعرض شارة شفاء مميزة بدل شارة الضربة العادية فقط
+    let iUsedLifestealNow = newMySkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].effect === "lifesteal");
+    let lifestealHeal = (iUsedLifestealNow && prevMyHp !== undefined && myHp > prevMyHp) ? (myHp - prevMyHp) : 0;
+
     let statusBox = document.getElementById("pvp-status-message");
     if(statusBox){
         if(data.status === "active"){
@@ -957,6 +962,10 @@ async function pvpRefreshState(isFirstLoad){
         } else if(iFrozeOppNow){
 
             showBattleEffectBanner("pvp", "❄️ جمّدتَ الخصم!", "freeze");
+
+        } else if(lifestealHeal > 0){
+
+            showBattleEffectBanner("pvp", `🩸 ضربة موفّقة وامتصصتَ ${lifestealHeal} صحة!`, "hit");
 
         } else if(prevMyHp !== undefined && myHp < prevMyHp){
 
