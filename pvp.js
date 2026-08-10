@@ -226,14 +226,36 @@ async function pvpPollOutgoingChallenge(){
     .rpc("pvp_get_match_state", { p_token: pvpGetToken(), p_match_id: pvpLobby.outgoingMatchId })
     .single();
 
-    if(error || !data){
-        // المباراة لم تعد موجودة: الخصم رفض التحدي (أو حُذفت)
+    // PGRST116 = طلب .single() لم يجد أي صف — أي أن المباراة حُذفت فعلًا
+    // (الخصم رفضها، أو انتهت صلاحيتها). أي خطأ آخر (انقطاع شبكة مؤقت،
+    // تأخر الاتصال، إلخ) لا يعني رفضًا؛ نتجاهله ونحاول مجددًا في الدورة
+    // التالية بدل الحكم خطأً بأن الخصم رفض التحدي.
+    if(error && error.code === "PGRST116"){
         pvpLobby.mode = "browsing";
         pvpLobby.outgoingMatchId = null;
         pvpSetLobbyStatus("❌ رفض الخصم التحدي، اختر خصمًا آخر");
         await pvpRefreshLobby();
         return;
     }
+
+    if(error || !data){
+        // خطأ مؤقت (شبكة/اتصال) — لا نُسقط الانتظار، فقط نحاول مجددًا
+        // في الدورة التالية للاستطلاع (كل 3 ثوانٍ).
+        pvpLobby._outgoingFailCount = (pvpLobby._outgoingFailCount || 0) + 1;
+
+        // بعد عدة محاولات فاشلة متتالية (~15 ثانية) نعتبر الاتصال بالمباراة
+        // مفقودًا فعلًا ونعيد اللاعب للتصفح بدل تركه عالقًا إلى الأبد
+        if(pvpLobby._outgoingFailCount >= 5){
+            pvpLobby._outgoingFailCount = 0;
+            pvpLobby.mode = "browsing";
+            pvpLobby.outgoingMatchId = null;
+            pvpSetLobbyStatus("⚠️ تعذر الاتصال بالتحدي، حاول مجددًا");
+            await pvpRefreshLobby();
+        }
+        return;
+    }
+
+    pvpLobby._outgoingFailCount = 0;
 
     if(data.status === "ready_wait"){
         pvpLobbyStopPolling();
