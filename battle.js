@@ -202,6 +202,13 @@ function resetBattleVisuals(prefix){
 
     }
 
+    // نمسح ذاكرة آخر رسم لشرائح المهارات المستخدمة حتى لا تبقى شرائح
+    // النزال السابق ظاهرة لو تطابق المفتاح صدفة
+    let enemyUsedBox = document.getElementById(prefix + "-enemy-used-skills");
+    let playerUsedBox = document.getElementById(prefix + "-player-used-skills");
+    if(enemyUsedBox) delete enemyUsedBox.dataset.renderedKey;
+    if(playerUsedBox) delete playerUsedBox.dataset.renderedKey;
+
 }
 
 
@@ -688,6 +695,8 @@ async function startPVEBattle(monsterId){
 
     battle.raceButtonLockedUntil = 0;
 
+    setTurnIndicatorText("pve-turn-indicator", "", null);
+
     // مهارات هذا النزال بالذات (تُستخدم لتحديد ما يمكن نسخه) تبدأ فارغة
     // دائمًا — يجب أن يستخدم الخصم المهارة فعليًا في هذا النزال نفسه حتى
     // يمكن نسخها. أما قائمة "كل ما كُشف من قبل" (تُستخدم للسرقة) فتُحمَّل
@@ -1166,6 +1175,12 @@ function processTurn(){
 
         addBattleLog(`${currentFighter.name} ما زال مجمدًا ولا يستطيع الحركة هذا الدور!`);
 
+        setTurnIndicatorText(
+            "pve-turn-indicator",
+            currentFighter === battle.player ? "🥶 أنت مجمّد! يخسر دورك بالكامل" : "🧊 الخصم مجمّد! يخسر دوره بالكامل",
+            "frozen-note"
+        );
+
         renderSkillButtons(battle.prefix);
 
         setTimeout(() => {
@@ -1182,6 +1197,12 @@ function processTurn(){
         return;
 
     }
+
+    setTurnIndicatorText(
+        "pve-turn-indicator",
+        battle.turnOwner === "player" ? "🟢 دورك الآن" : "⏳ دور الخصم...",
+        battle.turnOwner === "player" ? "my-turn" : "opp-turn"
+    );
 
     if(battle.turnOwner === "enemy"){
 
@@ -1779,6 +1800,8 @@ async function enemyAct(){
         : `${enemy.name} استخدم الدفاع وألغى الضربة!`
         );
 
+        showBattleEffectBanner(battle.prefix, "🛡️ الخصم استخدم الدفاع وألغى الضربة!", "defense");
+
         if(checkBattleEnd()) return;
 
         battle.turnOwner = "player";
@@ -1837,7 +1860,20 @@ function renderUsedSkillsUI(prefix){
 
     let playerBox = document.getElementById(prefix + "-player-used-skills");
 
+    // نفس إصلاح PvP: لا نعيد بناء الشرائح إلا إذا تغيّر محتواها فعليًا
+    // (الاسم أو حالة التهدئة)، حتى لا يُقطع الضغط المطوّل على شريحة قيد
+    // إعادة الرسم في نفس اللحظة
     if(enemyBox){
+
+        let key = battle.enemyUsedSkills.map(s => {
+            let ready = isSkillReady(battle.enemy, s);
+            let remaining = cooldownTurnsRemaining(battle.enemy, s);
+            return s.id + ":" + (!ready && remaining > 0 ? remaining : "0");
+        }).join(",");
+
+        if(enemyBox.dataset.renderedKey !== key){
+
+        enemyBox.dataset.renderedKey = key;
 
         enemyBox.innerHTML = "";
 
@@ -1871,9 +1907,17 @@ function renderUsedSkillsUI(prefix){
 
         });
 
+        }
+
     }
 
     if(playerBox){
+
+        let key = battle.playerUsedSkills.map(s => s.id).join(",");
+
+        if(playerBox.dataset.renderedKey !== key){
+
+        playerBox.dataset.renderedKey = key;
 
         playerBox.innerHTML = "";
 
@@ -1890,6 +1934,8 @@ function renderUsedSkillsUI(prefix){
             playerBox.appendChild(chip);
 
         });
+
+        }
 
     }
 
@@ -1954,6 +2000,36 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
     : battle.prefix + "-enemy";
 
     applyDamageEffect(battle.prefix, defenderPrefix, dmg, false);
+
+    // شارة الحدث في منتصف الساحة: توضّح فورًا هل الضربة نجحت، أم امتصّها
+    // الدرع، أم كانت تجميدًا — دون الحاجة لفتح سجل المعركة
+    let iAmDefender = (defender === battle.player);
+
+    if(absorbedByShield){
+
+        showBattleEffectBanner(
+            battle.prefix,
+            iAmDefender ? "🛡️ صددتَ الهجوم بالدرع!" : "🛡️ الخصم صدّ هجومك بالدرع!",
+            "block"
+        );
+
+    } else if(skill.effect === "freeze"){
+
+        showBattleEffectBanner(
+            battle.prefix,
+            iAmDefender ? "❄️ تم تجميدك!" : "❄️ جمّدتَ الخصم!",
+            "freeze"
+        );
+
+    } else if(dmg > 0){
+
+        showBattleEffectBanner(
+            battle.prefix,
+            iAmDefender ? `💥 تعرّضتَ لهجوم! -${dmg}` : `⚔️ ضربة موفّقة! -${dmg}`,
+            "hit"
+        );
+
+    }
 
     if(absorbedByShield){
 
@@ -2043,6 +2119,8 @@ function useDefense(defenseSkill){
     ? `${battle.player.name} استخدم الدفاع وألغى الضربة! (يتحمّل ${enduranceHits - 1} ضربات إضافية تلقائيًا)`
     : `${battle.player.name} استخدم الدفاع وألغى الضربة!`
     );
+
+    showBattleEffectBanner(battle.prefix, "🛡️ استخدمتَ الدفاع وألغيتَ الضربة!", "defense");
 
     if(checkBattleEnd()) return;
 
@@ -2939,5 +3017,63 @@ function applyDamageEffect(prefix, targetPrefix, amount, isHeal){
     playHitEffect(prefix);
 
     showDamagePopup(targetPrefix, amount, isHeal);
+
+}
+
+
+// ========================================
+// شارة حدث المعركة (هجوم/صدّ/دفاع/تجميد...) — نص قصير يظهر لحظيًا في
+// منتصف ساحة القتال (نفس الآلية لـ PvE و PvP، الدالة عامة يستخدمها
+// battle.js و pvp.js معًا)
+// kind: "hit" | "block" | "defense" | "freeze" | "info"
+// ========================================
+function showBattleEffectBanner(prefix, text, kind){
+
+    let arena = document.querySelector("#" + prefix + "-battle-screen .battle-arena");
+
+    if(!arena) return;
+
+    // لو كانت هناك شارة سابقة لم تختفِ بعد، أزلها فورًا حتى لا تتراكم
+    // الشارات فوق بعضها عند حدوث أكثر من فعل بسرعة
+    let existing = arena.querySelector(".battle-effect-banner");
+    if(existing) existing.remove();
+
+    let banner = document.createElement("div");
+
+    banner.className = "battle-effect-banner effect-" + (kind || "info");
+
+    banner.textContent = text;
+
+    arena.appendChild(banner);
+
+    requestAnimationFrame(() => banner.classList.add("show"));
+
+    setTimeout(() => {
+
+        banner.classList.remove("show");
+        banner.classList.add("hide");
+
+        setTimeout(() => banner.remove(), 220);
+
+    }, 1300);
+
+}
+
+
+// ========================================
+// رسالة "دورك الآن / دور الخصم" أسفل عداد الوقت مباشرة
+// elId: معرّف العنصر (مختلف بين pve وpvp لأسباب توافق قديمة)
+// ========================================
+function setTurnIndicatorText(elId, text, cssClass){
+
+    let box = document.getElementById(elId);
+
+    if(!box) return;
+
+    box.textContent = text || "";
+
+    box.classList.remove("my-turn", "opp-turn", "frozen-note");
+
+    if(cssClass) box.classList.add(cssClass);
 
 }

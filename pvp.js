@@ -33,7 +33,12 @@ let pvpState = {
     // كل مهارات الخصم التي استُخدمت ضدي ولو في مباراة سابقة (تُستخدم
     // للسرقة)، بخلاف oppUsedSkillIds التي تبقى خاصة بهذه المباراة فقط
     // (وتُستخدم للنسخ)
-    oppEverUsedSkillIds: []
+    oppEverUsedSkillIds: [],
+
+    // آخر HP معروف للطرفين — تُستخدم لاكتشاف حدوث ضرر فعلي بين استطلاع
+    // وآخر (لعرض شارة الحدث المناسبة)، undefined يعني لم نحمّل الحالة بعد
+    lastMyHp: undefined,
+    lastOppHp: undefined
 };
 
 // حالة الردهة (اختيار الخصم) والتحدي، منفصلة عن حالة النزال نفسه
@@ -393,6 +398,8 @@ async function pvpEnterReadyPhase(matchId, _unused){
     pvpState.oppEverUsedSkillIds = [];
     pvpState.myCooldowns = {};
     pvpState.myTurnsTaken = 0;
+    pvpState.lastMyHp = undefined;
+    pvpState.lastOppHp = undefined;
     pvpState.raceStarted = false;
     pvpState.raceResolvedLocally = false;
     pvpState.raceLockedUntil = 0;
@@ -433,16 +440,8 @@ async function pvpEnterReadyPhase(matchId, _unused){
     openScreen("pvp-battle-screen");
 
     let statusBox = document.getElementById("pvp-status-message");
-    if(!statusBox){
-        statusBox = document.createElement("div");
-        statusBox.id = "pvp-status-message";
-        statusBox.style.textAlign = "center";
-        statusBox.style.padding = "20px";
-        statusBox.style.fontSize = "18px";
-        document.getElementById("pvp-battle-screen").prepend(statusBox);
-    }
-    statusBox.style.display = "block";
-    statusBox.textContent = "";
+    if(statusBox) statusBox.style.display = "block";
+    if(statusBox) statusBox.textContent = "";
 
     let arena = document.querySelector("#pvp-battle-screen .battle-arena");
     resetBattleVisuals("pvp");
@@ -842,6 +841,12 @@ async function pvpRefreshState(isFirstLoad){
     let prevMyUsedIds = pvpState.myUsedSkillIds || [];
     let prevOppUsedIds = pvpState.oppUsedSkillIds || [];
 
+    // نلتقط الـHP قبل هذا التحديث حتى نكتشف حصول ضرر فعلي هذا الاستطلاع
+    // تحديدًا (وليس فقط عرض الرقم النهائي) — أول تحميل للمباراة undefined
+    // عمدًا حتى لا نُظهر شارة "تعرضتَ لهجوم" خطأً عند مجرد فتح الشاشة
+    let prevMyHp = pvpState.lastMyHp;
+    let prevOppHp = pvpState.lastOppHp;
+
     if(pvpState.isPlayer1){
         myHp = data.player1_hp; oppHp = data.player2_hp;
         myMaxHp = data.player1_max_hp; oppMaxHp = data.player2_max_hp;
@@ -877,6 +882,8 @@ async function pvpRefreshState(isFirstLoad){
     pvpState.oppUsedSkillIds = oppUsedIds;
     pvpState.oppEverUsedSkillIds = data.opponent_ever_used_skill_ids || [];
     pvpState.myTurnsTaken = myTurnsTaken;
+    pvpState.lastMyHp = myHp;
+    pvpState.lastOppHp = oppHp;
 
     pvpState.myCooldowns = {};
     (data.my_cooldowns || []).forEach(c => {
@@ -912,14 +919,71 @@ async function pvpRefreshState(isFirstLoad){
     if(statusBox){
         if(data.status === "active"){
             statusBox.style.display = "block";
+            statusBox.classList.remove("my-turn", "opp-turn", "frozen-note");
             if(iGotFrozenNow && !myTurn){
                 statusBox.textContent = "🥶 تم تجميدك! الخصم يلعب دورًا إضافيًا";
+                statusBox.classList.add("frozen-note");
             } else if(iFrozeOppNow && myTurn){
                 statusBox.textContent = "🧊 جمّدت الخصم! العب دورك مجددًا";
+                statusBox.classList.add("frozen-note");
             } else {
                 statusBox.textContent = myTurn ? "🟢 دورك الآن" : "⏳ دور الخصم...";
+                statusBox.classList.add(myTurn ? "my-turn" : "opp-turn");
             }
         }
+    }
+
+    // شارة حدث المعركة في منتصف الساحة (نفس آلية PvE بالضبط): نستنتج ما
+    // حدث فعليًا هذا الاستطلاع من مقارنة الحالة الجديدة بالقديمة — تجميد،
+    // ثم ضرر فعلي، ثم صدّ (مهارة هجومية استُخدمت لكن لم يحصل ضرر بسببها،
+    // أي امتصّها الدرع)، ثم استخدام دفاع. نعرض أول ما ينطبق فقط لكل استطلاع
+    if(data.status === "active"){
+
+        let newOppDealsDamageSkill = newOppSkillIds.some(id => {
+            let s = pvpState.skillCache[id];
+            return s && (s.type === "attack" || s.type === "special") && s.effect !== "freeze" && Number(s.damage) > 0;
+        });
+        let newMyDealsDamageSkill = newMySkillIds.some(id => {
+            let s = pvpState.skillCache[id];
+            return s && (s.type === "attack" || s.type === "special") && s.effect !== "freeze" && Number(s.damage) > 0;
+        });
+        let newOppDefenseSkill = newOppSkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].type === "defense");
+        let newMyDefenseSkill = newMySkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].type === "defense");
+
+        if(iGotFrozenNow){
+
+            showBattleEffectBanner("pvp", "❄️ تم تجميدك!", "freeze");
+
+        } else if(iFrozeOppNow){
+
+            showBattleEffectBanner("pvp", "❄️ جمّدتَ الخصم!", "freeze");
+
+        } else if(prevMyHp !== undefined && myHp < prevMyHp){
+
+            showBattleEffectBanner("pvp", `💥 تعرّضتَ لهجوم! -${prevMyHp - myHp}`, "hit");
+
+        } else if(prevOppHp !== undefined && oppHp < prevOppHp){
+
+            showBattleEffectBanner("pvp", `⚔️ ضربة موفّقة! -${prevOppHp - oppHp}`, "hit");
+
+        } else if(newOppDealsDamageSkill && prevMyHp !== undefined && myHp >= prevMyHp){
+
+            showBattleEffectBanner("pvp", "🛡️ صددتَ هجوم الخصم!", "block");
+
+        } else if(newMyDealsDamageSkill && prevOppHp !== undefined && oppHp >= prevOppHp){
+
+            showBattleEffectBanner("pvp", "🛡️ الخصم صدّ هجومك!", "block");
+
+        } else if(newOppDefenseSkill){
+
+            showBattleEffectBanner("pvp", "🛡️ الخصم استخدم الدفاع!", "defense");
+
+        } else if(newMyDefenseSkill){
+
+            showBattleEffectBanner("pvp", "🛡️ استخدمتَ الدفاع!", "defense");
+
+        }
+
     }
 
     if(data.status === "finished"){

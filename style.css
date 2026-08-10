@@ -1078,6 +1078,170 @@ box-shadow: 0 0 15px rgba(255,255,255,0.1);
 }
 
 
+/* رسالة "دورك الآن / دور الخصم" أسفل عداد الوقت مباشرة، في منتصف
+   الساحة، حتى يعرف اللاعب فورًا صاحب الدور بدون الحاجة لتفقّد الأزرار */
+.turn-indicator{
+
+margin-top:8px;
+
+text-align:center;
+
+font-size:13px;
+
+font-weight:600;
+
+color:#e8e8e8;
+
+background: rgba(255,255,255,0.05);
+
+border:1px solid rgba(255,255,255,0.12);
+
+border-radius:20px;
+
+padding:4px 12px;
+
+white-space:nowrap;
+
+min-height:1em;
+
+transition: background .25s, color .25s;
+
+}
+
+.turn-indicator:empty{
+
+display:none;
+
+}
+
+.turn-indicator.my-turn{
+
+color:#7dffb0;
+
+background: rgba(70,255,150,0.1);
+
+border-color: rgba(70,255,150,0.3);
+
+}
+
+.turn-indicator.opp-turn{
+
+color:#ffcf7d;
+
+background: rgba(255,190,70,0.08);
+
+border-color: rgba(255,190,70,0.25);
+
+}
+
+.turn-indicator.frozen-note{
+
+color:#8fd6ff;
+
+background: rgba(70,180,255,0.12);
+
+border-color: rgba(70,180,255,0.3);
+
+}
+
+
+/* ========================================
+   شارات أحداث المعركة (هجوم/صدّ/دفاع/تجميد...) — تظهر لحظيًا في منتصف
+   ساحة القتال حتى يفهم اللاعب ما الذي حدث دون الحاجة لفتح سجل المعركة
+======================================== */
+.battle-effect-banner{
+
+position:absolute;
+
+left:50%;
+
+top:38%;
+
+transform:translate(-50%,-50%) scale(0.85);
+
+z-index:60;
+
+padding:10px 20px;
+
+border-radius:14px;
+
+font-size:16px;
+
+font-weight:700;
+
+white-space:nowrap;
+
+pointer-events:none;
+
+opacity:0;
+
+background: rgba(15,15,20,0.88);
+
+border:1px solid rgba(255,255,255,0.18);
+
+box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+
+text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+
+transition: opacity .18s ease, transform .18s ease;
+
+}
+
+.battle-effect-banner.show{
+
+opacity:1;
+
+transform:translate(-50%,-50%) scale(1);
+
+}
+
+.battle-effect-banner.hide{
+
+opacity:0;
+
+transform:translate(-50%,-50%) scale(0.9) translateY(-10px);
+
+}
+
+.battle-effect-banner.effect-hit{
+
+color:#ff8a8a;
+
+border-color: rgba(255,60,60,0.4);
+
+}
+
+.battle-effect-banner.effect-block{
+
+color:#7dc8ff;
+
+border-color: rgba(70,150,255,0.4);
+
+}
+
+.battle-effect-banner.effect-defense{
+
+color:#7dffb0;
+
+border-color: rgba(70,255,150,0.4);
+
+}
+
+.battle-effect-banner.effect-freeze{
+
+color:#bfe9ff;
+
+border-color: rgba(70,200,255,0.4);
+
+}
+
+.battle-effect-banner.effect-info{
+
+color:#e8e8e8;
+
+}
+
+
 /* زر الهجوم - نبض ناري */
 
 #pve-attack-button,
