@@ -839,6 +839,7 @@ async function pvpRefreshState(isFirstLoad){
     let myHp, oppHp, myMaxHp, oppMaxHp, myName, oppName, myImage, oppImage;
     let myUsedIds, oppUsedIds, myTurnsTaken, myCooldownsRaw;
     let myFrozenTurns, oppFrozenTurns;
+    let myReflectMult, oppReflectMult;
 
     // نلتقط القوائم القديمة (قبل هذا التحديث) لنكتشف لاحقًا هل استُخدمت
     // مهارة تجميد جديدة هذا الاستطلاع تحديدًا (لإظهار رسالة واضحة)
@@ -851,6 +852,11 @@ async function pvpRefreshState(isFirstLoad){
     let prevMyHp = pvpState.lastMyHp;
     let prevOppHp = pvpState.lastOppHp;
 
+    // آخر مضاعف انعكاس معروف لكل طرف (قبل هذا التحديث): لازمه لشارة
+    // "عكس الخصم الضرر" لأنه يُستهلك فورًا على السيرفر بعد الارتداد
+    let prevMyReflect = pvpState.lastMyReflect || 0;
+    let prevOppReflect = pvpState.lastOppReflect || 0;
+
     if(pvpState.isPlayer1){
         myHp = data.player1_hp; oppHp = data.player2_hp;
         myMaxHp = data.player1_max_hp; oppMaxHp = data.player2_max_hp;
@@ -861,6 +867,8 @@ async function pvpRefreshState(isFirstLoad){
         myTurnsTaken = data.player1_turns_taken || 0;
         myFrozenTurns = data.player1_frozen_turns || 0;
         oppFrozenTurns = data.player2_frozen_turns || 0;
+        myReflectMult = data.player1_reflect_multiplier || 0;
+        oppReflectMult = data.player2_reflect_multiplier || 0;
     } else {
         myHp = data.player2_hp; oppHp = data.player1_hp;
         myMaxHp = data.player2_max_hp; oppMaxHp = data.player1_max_hp;
@@ -871,6 +879,8 @@ async function pvpRefreshState(isFirstLoad){
         myTurnsTaken = data.player2_turns_taken || 0;
         myFrozenTurns = data.player2_frozen_turns || 0;
         oppFrozenTurns = data.player1_frozen_turns || 0;
+        myReflectMult = data.player2_reflect_multiplier || 0;
+        oppReflectMult = data.player1_reflect_multiplier || 0;
     }
 
     setFighterImage(document.getElementById("pvp-player-image"), myImage);
@@ -888,6 +898,8 @@ async function pvpRefreshState(isFirstLoad){
     pvpState.myTurnsTaken = myTurnsTaken;
     pvpState.lastMyHp = myHp;
     pvpState.lastOppHp = oppHp;
+    pvpState.lastMyReflect = myReflectMult;
+    pvpState.lastOppReflect = oppReflectMult;
 
     pvpState.myCooldowns = {};
     (data.my_cooldowns || []).forEach(c => {
@@ -912,6 +924,10 @@ async function pvpRefreshState(isFirstLoad){
     if(playerImgEl) playerImgEl.classList.toggle("frozen-status", myFrozenTurns > 0);
     if(enemyImgEl) enemyImgEl.classList.toggle("frozen-status", oppFrozenTurns > 0);
 
+    // مؤشر وضع الانعكاس + شارة المضاعف (نفس آلية PvE تمامًا)
+    toggleReflectStatus(playerImgEl, { reflectMultiplier: myReflectMult });
+    toggleReflectStatus(enemyImgEl, { reflectMultiplier: oppReflectMult });
+
     // هل استُخدمت مهارة تجميد جديدة هذا الاستطلاع تحديدًا؟ (للرسالة فقط،
     // بما أن عدّاد التجميد نفسه قد يعود لصفر فورًا لو كانت مدته دورًا واحدًا)
     let newOppSkillIds = oppUsedIds.filter(id => !prevOppUsedIds.includes(id));
@@ -923,6 +939,16 @@ async function pvpRefreshState(isFirstLoad){
     // فعلاً؟ نعرض شارة شفاء مميزة بدل شارة الضربة العادية فقط
     let iUsedLifestealNow = newMySkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].effect === "lifesteal");
     let lifestealHeal = (iUsedLifestealNow && prevMyHp !== undefined && myHp > prevMyHp) ? (myHp - prevMyHp) : 0;
+
+    // كشف أحداث الانعكاس هذا الاستطلاع تحديدًا: إمّا أن أحد الطرفين فعّل
+    // وضع الانعكاس، أو أنني هاجمتُ خصمًا منعكسًا فارتدّ ضرره عليّ كاملًا
+    let iSetReflectNow = newMySkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].effect === "reflect");
+    let iOppSetReflectNow = newOppSkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].effect === "reflect");
+    let iAttackedNow = newMySkillIds.some(id => {
+        let s = pvpState.skillCache[id];
+        return s && (s.type === "attack" || s.type === "special") && s.effect !== "freeze" && s.effect !== "reflect" && Number(s.damage) > 0;
+    });
+    let iGotReflectedNow = iAttackedNow && prevMyHp !== undefined && myHp < prevMyHp;
 
     let statusBox = document.getElementById("pvp-status-message");
     if(statusBox){
@@ -950,11 +976,11 @@ async function pvpRefreshState(isFirstLoad){
 
         let newOppDealsDamageSkill = newOppSkillIds.some(id => {
             let s = pvpState.skillCache[id];
-            return s && (s.type === "attack" || s.type === "special") && s.effect !== "freeze" && Number(s.damage) > 0;
+            return s && (s.type === "attack" || s.type === "special") && s.effect !== "freeze" && s.effect !== "reflect" && Number(s.damage) > 0;
         });
         let newMyDealsDamageSkill = newMySkillIds.some(id => {
             let s = pvpState.skillCache[id];
-            return s && (s.type === "attack" || s.type === "special") && s.effect !== "freeze" && Number(s.damage) > 0;
+            return s && (s.type === "attack" || s.type === "special") && s.effect !== "freeze" && s.effect !== "reflect" && Number(s.damage) > 0;
         });
         let newOppDefenseSkill = newOppSkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].type === "defense");
         let newMyDefenseSkill = newMySkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].type === "defense");
@@ -970,6 +996,18 @@ async function pvpRefreshState(isFirstLoad){
         } else if(lifestealHeal > 0){
 
             showBattleEffectBanner("pvp", `🩸 ضربة موفّقة وامتصصتَ ${lifestealHeal} صحة!`, "hit");
+
+        } else if(iGotReflectedNow){
+
+            showBattleEffectBanner("pvp", `🔁 عكس الخصم الضرر عليك (×${prevOppReflect})! -${prevMyHp - myHp}`, "reflect");
+
+        } else if(iSetReflectNow){
+
+            showBattleEffectBanner("pvp", `🔁 وضع الانعكاس نشط ×${myReflectMult}! الضرر القادم سيرتد`, "reflect");
+
+        } else if(iOppSetReflectNow){
+
+            showBattleEffectBanner("pvp", `🔁 الخصم في وضع انعكاس! (×${oppReflectMult})`, "reflect");
 
         } else if(prevMyHp !== undefined && myHp < prevMyHp){
 

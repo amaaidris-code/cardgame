@@ -3063,6 +3063,12 @@ function skillTypeChoiceToFields(typeChoice){
 
         effect = "lifesteal";
 
+    } else if(typeChoice === "reflect"){
+
+        type = "special";
+
+        effect = "reflect";
+
     }
 
     return {type, effect, unblockable};
@@ -3084,6 +3090,8 @@ function skillFieldsToTypeChoice(skill){
 
     if(skill.effect === "lifesteal") return "lifesteal";
 
+    if(skill.effect === "reflect") return "reflect";
+
     if(skill.type === "defense") return "defense";
 
     return "attack";
@@ -3101,7 +3109,8 @@ function skillTypeOptionsHtml(selected){
         ["copy", "📋 نسخ (نسخ مهارة الخصم واستخدامها)"],
         ["unblockable", "💥 ضربة لا تُصد"],
         ["freeze", "🧊 تجميد (شلل دور كامل)"],
-        ["lifesteal", "🩸 امتصاص (شفاء بقدر الضرر)"]
+        ["lifesteal", "🩸 امتصاص (شفاء بقدر الضرر)"],
+        ["reflect", "🔁 انعكاس (الضرر القادم يرتد على المهاجم ×المضاعف)"]
     ];
 
     return options.map(([val, label]) =>
@@ -3122,6 +3131,8 @@ function skillTypeLabel(skill){
     if(skill.effect === "freeze") return "تجميد";
 
     if(skill.effect === "lifesteal") return "امتصاص";
+
+    if(skill.effect === "reflect") return "انعكاس";
 
     if(skill.type === "defense") return "دفاع";
 
@@ -3144,6 +3155,8 @@ function skillNumberFieldLabel(skill){
 
     if(skill.effect === "lifesteal") return "الضرر (= الشفاء)";
 
+    if(skill.effect === "reflect") return "مضاعف ارتداد الضرر";
+
     return "الضرر";
 
 }
@@ -3162,6 +3175,8 @@ function newSkillNumberFieldLabel(typeChoice){
     if(typeChoice === "freeze") return "عدد أدوار الشلل";
 
     if(typeChoice === "lifesteal") return "الضرر (= الشفاء)";
+
+    if(typeChoice === "reflect") return "مضاعف ارتداد الضرر";
 
     return "الضرر";
 

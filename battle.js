@@ -451,6 +451,10 @@ function buildFighter(pc, skills, isPlayer){
         // كل ضربة قادمة تُمتَص تلقائيًا وتُنقِص شحنة واحدة حتى تنفد
         shieldCharges: 0,
 
+        // حالة الانعكاس: مضاعف الانعكاس الحالي (0 = غير منعكس). أي مهارة
+        // انعكاس تُفعّل وضع "يرتد الضرر القادم كاملًا × المضاعف على المهاجم"
+        reflectMultiplier: 0,
+
         // حالة التجميد/الشلل: عدد الأدوار القادمة التي يخسرها هذا المقاتل بالكامل
         frozenTurns: 0,
 
@@ -479,6 +483,9 @@ function calcDamage(skill){
 
     // مهارة التجميد/الشلل لا تُلحق ضررًا؛ رقمها يمثّل عدد أدوار التجميد بدلاً من ذلك
     if(skill.effect === "freeze") return 0;
+
+    // مهارة الانعكاس لا تُلحق ضررًا مباشرًا؛ رقمها يمثّل مضاعف ارتداد الضرر
+    if(skill.effect === "reflect") return 0;
 
     if(skill.type === "attack" || skill.type === "special")
         return Number(skill.damage) || 0;
@@ -581,6 +588,10 @@ function buildMonsterFighter(character, skills){
         // شحنات الدرع المتبقية من مهارة دفاع/دفاع مسروق "يتحمّل عدة ضربات":
         // كل ضربة قادمة تُمتَص تلقائيًا وتُنقِص شحنة واحدة حتى تنفد
         shieldCharges: 0,
+
+        // حالة الانعكاس: مضاعف الانعكاس الحالي (0 = غير منعكس). أي مهارة
+        // انعكاس تُفعّل وضع "يرتد الضرر القادم كاملًا × المضاعف على المهاجم"
+        reflectMultiplier: 0,
 
         // حالة التجميد/الشلل: عدد الأدوار القادمة التي يخسرها هذا المقاتل بالكامل
         frozenTurns: 0,
@@ -820,11 +831,52 @@ function updateBattleScreen(){
     if(playerImage) playerImage.classList.toggle("frozen-status", !!(battle.player.frozenTurns > 0));
     if(enemyImage) enemyImage.classList.toggle("frozen-status", !!(battle.enemy.frozenTurns > 0));
 
+    // مؤشر بصري على وضع الانعكاس + شارة المضاعف (تظهر ما دام الانعكاس نشطًا)
+    toggleReflectStatus(playerImage, battle.player);
+    toggleReflectStatus(enemyImage, battle.enemy);
+
     applyGlowColors();
 
     renderSkillButtons(prefix);
 
     renderUsedSkillsUI(prefix);
+
+}
+
+
+// شارة وضع الانعكاس: تلوّن صورة المقاتل وتحطّ شارة ذهبية تعرض المضاعف
+// (مثل مؤشر التجميد، لكنها تظهر ما دام الانعكاس نشطًا وتختفي عند زواله)
+function toggleReflectStatus(imageEl, fighter){
+
+    if(!imageEl) return;
+
+    imageEl.classList.toggle("reflect-status", !!(fighter.reflectMultiplier > 0));
+
+    let card = imageEl.closest(".battle-card");
+
+    if(!card) return;
+
+    let badge = card.querySelector(".reflect-badge");
+
+    if(fighter.reflectMultiplier > 0){
+
+        if(!badge){
+
+            badge = document.createElement("div");
+
+            badge.className = "reflect-badge";
+
+            card.appendChild(badge);
+
+        }
+
+        badge.textContent = "🔁 " + fighter.reflectMultiplier + "×";
+
+    } else if(badge){
+
+        badge.remove();
+
+    }
 
 }
 
@@ -1824,10 +1876,17 @@ async function enemyAct(){
 
     let special =
     enemy.skills.find(s =>
-        s.type === "special" && s.effect !== "steal" && s.effect !== "copy" && isSkillReady(enemy, s));
+        s.type === "special" && s.effect !== "steal" && s.effect !== "copy" && s.effect !== "reflect" && isSkillReady(enemy, s));
+
+    // مهارة الانعكاس تُستخدم كخيار احتياطي فقط: إذا لم تكن هناك مهارة مميزة
+    // أخرى جاهزة، ولم يكن الخصم في وضع انعكاس فعلًا (حتى لا يُجدّدها بلا فائدة)
+    let reflectSkill =
+    (enemy.reflectMultiplier <= 0) &&
+    enemy.skills.find(s =>
+        s.type === "special" && s.effect === "reflect" && isSkillReady(enemy, s));
 
     let chosen =
-    special || enemy.skills.find(s => s.type === "attack");
+    special || reflectSkill || enemy.skills.find(s => s.type === "attack");
 
     // نُسجّل الدور والتهدئة قبل resolveAction لأنها هي من تُحدّث الواجهة
     // (renderUsedSkillsUI / updateBattleScreen)، وإلا تظهر شارة التهدئة
@@ -1947,6 +2006,23 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
 
     let dmg = calcDamage(skill);
 
+    // مهارة انعكاس: لا ضرر مباشر — تُفعّل وضع الانعكاس لدى المهاجم (يرتد
+    // الضرر القادم إليه كاملًا × المضاعف على مصدره). أي فعل آخر يُنهي حالة
+    // انعكاس المهاجم السابقة التي كانت تنتظر ضربة الخصم القادمة فقط.
+    let isReflectSkill = skill.effect === "reflect";
+
+    if(isReflectSkill){
+
+        attacker.reflectMultiplier = Math.max(1, Number(skill.damage) || 1);
+
+        dmg = 0;
+
+    } else {
+
+        attacker.reflectMultiplier = 0;
+
+    }
+
     let hpBefore = defender.hp;
 
     // درع "تحمّل عدة ضربات" المتبقي من دفاع سابق: يمتص هذه الضربة تلقائيًا
@@ -1966,10 +2042,30 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
 
     }
 
+    // انعكاس الخصم: إن كان المدافع في وضع انعكاس والهجوم ليس "لا تُصد" وسبب
+    // ضررًا فعلًا (لم تمتصّه آلية قبله)، يرتد الضرر كاملًا × مضاعف انعكاسه
+    // على المهاجم نفسه، وتُستهلك حالة الانعكاس (وضع مرّة واحدة فقط)
+    let reflectedDmg = 0;
+
+    if(!skill.unblockable && dmg > 0 && (defender.reflectMultiplier || 0) > 0){
+
+        reflectedDmg = dmg * defender.reflectMultiplier;
+
+        defender.reflectMultiplier = 0;
+
+        attacker.hp = Math.max(0, attacker.hp - reflectedDmg);
+
+    }
+
     // إن كانت المهارة "لا تُصد" (unblockable)، تُعتبر الضربة مستهلكة فورًا
     // حتى لا يقدر الدفاع (عادي أو مسروق) على إلغائها لاحقًا. وكذلك إن
-    // امتصّها الدرع، فلا يوجد ضرر جديد يحتاج اللاعب لإلغائه يدويًا
-    defender.lastHitSnapshot = { hpBefore: hpBefore, consumed: !!skill.unblockable || absorbedByShield };
+    // امتصّها الدرع، فلا يوجد ضرر جديد يحتاج اللاعب لإلغائه يدويًا.
+    // مهارة الانعكاس لا تُنشئ "ضربة معلّقة" على الهدف إطلاقًا (لا ضرر فعلي)
+    if(skill.effect !== "reflect"){
+
+        defender.lastHitSnapshot = { hpBefore: hpBefore, consumed: !!skill.unblockable || absorbedByShield };
+
+    }
 
     // مهارة "امتصاص" (lifesteal): يعالج المهاجم نفسه بمقدار الضرر الفعلي
     // الذي تسبّبه (بعد الدرع/الصد)، أي إن مُنع الضرر كله فلا شفاء — وصولاً
@@ -2026,9 +2122,45 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
 
     }
 
+    // ضرر الانعكاس المرتدّ يظهر فوق بطاقة المهاجم نفسه (الذي تلقّى الصفعة)
+    if(reflectedDmg > 0){
+
+        playHitEffect(battle.prefix);
+
+        let attackerPrefix =
+        (attacker === battle.player)
+        ? battle.prefix + "-player"
+        : battle.prefix + "-enemy";
+
+        showDamagePopup(attackerPrefix, reflectedDmg, false);
+
+    }
+
     // شارة الحدث في منتصف الساحة: توضّح فورًا هل الضربة نجحت، أم امتصّها
     // الدرع، أم كانت تجميدًا — دون الحاجة لفتح سجل المعركة
     let iAmDefender = (defender === battle.player);
+
+    if(reflectedDmg > 0){
+
+        showBattleEffectBanner(
+            battle.prefix,
+            iAmDefender
+            ? `🔁 عكس الخصم الضرر عليك! -${reflectedDmg}`
+            : `🔁 ${defender.name} عكس الضرر عليك! -${reflectedDmg}`,
+            "reflect"
+        );
+
+    } else if(isReflectSkill){
+
+        showBattleEffectBanner(
+            battle.prefix,
+            attacker === battle.player
+            ? `🔁 وضع الانعكاس نشط ×${attacker.reflectMultiplier}! الضرر القادم سيرتد`
+            : `🔁 الخصم في وضع الانعكاس! (×${attacker.reflectMultiplier})`,
+            "reflect"
+        );
+
+    }
 
     if(absorbedByShield){
 
@@ -2073,6 +2205,14 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
     } else if(skill.effect === "lifesteal" && healedAmount > 0){
 
         addBattleLog(`${attacker.name} استخدم ${skill.name} → ${dmg} ضرر وامتصّ ${healedAmount} صحة`);
+
+    } else if(isReflectSkill){
+
+        addBattleLog(`${attacker.name} استخدم ${skill.name} ودخل في وضع الانعكاس (×${attacker.reflectMultiplier})`);
+
+    } else if(reflectedDmg > 0){
+
+        addBattleLog(`${attacker.name} استخدم ${skill.name} → ${dmg} ضرر على ${defender.name}، لكن ${defender.name} عكس الضرر! -${reflectedDmg} على ${attacker.name}`);
 
     } else {
 
