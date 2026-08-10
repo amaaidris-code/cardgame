@@ -3,7 +3,7 @@
   "appName": "CardGame",
   "webDir": "www",
   "server": {
-    "url": "https://beautiful-gingersnap-a87f1c.netlify.app",
+    "url": "https://cardgame-5nv.pages.dev",
     "cleartext": false,
     "androidScheme": "https"
   },
