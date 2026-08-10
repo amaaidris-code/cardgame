@@ -737,6 +737,12 @@ async function pvpRefreshState(isFirstLoad){
 
     let myHp, oppHp, myMaxHp, oppMaxHp, myName, oppName, myImage, oppImage;
     let myUsedIds, oppUsedIds, myTurnsTaken, myCooldownsRaw;
+    let myFrozenTurns, oppFrozenTurns;
+
+    // نلتقط القوائم القديمة (قبل هذا التحديث) لنكتشف لاحقًا هل استُخدمت
+    // مهارة تجميد جديدة هذا الاستطلاع تحديدًا (لإظهار رسالة واضحة)
+    let prevMyUsedIds = pvpState.myUsedSkillIds || [];
+    let prevOppUsedIds = pvpState.oppUsedSkillIds || [];
 
     if(pvpState.isPlayer1){
         myHp = data.player1_hp; oppHp = data.player2_hp;
@@ -746,6 +752,8 @@ async function pvpRefreshState(isFirstLoad){
         myUsedIds = data.player1_used_skill_ids || [];
         oppUsedIds = data.player2_used_skill_ids || [];
         myTurnsTaken = data.player1_turns_taken || 0;
+        myFrozenTurns = data.player1_frozen_turns || 0;
+        oppFrozenTurns = data.player2_frozen_turns || 0;
     } else {
         myHp = data.player2_hp; oppHp = data.player1_hp;
         myMaxHp = data.player2_max_hp; oppMaxHp = data.player1_max_hp;
@@ -754,6 +762,8 @@ async function pvpRefreshState(isFirstLoad){
         myUsedIds = data.player2_used_skill_ids || [];
         oppUsedIds = data.player1_used_skill_ids || [];
         myTurnsTaken = data.player2_turns_taken || 0;
+        myFrozenTurns = data.player2_frozen_turns || 0;
+        oppFrozenTurns = data.player1_frozen_turns || 0;
     }
 
     setFighterImage(document.getElementById("pvp-player-image"), myImage);
@@ -784,11 +794,30 @@ async function pvpRefreshState(isFirstLoad){
         pvpCloseStealMenu();
     }
 
+    // مؤشر تجميد بصري فوق صورة أي طرف لا يزال له أدوار متبقية من التجميد
+    let playerImgEl = document.getElementById("pvp-player-image");
+    let enemyImgEl = document.getElementById("pvp-enemy-image");
+    if(playerImgEl) playerImgEl.classList.toggle("frozen-status", myFrozenTurns > 0);
+    if(enemyImgEl) enemyImgEl.classList.toggle("frozen-status", oppFrozenTurns > 0);
+
+    // هل استُخدمت مهارة تجميد جديدة هذا الاستطلاع تحديدًا؟ (للرسالة فقط،
+    // بما أن عدّاد التجميد نفسه قد يعود لصفر فورًا لو كانت مدته دورًا واحدًا)
+    let newOppSkillIds = oppUsedIds.filter(id => !prevOppUsedIds.includes(id));
+    let newMySkillIds = myUsedIds.filter(id => !prevMyUsedIds.includes(id));
+    let iGotFrozenNow = newOppSkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].effect === "freeze");
+    let iFrozeOppNow = newMySkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].effect === "freeze");
+
     let statusBox = document.getElementById("pvp-status-message");
     if(statusBox){
         if(data.status === "active"){
             statusBox.style.display = "block";
-            statusBox.textContent = myTurn ? "🟢 دورك الآن" : "⏳ دور الخصم...";
+            if(iGotFrozenNow && !myTurn){
+                statusBox.textContent = "🥶 تم تجميدك! الخصم يلعب دورًا إضافيًا";
+            } else if(iFrozeOppNow && myTurn){
+                statusBox.textContent = "🧊 جمّدت الخصم! العب دورك مجددًا";
+            } else {
+                statusBox.textContent = myTurn ? "🟢 دورك الآن" : "⏳ دور الخصم...";
+            }
         }
     }
 
