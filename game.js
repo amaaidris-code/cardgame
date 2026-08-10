@@ -697,8 +697,8 @@ async function login(){
     // رمز الجلسة الآن يُعاد مباشرة ضمن login_user_and_get_player نفسها
     // (بعد أن أثبتت هويتك عبر كلمة المرور)، بدل نداء منفصل كان بإمكان أي
     // شخص يملك anon key استدعاءه بأي player_id لانتحال أي حساب آخر.
-    if(user.player_token){
-        localStorage.setItem("player_token", user.player_token);
+    if(user.token){
+        localStorage.setItem("player_token", user.token);
     }
 
 
