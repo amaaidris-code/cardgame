@@ -592,7 +592,7 @@ async function login(){
 
     // دخول الأدمن
 
-    if(username === "admin"){
+    if(username === "Admin"){
 
 
         let {data:admin,error:adminError}=
