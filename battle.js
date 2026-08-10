@@ -1831,6 +1831,9 @@ async function enemyAct(){
 
         enemy.lastHitSnapshot.consumed = true;
 
+        // الدفاع فعل ينهي حالة انعكاس الخصم السابقة (مطابقة لمنطق PvP)
+        enemy.reflectMultiplier = 0;
+
         let enduranceHits = Math.max(1, Number(defenseSkill.damage) || 1);
 
         enemy.shieldCharges = (enemy.shieldCharges || 0) + (enduranceHits - 1);
@@ -2270,6 +2273,10 @@ function useDefense(defenseSkill){
     battle.player.hp = snapshot.hpBefore;
 
     snapshot.consumed = true;
+
+    // أي فعل غير الانعكاس (بما فيه الدفاع) يُنهي حالة انعكاس المهاجم السابقة
+    // — مطابقة لمنطق السيرفر في PvP حيث يُصفَّر الانعكاس مع أي فعل آخر
+    battle.player.reflectMultiplier = 0;
 
     // رقم مهارة الدفاع الآن يمثّل "عدد الضربات التي يمكن تحمّلها": الضربة
     // الحالية تُلغى فورًا، وأي ضربات إضافية (N-1) تُمتص تلقائيًا لاحقًا
