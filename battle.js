@@ -2399,6 +2399,8 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
     // الدرع، أم كانت تجميدًا — دون الحاجة لفتح سجل المعركة
     let iAmDefender = (defender === battle.player);
 
+    // شارة الحدث: الانعكاس أولًا في الأهمية حتى لو امتصّ الدرع الضربة أيضًا
+    // (كانت شارة الدرع تحل محل شارة الانعكاس فتختفي رسالة "عكس الضرر")
     if(reflectedDmg > 0){
 
         showBattleEffectBanner(
@@ -2419,9 +2421,7 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
             "reflect"
         );
 
-    }
-
-    if(absorbedByShield){
+    } else if(absorbedByShield){
 
         showBattleEffectBanner(
             battle.prefix,
@@ -2457,7 +2457,17 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
 
     }
 
-    if(absorbedByShield){
+    // سجل المعركة: الانعكاس قبل الدرع، مع توضيح إن امتصّ الدرع الضربة
+    // أيضًا (كان فرع الدرع يخفي سجل الانعكاس تمامًا عند اجتماعهما)
+    if(reflectedDmg > 0){
+
+        let shieldNote = absorbedByShield
+        ? ` (وامتصّ ${defender.name} الضربة أيضًا بدرعه!)`
+        : "";
+
+        addBattleLog(`${attacker.name} استخدم ${skill.name} → ${dmg} ضرر على ${defender.name}، لكن ${defender.name} عكس الضرر! -${reflectedDmg} على ${attacker.name}${shieldNote}`);
+
+    } else if(absorbedByShield){
 
         addBattleLog(`${attacker.name} استخدم ${skill.name}، لكن ${defender.name} امتصّها بدرعه! (متبقٍ ${defender.shieldCharges} من التحمّل)`);
 
@@ -2468,10 +2478,6 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
     } else if(isReflectSkill){
 
         addBattleLog(`${attacker.name} استخدم ${skill.name} ودخل في وضع الانعكاس (×${attacker.reflectMultiplier})`);
-
-    } else if(reflectedDmg > 0){
-
-        addBattleLog(`${attacker.name} استخدم ${skill.name} → ${dmg} ضرر على ${defender.name}، لكن ${defender.name} عكس الضرر! -${reflectedDmg} على ${attacker.name}`);
 
     } else {
 
