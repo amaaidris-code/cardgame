@@ -240,9 +240,11 @@ function pvpRenderLobbyList(players, incomingChallenge){
     if(incomingChallenge){
         let card = document.createElement("div");
         card.className = "character-card pvp-incoming-card";
+        // اسم التحدّي قد يحمله مستخدم عادي — يُهرب قبل العرض (XSS)
+        let safeChallenger = escapeHtml(incomingChallenge.challenger_name || "لاعب");
         card.innerHTML = `
         <div class="character-info">
-            <h3>⚔️ ${incomingChallenge.challenger_name || "لاعب"}</h3>
+            <h3>⚔️ ${safeChallenger}</h3>
             <p class="pvp-incoming-note">تحدّاك هذا اللاعب!</p>
         </div>
         <div class="pvp-incoming-buttons">
@@ -265,9 +267,11 @@ function pvpRenderLobbyList(players, incomingChallenge){
     players.forEach(p => {
         let card = document.createElement("div");
         card.className = "character-card";
+        // اسم الشخصية المعروض في الردهة قد يكون لخصم — يُهرب قبل العرض (XSS)
+        let safeCharName = escapeHtml(p.character_name || "لاعب");
         card.innerHTML = `
         <div class="character-info">
-            <h3>${p.character_name || "لاعب"}</h3>
+            <h3>${safeCharName}</h3>
         </div>
         <button>⚔️ تحدَّ</button>
         `;
@@ -1024,10 +1028,13 @@ function updateHpDisplay(prefix, hp, maxHp){
 // ========================================
 function renderPVPSkillButtons(){
 
-    let container = document.getElementById("pvp-player-skills-pages");
-    if(!container) return;
+    let pagesEl = document.getElementById("pvp-player-skills-pages");
+    if(!pagesEl) return;
 
-    container.innerHTML = "";
+    let container = pagesEl.closest(".skills-container");
+
+    // نحافظ على رقم الصفحة الحالية عبر إعادات الرسم المتكررة (تهدئة، دور...)
+    let currentIndex = Number(pagesEl.dataset.activePage || 0);
 
     let usable = pvpState.mySkills;
 
@@ -1035,28 +1042,129 @@ function renderPVPSkillButtons(){
         usable = [{id:"default_atk", name:"هجوم عادي", type:"attack", damage:100, cooldown:0, effect:null}];
     }
 
-    let page = document.createElement("div");
-    page.className = "skills-page active";
+    let pagesOfSkills = chunkSkills(usable, SKILLS_PER_PAGE);
 
-    usable.forEach(skill => {
-        let btn = document.createElement("button");
-        btn.innerHTML = `<span class="skill-name">${skill.name}</span>`;
-        btn.dataset.skillId = skill.id;
+    currentIndex = Math.max(0, Math.min(currentIndex, pagesOfSkills.length - 1));
 
-        if(skill.effect === "steal" || skill.effect === "copy"){
-            btn.querySelector(".skill-name").textContent =
-                skill.name + (skill.effect === "steal" ? " 🕵️" : " 📋");
-            btn.onclick = () => pvpOpenStealMenu(skill);
-        } else {
-            btn.onclick = () => pvpUseSkill(skill.id);
-        }
+    pagesEl.innerHTML = "";
 
-        attachSkillLongPress(btn, skill);
+    pagesOfSkills.forEach((skillsChunk, i) => {
 
-        page.appendChild(btn);
+        let pageDiv = document.createElement("div");
+
+        pageDiv.className = "skills-page" + (i === currentIndex ? " active" : "");
+
+        skillsChunk.forEach(skill => {
+
+            let btn = document.createElement("button");
+
+            btn.innerHTML = `<span class="skill-name">${escapeHtml(skill.name)}</span>`;
+
+            btn.dataset.skillId = skill.id;
+
+            if(skill.effect === "steal" || skill.effect === "copy"){
+
+                btn.querySelector(".skill-name").textContent =
+                    skill.name + (skill.effect === "steal" ? " 🕵️" : " 📋");
+
+                btn.onclick = () => pvpOpenStealMenu(skill);
+
+            } else {
+
+                btn.onclick = () => pvpUseSkill(skill.id);
+
+            }
+
+            attachSkillLongPress(btn, skill);
+
+            pageDiv.appendChild(btn);
+
+        });
+
+        pagesEl.appendChild(pageDiv);
+
     });
 
-    container.appendChild(page);
+    pagesEl.dataset.activePage = String(currentIndex);
+
+    // النقاط أسفل الأزرار: نقطة واحدة لكل مجموعة من 4 مهارات
+    let dotsEl = container ? container.querySelector(".skill-dots") : null;
+
+    if(dotsEl){
+
+        if(pagesOfSkills.length <= 1){
+
+            dotsEl.style.display = "none";
+
+        } else {
+
+            dotsEl.style.display = "";
+
+            dotsEl.innerHTML = "";
+
+            pagesOfSkills.forEach((_, i) => {
+
+                let dot = document.createElement("span");
+
+                if(i === currentIndex) dot.classList.add("active");
+
+                dot.onclick = () => goToSkillsPage("pvp", i);
+
+                dotsEl.appendChild(dot);
+
+            });
+
+        }
+
+    }
+
+    // سحب اللمس للتنقل بين صفحات المهارات (مرة واحدة فقط لكل حاوية)
+    if(!pagesEl.dataset.swipeBound){
+
+        pagesEl.dataset.swipeBound = "1";
+
+        let startX = null;
+
+        pagesEl.addEventListener("touchstart", (e) => {
+
+            startX = e.touches[0].clientX;
+
+        }, { passive: true });
+
+        pagesEl.addEventListener("touchend", (e) => {
+
+            if(startX === null) return;
+
+            let endX = e.changedTouches[0].clientX;
+
+            let deltaX = endX - startX;
+
+            startX = null;
+
+            let SWIPE_THRESHOLD = 40;
+
+            if(Math.abs(deltaX) < SWIPE_THRESHOLD) return;
+
+            let pages = pagesEl.querySelectorAll(".skills-page");
+
+            let active = Number(pagesEl.dataset.activePage || 0);
+
+            if(deltaX < 0){
+
+                // سحب لليسار → الصفحة التالية
+                if(active < pages.length - 1) goToSkillsPage("pvp", active + 1);
+
+            } else {
+
+                // سحب لليمين → الصفحة السابقة
+                if(active > 0) goToSkillsPage("pvp", active - 1);
+
+            }
+
+        }, { passive: true });
+
+    }
+
     pvpApplyCooldownBadges();
 }
 

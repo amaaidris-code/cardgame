@@ -5,6 +5,38 @@
 
 
 // ========================================
+// تهريب النصوص قبل إدراجها في innerHTML — حماية من XSS
+// أي بيانات واردة من الخادم قد يحملها مستخدم عادي (اسم مستخدم، طلبات
+// شخصيات، أسماء في الردهة) تُمرَّر عبر هذه الدالة قبل أي عرض
+// ========================================
+
+function escapeHtml(value){
+
+    return String(value == null ? "" : value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+
+}
+
+// نسخة مخصصة لإدراجها داخل onclick="...": تهرب كل المحارف الخطرة في سياق
+// سلسلة JavaScript داخل خاصية HTML
+function escapeJsAttr(value){
+
+    return String(value == null ? "" : value)
+        .replace(/\\/g, "\\\\")
+        .replace(/'/g, "\\'")
+        .replace(/"/g, "\\\"")
+        .replace(/</g, "\\u003C")
+        .replace(/>/g, "\\u003E")
+        .replace(/\n/g, "\\n")
+        .replace(/\r/g, "\\r");
+
+}
+
+// ========================================
 // نظام إشعارات احترافي (Toast) بديل عن alert() الأبيض الافتراضي
 // نفس طريقة الاستدعاء تماماً: showToast("رسالة") بدل alert("رسالة")،
 // فقط شكل العرض تغيّر ليصير بطاقة داكنة متحركة بدل نافذة المتصفح الراكدة
@@ -1084,7 +1116,7 @@ function renderMonsterList(monsters){
 
         <div class="character-info">
 
-            <h3>${monster.name}</h3>
+            <h3>${escapeHtml(monster.name)}</h3>
 
             <p>❤️ ${monster.hp || 0} &nbsp;·&nbsp; ⚔️ ${monster.atk || 0}</p>
 
@@ -1227,12 +1259,12 @@ async function loadAvailableCharacters(){
         <div class="character-info">
 
             <h3>
-            ${character.name}
+            ${escapeHtml(character.name)}
             </h3>
 
 
             <p>
-            ${character.anime}
+            ${escapeHtml(character.anime)}
             </p>
 
 
@@ -1936,12 +1968,12 @@ async function loadCollection(){
 
 
         <h3>
-        ${character.name}
+        ${escapeHtml(character.name)}
         </h3>
 
 
         <p>
-        ${character.anime}
+        ${escapeHtml(character.anime)}
         </p>
 
 
@@ -2092,14 +2124,13 @@ async function loadCharacterProfile(){
 
 
 
-
     box.innerHTML = `
 
 
 
     <img
 
-    src="${character.identity_image || ''}"
+    src="${escapeHtml(character.identity_image || '')}"
 
     class="character-image"
 
@@ -2109,7 +2140,7 @@ async function loadCharacterProfile(){
 
     <h2>
 
-    ${character.name}
+    ${escapeHtml(character.name)}
 
     </h2>
 
@@ -2117,9 +2148,10 @@ async function loadCharacterProfile(){
 
     <p>
 
-    ${character.anime}
+    ${escapeHtml(character.anime)}
 
     </p>
+
 
 
 
@@ -2166,7 +2198,7 @@ async function loadCharacterProfile(){
 
     <h3>
 
-    ${character.power_name || "القوة الخاصة"}
+    ${escapeHtml(character.power_name || "القوة الخاصة")}
 
     </h3>
 
@@ -2176,7 +2208,7 @@ async function loadCharacterProfile(){
 
     <p>
 
-    ${character.power_description || ""}
+    ${escapeHtml(character.power_description || "")}
 
     </p>
 
@@ -2186,7 +2218,7 @@ async function loadCharacterProfile(){
 
     <p>
 
-    "${character.quote || ""}"
+    "${escapeHtml(character.quote || "")}"
 
     </p>
 
@@ -2522,19 +2554,24 @@ function renderAdminCharacterCards(list, emptyMessage){
 
     list.forEach(character => {
 
+        // أسماء الشخصيات/الأنمي من قاعدة البيانات — تُهرب قبل العرض (XSS)
+        let safeName = escapeHtml(character.name);
+
+        let safeAnime = escapeHtml(character.anime);
+
         html += `
 
         <div class="admin-character-card">
 
             <div class="admin-thumb-wrap">
-                <img class="admin-thumb" src="${character.identity_image || ''}" onerror="this.style.visibility='hidden'">
+                <img class="admin-thumb" src="${escapeHtml(character.identity_image || '')}" onerror="this.style.visibility='hidden'">
             </div>
 
             <div class="admin-character-info">
 
-                <h3>${character.name}</h3>
+                <h3>${safeName}</h3>
 
-                <p class="admin-character-anime">${character.anime}</p>
+                <p class="admin-character-anime">${safeAnime}</p>
 
                 <p class="admin-character-stats">❤️ ${character.hp || 0} &nbsp;·&nbsp; ⚔️ ${character.atk || 0} &nbsp;·&nbsp; LV ${character.level || 1}</p>
 
@@ -2685,7 +2722,13 @@ async function loadAdminPlayers(){
 
     players.forEach(player => {
 
+        // اسم المستخدم من إدخال اللاعب نفسه — يُهرب قبل العرض (innerHTML)
+        // وقبل إدراجه داخل onclick لمنع حقن سكربت (XSS) في لوحة الأدمن
         let username = player.username || "غير معروف";
+
+        let safeUsername = escapeHtml(username);
+
+        let jsSafeUsername = escapeJsAttr(username);
 
         html += `
 
@@ -2693,7 +2736,7 @@ async function loadAdminPlayers(){
 
             <div class="admin-player-info">
 
-                <h3>${username}</h3>
+                <h3>${safeUsername}</h3>
 
                 <p class="admin-player-sub">${player.has_character ? "🎴 يملك شخصية" : "بدون شخصية"}</p>
 
@@ -2705,7 +2748,7 @@ async function loadAdminPlayers(){
 
                 <button onclick="savePlayerGold('${player.player_id}')">💾 حفظ</button>
 
-                <button onclick="deletePlayerAdmin('${player.player_id}', '${username.replace(/'/g, "\\'")}')" class="admin-danger-btn">🗑️ حذف</button>
+                <button onclick="deletePlayerAdmin('${player.player_id}', '${jsSafeUsername}')" class="admin-danger-btn">🗑️ حذف</button>
 
             </div>
 
@@ -2843,11 +2886,17 @@ async function openEditCharacterModal(characterId){
 
         <div class="admin-skill-edit-row">
 
-            <span class="admin-skill-edit-name">${s.name} <small>(${skillTypeLabel(s)})</small></span>
+            <input type="text" id="skill-name-${s.id}" class="admin-skill-name-input" value="${escapeHtml(s.name || '')}" placeholder="اسم المهارة">
+
+            <select id="skill-type-${s.id}" onchange="updateSkillNumberLabelFor('${s.id}')">
+                ${skillTypeOptionsHtml(skillFieldsToTypeChoice(s))}
+            </select>
 
             <input type="number" id="skill-damage-${s.id}" value="${s.damage || 0}" placeholder="${skillNumberFieldLabel(s)}">
 
             <input type="number" id="skill-cooldown-${s.id}" value="${s.cooldown || 0}" placeholder="التهدئة">
+
+            <textarea id="skill-desc-${s.id}" class="admin-skill-desc-input" placeholder="وصف المهارة (يظهر عند الضغط المطوّل)">${escapeHtml(s.description || '')}</textarea>
 
             <button onclick="saveSkillEdit('${s.id}')">حفظ</button>
 
@@ -2934,18 +2983,14 @@ async function openEditCharacterModal(characterId){
                 <input id="new-skill-name" type="text" placeholder="اسم المهارة">
 
                 <select id="new-skill-type" onchange="updateNewSkillNumberLabel()">
-                    <option value="attack">⚔️ هجوم عادي</option>
-                    <option value="defense">🛡️ دفاع</option>
-                    <option value="steal">🗡️ مفترس (سرقة مهارة)</option>
-                    <option value="copy">📋 نسخ (نسخ مهارة الخصم واستخدامها)</option>
-                    <option value="unblockable">💥 ضربة لا تُصد</option>
-                    <option value="freeze">🧊 تجميد (شلل دور كامل)</option>
-                    <option value="lifesteal">🩸 امتصاص (شفاء بقدر الضرر)</option>
+                    ${skillTypeOptionsHtml("attack")}
                 </select>
 
                 <input id="new-skill-damage" type="number" placeholder="الضرر" value="0">
 
                 <input id="new-skill-cooldown" type="number" placeholder="التهدئة (بالأدوار)" value="0">
+
+                <textarea id="new-skill-description" placeholder="وصف المهارة (يظهر للاعب عند الضغط المطوّل على الزر)"></textarea>
 
                 <button onclick="addSkillToCharacter('${characterId}')">إضافة المهارة</button>
 
@@ -2970,6 +3015,98 @@ async function openEditCharacterModal(characterId){
     document.getElementById("cancel-character-edit-btn").onclick = closeEditCharacterModal;
 
     document.getElementById("save-character-edit-btn").onclick = () => saveCharacterEdit(characterId);
+
+}
+
+
+// يحوّل اختيار نوع المهارة في قوائم النوع (إضافة/تعديل) إلى الحقول الفعلية
+// type/effect/unblockable كما هي مخزّنة في جدول skills
+function skillTypeChoiceToFields(typeChoice){
+
+    let type = "attack";
+
+    let effect = null;
+
+    let unblockable = false;
+
+    if(typeChoice === "defense"){
+
+        type = "defense";
+
+    } else if(typeChoice === "steal"){
+
+        type = "special";
+
+        effect = "steal";
+
+    } else if(typeChoice === "copy"){
+
+        type = "special";
+
+        effect = "copy";
+
+    } else if(typeChoice === "unblockable"){
+
+        type = "special";
+
+        unblockable = true;
+
+    } else if(typeChoice === "freeze"){
+
+        type = "special";
+
+        effect = "freeze";
+
+    } else if(typeChoice === "lifesteal"){
+
+        type = "special";
+
+        effect = "lifesteal";
+
+    }
+
+    return {type, effect, unblockable};
+
+}
+
+
+// الاتجاه المعاكس: من كائن مهارة (كما يُقرأ من قاعدة البيانات) إلى قيمة
+// قائمة النوع، لعرض قائمة النوع في نموذج التعديل على قيمتها الحالية
+function skillFieldsToTypeChoice(skill){
+
+    if(skill.unblockable) return "unblockable";
+
+    if(skill.effect === "steal") return "steal";
+
+    if(skill.effect === "copy") return "copy";
+
+    if(skill.effect === "freeze") return "freeze";
+
+    if(skill.effect === "lifesteal") return "lifesteal";
+
+    if(skill.type === "defense") return "defense";
+
+    return "attack";
+
+}
+
+
+// خيارات قائمة نوع المهارة (مشتركة بين نموذجي الإضافة والتعديل)
+function skillTypeOptionsHtml(selected){
+
+    const options = [
+        ["attack", "⚔️ هجوم عادي"],
+        ["defense", "🛡️ دفاع"],
+        ["steal", "🗡️ مفترس (سرقة مهارة)"],
+        ["copy", "📋 نسخ (نسخ مهارة الخصم واستخدامها)"],
+        ["unblockable", "💥 ضربة لا تُصد"],
+        ["freeze", "🧊 تجميد (شلل دور كامل)"],
+        ["lifesteal", "🩸 امتصاص (شفاء بقدر الضرر)"]
+    ];
+
+    return options.map(([val, label]) =>
+        `<option value="${val}"${val === selected ? " selected" : ""}>${label}</option>`
+    ).join("");
 
 }
 
@@ -3044,6 +3181,20 @@ function updateNewSkillNumberLabel(){
 }
 
 
+// نسخة لنموذج تعديل مهارة موجودة: تحدّث تسمية حقل الضرر عند تغيير نوع المهارة
+function updateSkillNumberLabelFor(skillId){
+
+    let select = document.getElementById("skill-type-" + skillId);
+
+    let input = document.getElementById("skill-damage-" + skillId);
+
+    if(!select || !input) return;
+
+    input.placeholder = newSkillNumberFieldLabel(select.value);
+
+}
+
+
 async function addSkillToCharacter(characterId){
 
     let name = document.getElementById("new-skill-name").value.trim();
@@ -3054,6 +3205,8 @@ async function addSkillToCharacter(characterId){
 
     let cooldown = Number(document.getElementById("new-skill-cooldown").value) || 0;
 
+    let description = document.getElementById("new-skill-description").value.trim();
+
     if(name === ""){
 
         alert("اكتب اسم المهارة");
@@ -3062,47 +3215,7 @@ async function addSkillToCharacter(characterId){
 
     }
 
-    let type = "attack";
-
-    let effect = null;
-
-    let unblockable = false;
-
-    if(typeChoice === "defense"){
-
-        type = "defense";
-
-    } else if(typeChoice === "steal"){
-
-        type = "special";
-
-        effect = "steal";
-
-    } else if(typeChoice === "copy"){
-
-        type = "special";
-
-        effect = "copy";
-
-    } else if(typeChoice === "unblockable"){
-
-        type = "special";
-
-        unblockable = true;
-
-    } else if(typeChoice === "freeze"){
-
-        type = "special";
-
-        effect = "freeze";
-
-    } else if(typeChoice === "lifesteal"){
-
-        type = "special";
-
-        effect = "lifesteal";
-
-    }
+    let {type, effect, unblockable} = skillTypeChoiceToFields(typeChoice);
 
 
     let admin_token = localStorage.getItem("admin_token");
@@ -3127,7 +3240,9 @@ async function addSkillToCharacter(characterId){
 
         p_effect: effect,
 
-        p_unblockable: unblockable
+        p_unblockable: unblockable,
+
+        p_description: description
 
     });
 
@@ -3281,14 +3396,35 @@ async function saveCharacterEdit(characterId){
 
 async function saveSkillEdit(skillId){
 
+    let nameInput = document.getElementById("skill-name-" + skillId);
+
+    let typeSelect = document.getElementById("skill-type-" + skillId);
+
     let damageInput = document.getElementById("skill-damage-" + skillId);
 
     let cooldownInput = document.getElementById("skill-cooldown-" + skillId);
+
+    let descInput = document.getElementById("skill-desc-" + skillId);
+
+    let name = nameInput ? nameInput.value.trim() : "";
+
+    let typeChoice = typeSelect ? typeSelect.value : "attack";
 
     let damage = Number(damageInput.value) || 0;
 
     let cooldown = Number(cooldownInput.value) || 0;
 
+    let description = descInput ? descInput.value.trim() : "";
+
+    if(name === ""){
+
+        alert("اكتب اسم المهارة");
+
+        return;
+
+    }
+
+    let {type, effect, unblockable} = skillTypeChoiceToFields(typeChoice);
 
     let admin_token = localStorage.getItem("admin_token");
 
@@ -3301,9 +3437,19 @@ async function saveSkillEdit(skillId){
 
         p_skill_id: skillId,
 
+        p_name: name,
+
+        p_type: type,
+
         p_damage: damage,
 
-        p_cooldown: cooldown
+        p_cooldown: cooldown,
+
+        p_effect: effect,
+
+        p_unblockable: unblockable,
+
+        p_description: description
 
     });
 
@@ -3417,27 +3563,33 @@ async function loadCharacterRequests(){
 
 
 
+        // بيانات الطلب من اللاعب نفسه — تُهرب قبل العرض لمنع XSS في لوحة الأدمن
+        let safeCharName = escapeHtml(req.character_name);
+
+        let safeAnimeName = escapeHtml(req.anime_name);
+
+        let safeNotes = escapeHtml(req.notes || "");
 
         div.innerHTML = `
 
 
 
         <h3>
-        ${req.character_name}
+        ${safeCharName}
         </h3>
 
 
 
         <p>
         الأنمي:
-        ${req.anime_name}
+        ${safeAnimeName}
         </p>
 
 
 
         <p>
         ملاحظات:
-        ${req.notes || ""}
+        ${safeNotes}
         </p>
 
 

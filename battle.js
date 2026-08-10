@@ -1252,7 +1252,7 @@ function buildSkillButton(skill){
     let btn = document.createElement("button");
 
     btn.innerHTML =
-    `<span class="skill-name">${skill.name}</span>`;
+    `<span class="skill-name">${escapeHtml(skill.name)}</span>`;
 
     let ready = isSkillReady(battle.player, skill);
 
@@ -1524,7 +1524,7 @@ function openStealTargetMenu(targetSkill, onChoose, onSkip, verbLabel = "الم�
 
         <div class="steal-modal-box">
 
-            <h3>🎯 استخدم "${targetSkill.name}" ${verbLabel} على من؟</h3>
+            <h3>🎯 استخدم "${escapeHtml(targetSkill.name)}" ${verbLabel} على من؟</h3>
 
             <div class="steal-modal-buttons">
 
@@ -1672,9 +1672,9 @@ function showSkillDetails(skill){
 
         <div class="steal-modal-box">
 
-            <h3>${skill.name}</h3>
+            <h3>${escapeHtml(skill.name)}</h3>
 
-            <p class="skill-desc-text">${descText}</p>
+            <p class="skill-desc-text">${escapeHtml(descText)}</p>
 
             ${dmgLine}
 
@@ -2221,7 +2221,7 @@ function openStealMenu(stealSkill){
 
             let onCooldownClass = ready ? "" : "on-cooldown";
 
-            return `<button class="steal-option ${onCooldownClass}" data-name="${s.name}" ${disabledAttr}>${s.name}${cooldownBadge}</button>`;
+            return `<button class="steal-option ${onCooldownClass}" data-name="${escapeHtml(s.name)}" ${disabledAttr}>${escapeHtml(s.name)}${cooldownBadge}</button>`;
 
         })
         .join("")
@@ -2577,7 +2577,7 @@ function openCopyMenu(copySkill){
 
     let usedListHtml = copyableSkills.length > 0
     ? copyableSkills
-        .map(s => `<button class="steal-option" data-name="${s.name}">${s.name}</button>`)
+        .map(s => `<button class="steal-option" data-name="${escapeHtml(s.name)}">${escapeHtml(s.name)}</button>`)
         .join("")
     : "<p>لم تظهر أي مهارة من الخصم بعد في هذه المعركة</p>";
 
