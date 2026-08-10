@@ -2897,6 +2897,87 @@ async function loadCharacterSkillsForAdmin(character_id){
 }
 
 
+// يقرأ خلفيات صفحات المهارات مباشرة من قاعدة البيانات (بدون كاش) لتعرض
+// آخر قيمة محفوظة في لوحة الإدارة فورًا عند فتح نافذة التعديل
+async function loadSkillPageBackgroundsForAdmin(character_id){
+
+    let {data, error} =
+
+    await supabaseClient
+    .from("character_skill_page_backgrounds")
+    .select("page_index, image_url")
+    .eq("character_id", character_id);
+
+    if(error || !data) return {};
+
+    let map = {};
+
+    data.forEach(row => {
+
+        if(row.image_url) map[row.page_index] = row.image_url;
+
+    });
+
+    return map;
+
+}
+
+
+// يحفظ/يحدّث خلفية صفحة مهارات عبر دالة السيرفر الآمنة، ويمسح كاش
+// المعارك لهذه الشخصية حتى يظهر التغيير في المباراة التالية مباشرة
+async function saveSkillPageBackground(characterId, pageIndex){
+
+    let input = document.getElementById("page-bg-" + pageIndex);
+
+    let url = input ? input.value.trim() : "";
+
+    let admin_token = localStorage.getItem("admin_token");
+
+    let {error} =
+
+    await supabaseClient
+    .rpc("admin_set_character_skill_page_background", {
+
+        p_admin_token: admin_token,
+
+        p_character_id: characterId,
+
+        p_page_index: pageIndex,
+
+        p_image_url: url
+
+    });
+
+    let status = document.getElementById("page-bg-status-" + pageIndex);
+
+    if(error){
+
+        if(status) status.textContent = "";
+
+        alert(error.message || "تعذر حفظ الخلفية");
+
+        return;
+
+    }
+
+    if(status) status.textContent = url ? "✓ حُفظت الخلفية" : "✓ أُزيلت الخلفية";
+
+    GameCache.clear("skill_page_bgs_" + characterId);
+
+}
+
+
+async function clearSkillPageBackground(characterId, pageIndex){
+
+    let input = document.getElementById("page-bg-" + pageIndex);
+
+    if(input) input.value = "";
+
+    await saveSkillPageBackground(characterId, pageIndex);
+
+}
+
+
 async function openEditCharacterModal(characterId){
 
     let character = adminCharactersCache.find(c => c.id === characterId);
@@ -2906,6 +2987,30 @@ async function openEditCharacterModal(characterId){
     closeEditCharacterModal();
 
     let skills = await loadCharacterSkillsForAdmin(characterId);
+
+    // خلفيات صفحات المهارات الحالية (كل 4 مهارات = صفحة) ليُعرض كل رابط
+    // في صندوقه، ويُحدَّث فورًا عند تغييره (بدون انتظار كاش المعارك)
+    let pageBgs = await loadSkillPageBackgroundsForAdmin(characterId);
+
+    let numPages = Math.max(1, Math.ceil(skills.length / 4));
+
+    let pageBgsHtml = Array.from({length: numPages}, (_, p) => `
+
+        <div class="admin-skill-edit-row admin-page-bg-row">
+
+            <span class="admin-page-bg-label">🎨 صفحة ${p + 1}</span>
+
+            <input type="text" id="page-bg-${p}" value="${escapeHtml(pageBgs[p] || '')}" placeholder="رابط صورة خلفية هذه الصفحة (اختياري)">
+
+            <button onclick="saveSkillPageBackground('${characterId}', ${p})">حفظ</button>
+
+            <button onclick="clearSkillPageBackground('${characterId}', ${p})">🗑️</button>
+
+            <span id="page-bg-status-${p}" class="upload-status"></span>
+
+        </div>
+
+    `).join("");
 
     let skillsHtml = skills.length > 0
     ? skills.map(s => `
@@ -2998,6 +3103,16 @@ async function openEditCharacterModal(characterId){
 
             <div class="admin-skills-edit-list">
                 ${skillsHtml}
+            </div>
+
+            <hr>
+
+            <h4>🎨 خلفيات صفحات المهارات</h4>
+
+            <p class="admin-hint">كل صفحة تعرض حتى 4 مهارات. الرابط يظهر خلف أزرار المهارات في ساحة المعركة. اترك الرابط فارغًا ثم احفظ لإزالة الخلفية.</p>
+
+            <div class="admin-skills-edit-list">
+                ${pageBgsHtml}
             </div>
 
             <hr>

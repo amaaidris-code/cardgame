@@ -10,6 +10,7 @@ let pvpState = {
     isPlayer1: null,
     mySkills: [],
     myCharacterName: "",
+    myCharacterId: null,
     finished: false,
     myUsedSkillIds: [],
     oppUsedSkillIds: [],
@@ -29,11 +30,6 @@ let pvpState = {
     turnDeadline: null,
     turnTimerInterval: null,
     skipTurnRequested: false,
-
-    // كل مهارات الخصم التي استُخدمت ضدي ولو في مباراة سابقة (تُستخدم
-    // للسرقة)، بخلاف oppUsedSkillIds التي تبقى خاصة بهذه المباراة فقط
-    // (وتُستخدم للنسخ)
-    oppEverUsedSkillIds: [],
 
     // المهارات المختومة حتى نهاية المباراة (skill_id) لكل طرف — تُمنع
     // من الاستخدام، وتظهر مقفلة بشارة 🔒
@@ -404,7 +400,6 @@ async function pvpEnterReadyPhase(matchId, _unused){
     pvpState.finished = false;
     pvpState.myUsedSkillIds = [];
     pvpState.oppUsedSkillIds = [];
-    pvpState.oppEverUsedSkillIds = [];
     pvpState.myCooldowns = {};
     pvpState.myTurnsTaken = 0;
     pvpState.lastMyHp = undefined;
@@ -430,8 +425,12 @@ async function pvpEnterReadyPhase(matchId, _unused){
         return;
     }
     pvpState.myCharacterName = pc.characters ? pc.characters.name : "";
+    pvpState.myCharacterId = pc.character_id;
     pvpState.mySkills = await loadCharacterSkills(pc.character_id);
     pvpState.mySkills.forEach(s => { pvpState.skillCache[s.id] = s; });
+
+    // خلفيات صفحات مهاراتي (تُرسم خلف الأزرار في ساحة المعركة)
+    await loadSkillPageBackgrounds(pc.character_id);
 
     let { data, error } =
     await supabaseClient
@@ -906,7 +905,6 @@ async function pvpRefreshState(isFirstLoad){
 
     pvpState.myUsedSkillIds = myUsedIds;
     pvpState.oppUsedSkillIds = oppUsedIds;
-    pvpState.oppEverUsedSkillIds = data.opponent_ever_used_skill_ids || [];
     pvpState.mySealedSkillIds = mySealedIds;
     pvpState.oppSealedSkillIds = oppSealedIds;
     pvpState.myTurnsTaken = myTurnsTaken;
@@ -920,7 +918,7 @@ async function pvpRefreshState(isFirstLoad){
         pvpState.myCooldowns[c.skill_id] = c.last_used_turn;
     });
 
-    await pvpEnsureSkillsCached([...myUsedIds, ...oppUsedIds, ...pvpState.oppEverUsedSkillIds, ...mySealedIds, ...oppSealedIds]);
+    await pvpEnsureSkillsCached([...myUsedIds, ...oppUsedIds, ...mySealedIds, ...oppSealedIds]);
     pvpRenderUsedSkillsUI();
 
     let myTurn = (data.turn_player_id === (pvpState.isPlayer1 ? data.player1_id : data.player2_id));
@@ -1055,6 +1053,12 @@ async function pvpRefreshState(isFirstLoad){
 
             showBattleEffectBanner("pvp", `🔁 الخصم في وضع انعكاس! (×${oppReflectMult})`, "reflect");
 
+        } else if(prevMyReflect > 0 && myReflectMult === 0 && prevOppHp !== undefined && oppHp < prevOppHp){
+
+            // انعكاسي كان مفعّلًا واستُهلك هذا الاستطلاع، وصحة الخصم انخفضت —
+            // أي أنه هاجمني فارتدّ ضرره عليه (حتى لو امتصّ درعُك الضربة عنك)
+            showBattleEffectBanner("pvp", `🔁 عكستَ ضرر الخصم عليه! -${prevOppHp - oppHp}`, "reflect");
+
         } else if(prevMyHp !== undefined && myHp < prevMyHp){
 
             showBattleEffectBanner("pvp", `💥 تعرّضتَ لهجوم! -${prevMyHp - myHp}`, "hit");
@@ -1137,6 +1141,17 @@ function renderPVPSkillButtons(){
         let pageDiv = document.createElement("div");
 
         pageDiv.className = "skills-page" + (i === currentIndex ? " active" : "");
+
+        // خلفية مخصصة لهذه الصفحة من لوحة الإدارة (إن وُجدت)
+        let pageBg = getSkillPageBackground(pvpState.myCharacterId, i);
+
+        if(pageBg){
+
+            pageDiv.classList.add("skill-page-bg");
+
+            pageDiv.style.backgroundImage = "url('" + pageBg.replace(/'/g, "\\'") + "')";
+
+        }
 
         skillsChunk.forEach(skill => {
 
@@ -1446,10 +1461,11 @@ function pvpRenderUsedSkillsUI(){
 
     renderInto("pvp-player-used-skills", pvpState.myUsedSkillIds, "renderedIds", pvpState.mySealedSkillIds);
 
-    // نعرض تحت بطاقة الخصم كل ما استخدمه ضدك ولو في مباراة سابقة (نفس ما
-    // يُتاح للسرقة)، لا فقط ما استخدمه في هذه المباراة تحديدًا — الضغط
-    // المطوّل على أي منها يعرض وصفها وتأثيرها تمامًا كمهاراتك أنت
-    let oppIds = [...new Set([...pvpState.oppUsedSkillIds, ...pvpState.oppEverUsedSkillIds])];
+    // نعرض تحت بطاقة الخصم كل ما استخدمه ضدك في هذه المباراة فقط (نفس ما
+    // يُتاح للسرقة/النسخ) — الضغط المطوّل على أي منها يعرض وصفها وتأثيرها
+    // تمامًا كمهاراتك أنت. لا شيء من مباراة سابقة يظهر هنا: كل مباراة تبدأ
+    // نظيفة ولا يمكن سرقة/نسخ إلا ما استخدمه الخصم في هذه المباراة تحديدًا
+    let oppIds = [...new Set(pvpState.oppUsedSkillIds)];
     renderInto("pvp-enemy-used-skills", oppIds, "renderedIds", pvpState.oppSealedSkillIds);
 }
 
@@ -1461,20 +1477,16 @@ function pvpOpenStealMenu(abilitySkill){
 
     pvpCloseStealMenu();
 
-    // النسخ يتطلب أن يكون الخصم استخدم المهارة في هذه المباراة بالذات؛
-    // السرقة يكفي فيها أن يكون استخدمها ضدك ولو في مباراة سابقة
-    let sourceIds = (abilitySkill.effect === "steal")
-        ? pvpState.oppEverUsedSkillIds
-        : pvpState.oppUsedSkillIds;
+    // السرقة والنسخ يتطلبان معًا أن يكون الخصم استخدم المهارة في هذه
+    // المباراة بالذات (نفس ما تتحقق منه دالة السيرفر pvp_steal_or_copy_skill)
+    let sourceIds = pvpState.oppUsedSkillIds;
 
     let candidates = sourceIds
     .map(id => pvpState.skillCache[id])
     .filter(s => s && s.effect !== "steal" && s.effect !== "copy");
 
     if(candidates.length === 0){
-        alert(abilitySkill.effect === "steal"
-            ? "لم يستخدم الخصم أي مهارة قابلة للسرقة ضدك من قبل"
-            : "لم يستخدم الخصم أي مهارة قابلة للنسخ بعد في هذه المباراة");
+        alert("لم يستخدم الخصم أي مهارة قابلة للسرقة/النسخ بعد في هذه المباراة");
         return;
     }
 

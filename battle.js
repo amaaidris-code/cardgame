@@ -412,8 +412,57 @@ async function loadCharacterSkills(character_id){
 }
 
 
+// ========================================
+// خلفيات صفحات المهارات (كل 4 مهارات = صفحة)
+// ========================================
+// خلفية لكل مجموعة مهارات تُعرض في ساحة المعركة خلف أزرارها. بيانات
+// تزيينية للعرض فقط (لا تؤثر على أي نتيجة)، تُخزن محليًا للعمل أوفلاين
+// مثل باقي بيانات العرض المرجعية، وتُحدَّث من الشبكة كل دقيقة تقريبًا
+// حتى يظهر تغيير لوحة الإدارة سريعًا.
 
-// دالة مساعدة: تتحقق من صيغة اللون (hex) وتُرجع لونًا افتراضيًا آمنًا إن لم تكن صحيحة
+let skillPageBackgroundsCache = {};
+
+async function loadSkillPageBackgrounds(character_id){
+
+    let cacheName = "skill_page_bgs_" + character_id;
+
+    await GameCache.fetchWithCache(
+        cacheName,
+        async () => {
+            let {data, error} =
+            await supabaseClient
+            .from("character_skill_page_backgrounds")
+            .select("page_index, image_url")
+            .eq("character_id", character_id);
+
+            if(error) throw error;
+
+            let map = {};
+
+            (data || []).forEach(row => {
+                if(row.image_url) map[row.page_index] = row.image_url;
+            });
+
+            return map;
+        },
+        (data) => { skillPageBackgroundsCache[character_id] = data || {}; },
+        () => { skillPageBackgroundsCache[character_id] = {}; },
+        60 * 1000
+    );
+
+}
+
+// تُرجع رابط خلفية الصفحة فورًا من الكاش ("" إن لم توجد) — تُستدعى من
+// داخل وظائف الرسم المتزامنة، لذلك لا تنتظر أي جلب من الشبكة
+function getSkillPageBackground(character_id, pageIndex){
+
+    let map = skillPageBackgroundsCache[character_id];
+
+    if(!map) return "";
+
+    return map[pageIndex] || "";
+
+}
 function safeGlowColor(color, fallback){
 
     if(color && /^#[0-9A-Fa-f]{6}$/.test(color)) return color;
@@ -463,6 +512,8 @@ function buildFighter(pc, skills, isPlayer){
         sealedSkillIds: [],
 
         playerCharacterId: pc.id,
+
+        characterId: pc.character_id,
 
         isPlayer: isPlayer,
 
@@ -710,6 +761,9 @@ async function startPVEBattle(monsterId){
         ];
 
     }
+
+    // خلفيات صفحات مهارات اللاعب (يُستخدمها الرسم مباشرة بعد ذلك)
+    await loadSkillPageBackgrounds(pc.character_id);
 
 
     battle.player = buildFighter(pc, skills, true);
@@ -1445,6 +1499,17 @@ function renderSkillButtons(prefix){
         let pageDiv = document.createElement("div");
 
         pageDiv.className = "skills-page" + (i === currentIndex ? " active" : "");
+
+        // خلفية مخصصة لهذه الصفحة من لوحة الإدارة (إن وُجدت)
+        let pageBg = getSkillPageBackground(battle.player.characterId, i);
+
+        if(pageBg){
+
+            pageDiv.classList.add("skill-page-bg");
+
+            pageDiv.style.backgroundImage = "url('" + pageBg.replace(/'/g, "\\'") + "')";
+
+        }
 
         skillsChunk.forEach(skill => {
 
@@ -2217,6 +2282,23 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
 
     let hpBefore = defender.hp;
 
+    // انعكاس الخصم: يُحسب على أساس الضرر الوارد قبل امتصاص الدرع — إن كان
+    // المدافع في وضع انعكاس والهجوم ليس "لا تُصد" وسبّب ضررًا فعلًا، يرتد
+    // الضرر كاملًا × مضاعف انعكاسه على المهاجم نفسه (حتى لو امتصّ الدرع
+    // الضربة عن المدافع، فالهجوم الحقيقي ما زال انعكس على مصدره)، وتُستهلك
+    // حالة الانعكاس (وضع مرّة واحدة فقط) — نفس سلوك سيرفر PvP
+    let reflectedDmg = 0;
+
+    if(!skill.unblockable && dmg > 0 && (defender.reflectMultiplier || 0) > 0){
+
+        reflectedDmg = dmg * defender.reflectMultiplier;
+
+        defender.reflectMultiplier = 0;
+
+        attacker.hp = Math.max(0, attacker.hp - reflectedDmg);
+
+    }
+
     // درع "تحمّل عدة ضربات" المتبقي من دفاع سابق: يمتص هذه الضربة تلقائيًا
     // (طالما ليست "لا تُصد") وينقص شحنة واحدة، بدل تطبيق الضرر مباشرة
     let absorbedByShield =
@@ -2231,21 +2313,6 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
     } else {
 
         defender.hp = Math.max(0, defender.hp - dmg);
-
-    }
-
-    // انعكاس الخصم: إن كان المدافع في وضع انعكاس والهجوم ليس "لا تُصد" وسبب
-    // ضررًا فعلًا (لم تمتصّه آلية قبله)، يرتد الضرر كاملًا × مضاعف انعكاسه
-    // على المهاجم نفسه، وتُستهلك حالة الانعكاس (وضع مرّة واحدة فقط)
-    let reflectedDmg = 0;
-
-    if(!skill.unblockable && dmg > 0 && (defender.reflectMultiplier || 0) > 0){
-
-        reflectedDmg = dmg * defender.reflectMultiplier;
-
-        defender.reflectMultiplier = 0;
-
-        attacker.hp = Math.max(0, attacker.hp - reflectedDmg);
 
     }
 
@@ -2337,7 +2404,7 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
         showBattleEffectBanner(
             battle.prefix,
             iAmDefender
-            ? `🔁 عكس الخصم الضرر عليك! -${reflectedDmg}`
+            ? `🔁 عكستَ ضرر الخصم عليه! -${reflectedDmg}`
             : `🔁 ${defender.name} عكس الضرر عليك! -${reflectedDmg}`,
             "reflect"
         );

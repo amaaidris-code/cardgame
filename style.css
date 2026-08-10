@@ -802,6 +802,53 @@ position:relative;
 }
 
 
+/* صفحة مهارات بخلفية مخصصة (تُضبط من لوحة الإدارة لكل صفحة على حدة):
+   الصورة تُغطي الصفحة خلف الأزرار، مع طبقة تعتيم خفيفة للحفاظ على وضوح
+   أزرار المهارات نفسها (الأزرار لها خلفية داكنة صلبة أصلًا) */
+
+.skills-page.skill-page-bg {
+
+    position: relative;
+
+    background-size: cover;
+
+    background-position: center;
+
+    border-radius: 12px;
+
+    padding: 8px;
+
+    border: 1px solid rgba(255,255,255,0.12);
+
+}
+
+.skills-page.skill-page-bg::before {
+
+    content: "";
+
+    position: absolute;
+
+    inset: 0;
+
+    background: rgba(8,8,14,0.45);
+
+    border-radius: 12px;
+
+    pointer-events: none;
+
+    z-index: 0;
+
+}
+
+.skills-page.skill-page-bg > * {
+
+    position: relative;
+
+    z-index: 1;
+
+}
+
+
 .skills-page button {
 
     width: 100%;
@@ -2503,6 +2550,28 @@ flex-direction:column;
 gap:10px;
 
 margin:12px 0;
+
+}
+
+.admin-page-bg-label{
+
+flex-shrink:0;
+
+color:#9ecbff;
+
+font-size:13px;
+
+font-weight:bold;
+
+}
+
+.admin-hint{
+
+color:#999;
+
+font-size:12px;
+
+margin:4px 0;
 
 }
 
