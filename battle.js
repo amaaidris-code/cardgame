@@ -796,6 +796,8 @@ function buildMonsterFighter(character, skills){
 
 async function startPVEBattle(monsterId){
 
+    console.log("startPVEBattle called with:", monsterId);
+
     if(!monsterId){
 
         openScreen("pve-select-screen");
@@ -808,7 +810,12 @@ async function startPVEBattle(monsterId){
 
     openScreen("pve-battle-screen");
 
-    window.shadowPoolCache = await fetchShadowPoolFromSupabase();
+    try {
+        window.shadowPoolCache = await fetchShadowPoolFromSupabase();
+    } catch (e) {
+        console.error("Failed to fetch shadow pool", e);
+        window.shadowPoolCache = [];
+    }
 
     resetBattleVisuals("pve");
 
