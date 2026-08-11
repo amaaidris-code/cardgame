@@ -2754,10 +2754,6 @@ async function pveAddDefeatedToShadowPool(enemy){
     }
 }
 
-    pveSaveShadowPool(pool);
-
-}
-
 
 // ========================================
 // معالجات اللاعب لمهارات الأنواع الجديدة
