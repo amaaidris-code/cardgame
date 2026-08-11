@@ -59,7 +59,7 @@ function pveRevealedSkillsStorageKey(monsterId){
 
 function pveLoadRevealedSkillIds(monsterId){
 
-    if(!monsterId) return [];
+    if(!monsterId || typeof monsterId !== 'string' && typeof monsterId !== 'number') return [];
 
     try{
 
@@ -80,7 +80,7 @@ function pveLoadRevealedSkillIds(monsterId){
 
 function pveSaveRevealedSkillIds(monsterId, ids){
 
-    if(!monsterId) return;
+    if(!monsterId || typeof monsterId !== 'string' && typeof monsterId !== 'number') return;
 
     try{
 

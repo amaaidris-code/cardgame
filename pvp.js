@@ -7,6 +7,7 @@
 let pvpState = {
     matchId: null,
     pollTimer: null,
+    isFetching: false,
     isPlayer1: null,
     mySkills: [],
     myCharacterName: "",
@@ -49,6 +50,7 @@ let pvpState = {
 // حالة الردهة (اختيار الخصم) والتحدي، منفصلة عن حالة النزال نفسه
 let pvpLobby = {
     pollTimer: null,
+    isFetching: false,
     // 'browsing' نتصفح القائمة | 'waiting' أرسلت تحديًا وأنتظر ردًا
     mode: "browsing",
     outgoingMatchId: null,
@@ -210,10 +212,13 @@ function pvpSetLobbyStatus(text){
 }
 
 async function pvpRefreshLobby(){
+    if(pvpLobby.isFetching) return;
+    pvpLobby.isFetching = true;
 
     // أثناء انتظار رد على تحدٍّ أرسلته: نراقب حالة تلك المباراة تحديدًا
     if(pvpLobby.mode === "waiting"){
         await pvpPollOutgoingChallenge();
+        pvpLobby.isFetching = false;
         return;
     }
 
@@ -231,6 +236,7 @@ async function pvpRefreshLobby(){
     if(!listError){
         pvpRenderLobbyList(players || [], incomingChallenge);
     }
+    pvpLobby.isFetching = false;
 }
 
 function pvpRenderLobbyList(players, incomingChallenge){
@@ -806,15 +812,21 @@ function pvpBeginMatchLoop(){
 
 // نجيب حالة المباراة الحالية ونحدّث الشاشة
 async function pvpRefreshState(isFirstLoad){
-
     if(pvpState.finished) return;
+    if(pvpState.isFetching) return;
+    pvpState.isFetching = true;
 
     let { data, error } =
     await supabaseClient
     .rpc("pvp_get_match_state", { p_token: pvpGetToken(), p_match_id: pvpState.matchId })
     .single();
 
-    if(error || !data) return;
+    if(error || !data) {
+        pvpState.isFetching = false;
+        return;
+    }
+
+    pvpState.isFetching = false;
 
     if(pvpState.isPlayer1 === null || pvpState.isPlayer1 === undefined){
         pvpState.isPlayer1 = (data.player1_id === (await pvpGetMyPlayerId()));
