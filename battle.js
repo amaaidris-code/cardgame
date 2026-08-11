@@ -2187,7 +2187,10 @@ function renderUsedSkillsUI(prefix){
     // إعادة الرسم في نفس اللحظة
     if(enemyBox){
 
-        let key = battle.enemyUsedSkills.map(s => {
+        // الشرائح تحت بطاقة الخصم تعرض فقط مهارات هذا النزال الحالي بالذات
+        // (enemyUsedSkillsThisBattle) حتى لا تبقى مهارات نزالات سابقة ظاهرة،
+        // فيبدو وكأنها لم "تُصفَّر" مع بدء نزال جديد
+        let key = battle.enemyUsedSkillsThisBattle.map(s => {
             let ready = isSkillReady(battle.enemy, s);
             let remaining = cooldownTurnsRemaining(battle.enemy, s);
             let sealed = isSkillSealed(battle.enemy, s) ? "S" : "0";
@@ -2200,7 +2203,7 @@ function renderUsedSkillsUI(prefix){
 
         enemyBox.innerHTML = "";
 
-        battle.enemyUsedSkills.forEach(s => {
+        battle.enemyUsedSkillsThisBattle.forEach(s => {
 
             let ready = isSkillReady(battle.enemy, s);
 
@@ -2919,7 +2922,7 @@ function attemptStealMulti(stealSkill, names){
 
         if(!targetSkill){
 
-            alert(`لا توجد مهارة بهذا الاسم لدى الخصم: "${name}"`);
+            alert(`لا توجد مهارة بهذا الاسم ظهرت من الخصم: "${name}"`);
 
             return;
 
@@ -3469,7 +3472,10 @@ function runCopiedSkillsQueue(queue, index, consumesPlayerTurn){
 
 function openSealMenu(sealSkill){
 
-    if(battle.turnOwner !== "player") return;
+    if(battle.turnOwner !== "player"){
+        alert("ليس دورك الآن");
+        return;
+    }
 
     if(battle.finished) return;
 
@@ -3495,12 +3501,13 @@ function openSealMenu(sealSkill){
 
     let selectedNames = [];
 
-    // تُختم المهارات التي استخدمها الخصم في هذا النزال بالذات وغير المختومة
-    // مسبقًا (لا فائدة من ختم ما هو مختوم فعلًا) — بالإضافة إلى مهارة دفاع
-    // الخصم التي تبقى قابلة للختم دائمًا حتى لو لم يستخدمها في هذا النزال
-    // بعد، فالدفاع مهارة أساسية لدى أي مقاتل ويجب أن يبقى ممكنًا منعُه
+    // نفس قائمة السرقة تمامًا: تُعرض كل المهارات التي كشفها الخصم في أي
+    // وقت (بما فيها النزالات السابقة ضد هذا الخصم) وغير المختومة مسبقًا
+    // (لا فائدة من ختم ما هو مختوم فعلًا) — بالإضافة إلى مهارة دفاع
+    // الخصم التي تبقى قابلة للختم دائمًا حتى لو لم يستخدمها في أي نزال،
+    // فالدفاع مهارة أساسية لدى أي مقاتل ويجب أن يبقى ممكنًا منعُه
     let sealableSkills =
-    battle.enemyUsedSkillsThisBattle.filter(s => !isSkillSealed(battle.enemy, s));
+    battle.enemyUsedSkills.filter(s => !isSkillSealed(battle.enemy, s));
 
     let enemyDefenseSkill =
     battle.enemy.skills.find(s => s.type === "defense");
@@ -3517,7 +3524,7 @@ function openSealMenu(sealSkill){
     ? sealableSkills
         .map(s => `<button class="steal-option" data-name="${escapeHtml(s.name)}">${escapeHtml(s.name)}</button>`)
         .join("")
-    : "<p>لم يستخدم الخصم أي مهارة في هذه المعركة بعد لتُختم</p>";
+    : "<p>لم تظهر أي مهارة من الخصم بعد لتُختم</p>";
 
     let modal = document.createElement("div");
 
@@ -3651,8 +3658,8 @@ function attemptSealMulti(sealSkill, names){
     for(let name of uniqueNames){
 
         let targetSkill =
-        battle.enemyUsedSkillsThisBattle.find(s => s.name.trim() === name)
-        // مهارة الدفاع قابلة للختم حتى لو لم يستخدمها الخصم في هذا النزال بعد
+        battle.enemyUsedSkills.find(s => s.name.trim() === name)
+        // مهارة الدفاع قابلة للختم حتى لو لم يظهرها الخصم من قبل أبدًا
         || battle.enemy.skills.find(s => s.type === "defense" && s.name.trim() === name);
 
         if(!targetSkill){

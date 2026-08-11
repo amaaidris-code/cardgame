@@ -798,6 +798,7 @@ async function pvpHandleRacePress(){
 // (يبقى للتوافق: يُستخدم فقط في حال دخلنا مباشرة على مباراة نشطة بالفعل)
 // ========================================
 function pvpBeginMatchLoop(){
+    ensureLogBox("pvp");
     renderPVPSkillButtons();
     pvpRefreshState(true);
     pvpAfterReadyPollStart();
@@ -985,6 +986,9 @@ async function pvpRefreshState(isFirstLoad){
             } else if(iOppUsedReflectNow){
                 statusBox.textContent = "🔁 الخصم عكس هجومك السابق عليك!";
                 statusBox.classList.add("frozen-note");
+            } else if(myHp <= 0){
+                statusBox.textContent = "⚠️ أنت على وشك السقوط! استخدم الدفاع أو الانعكاس الآن";
+                statusBox.classList.add("frozen-note");
             } else {
                 statusBox.textContent = myTurn ? "🟢 دورك الآن" : "⏳ دور الخصم...";
                 statusBox.classList.add(myTurn ? "my-turn" : "opp-turn");
@@ -1011,26 +1015,32 @@ async function pvpRefreshState(isFirstLoad){
 
         if(iGotFrozenNow){
 
+            pvpAddBattleLog("🥶 تم تجميدك! الخصم يلعب دورًا إضافيًا");
             showBattleEffectBanner("pvp", "❄️ تم تجميدك!", "freeze");
 
         } else if(iFrozeOppNow){
 
+            pvpAddBattleLog("🧊 جمّدتَ الخصم!");
             showBattleEffectBanner("pvp", "❄️ جمّدتَ الخصم!", "freeze");
 
         } else if(iGotSealedNow){
 
+            pvpAddBattleLog("🔒 الخصم ختم إحدى مهاراتك حتى نهاية المباراة!");
             showBattleEffectBanner("pvp", "🔒 الخصم ختم مهارتك حتى نهاية المباراة!", "seal");
 
         } else if(iSealedOppNow){
 
+            pvpAddBattleLog("🔒 ختمتَ مهارة من مهارات الخصم حتى نهاية المباراة!");
             showBattleEffectBanner("pvp", "🔒 ختمتَ مهارة الخصم حتى نهاية المباراة!", "seal");
 
         } else if(iUnsealedNow){
 
+            pvpAddBattleLog("🔓 فككتَ الختم عن مهارتك المختومة!");
             showBattleEffectBanner("pvp", "🔓 فككتَ الختم عن مهارتك!", "unseal");
 
         } else if(lifestealHeal > 0){
 
+            pvpAddBattleLog(`🩸 ضربة موفّقة وامتصصتَ ${lifestealHeal} صحة`);
             showBattleEffectBanner("pvp", `🩸 ضربة موفّقة وامتصصتَ ${lifestealHeal} صحة!`, "hit");
 
         } else if(iUsedReflectNow){
@@ -1040,6 +1050,7 @@ async function pvpRefreshState(isFirstLoad){
             let msg = "🔁 عكستَ الهجوم السابق!";
             if(reflectedOnOpp > 0) msg += ` -${reflectedOnOpp} على الخصم`;
             if(restored > 0) msg += ` واسترجعت ${restored} صحة`;
+            pvpAddBattleLog(msg);
             showBattleEffectBanner("pvp", msg, "reflect");
 
         } else if(iOppUsedReflectNow){
@@ -1047,31 +1058,56 @@ async function pvpRefreshState(isFirstLoad){
             // الخصم استخدم انعكاسًا عكسَ فيه آخر هجومٍ سابق استقبله (مني)،
             // فاسترجع هو صحته وخسرتُ أنا الصحة المرتدّة
             let took = (prevMyHp !== undefined && myHp < prevMyHp) ? (prevMyHp - myHp) : 0;
-            showBattleEffectBanner("pvp", `🔁 الخصم عكس هجومك السابق عليك! -${took}`, "reflect");
+            let msg = "🔁 الخصم عكس هجومك السابق عليك!";
+            if(took > 0) msg += ` -${took}`;
+            pvpAddBattleLog(msg);
+            showBattleEffectBanner("pvp", msg, "reflect");
 
         } else if(prevMyHp !== undefined && myHp < prevMyHp){
 
-            showBattleEffectBanner("pvp", `💥 تعرّضتَ لهجوم! -${prevMyHp - myHp}`, "hit");
+            if(myHp <= 0){
+                pvpAddBattleLog("💀 ضربة قاتلة! لكنك نجوت — استخدم الدفاع أو الانعكاس الآن!");
+                showBattleEffectBanner("pvp", "💀 ضربة قاتلة! لكنك نجوت — استخدم الدفاع أو الانعكاس الآن!", "hit");
+            } else {
+                pvpAddBattleLog(`💥 تعرّضتَ لهجوم! -${prevMyHp - myHp}`);
+                showBattleEffectBanner("pvp", `💥 تعرّضتَ لهجوم! -${prevMyHp - myHp}`, "hit");
+            }
 
         } else if(prevOppHp !== undefined && oppHp < prevOppHp){
 
-            showBattleEffectBanner("pvp", `⚔️ ضربة موفّقة! -${prevOppHp - oppHp}`, "hit");
+            if(oppHp <= 0){
+                pvpAddBattleLog("⚔️ ضربة قاتلة! لكن الخصم نجى — عليه الدفاع أو الانعكاس الآن");
+                showBattleEffectBanner("pvp", "⚔️ ضربة قاتلة! لكن الخصم صَدّها!", "hit");
+            } else {
+                pvpAddBattleLog(`⚔️ ضربة موفّقة! -${prevOppHp - oppHp} على الخصم`);
+                showBattleEffectBanner("pvp", `⚔️ ضربة موفّقة! -${prevOppHp - oppHp}`, "hit");
+            }
 
         } else if(newOppDealsDamageSkill && prevMyHp !== undefined && myHp >= prevMyHp){
 
+            pvpAddBattleLog("🛡️ صددتَ هجوم الخصم!");
             showBattleEffectBanner("pvp", "🛡️ صددتَ هجوم الخصم!", "block");
 
         } else if(newMyDealsDamageSkill && prevOppHp !== undefined && oppHp >= prevOppHp){
 
+            pvpAddBattleLog("🛡️ الخصم صدّ هجومك!");
             showBattleEffectBanner("pvp", "🛡️ الخصم صدّ هجومك!", "block");
 
         } else if(newOppDefenseSkill){
 
+            pvpAddBattleLog("🛡️ الخصم استخدم الدفاع");
             showBattleEffectBanner("pvp", "🛡️ الخصم استخدم الدفاع!", "defense");
 
         } else if(newMyDefenseSkill){
 
-            showBattleEffectBanner("pvp", "🛡️ استخدمتَ الدفاع!", "defense");
+            if(prevMyHp !== undefined && myHp > prevMyHp){
+                let restored = myHp - prevMyHp;
+                pvpAddBattleLog(`🛡️ صددتَ الضربة القاتلة بالدفاع واسترجعت ${restored} صحة!`);
+                showBattleEffectBanner("pvp", `🛡️ صددتَ الضربة القاتلة بالدفاع! +${restored} صحة`, "defense");
+            } else {
+                pvpAddBattleLog("🛡️ استخدمتَ الدفاع");
+                showBattleEffectBanner("pvp", "🛡️ استخدمتَ الدفاع!", "defense");
+            }
 
         }
 
@@ -1466,6 +1502,17 @@ function pvpRenderUsedSkillsUI(){
     // نظيفة ولا يمكن سرقة/نسخ إلا ما استخدمه الخصم في هذه المباراة تحديدًا
     let oppIds = [...new Set(pvpState.oppUsedSkillIds)];
     renderInto("pvp-enemy-used-skills", oppIds, "renderedIds", pvpState.oppSealedSkillIds);
+}
+
+// سجل أحداث PvP — نفس آلية addBattleLog في PvE، يكتب سطرًا في صندوق السجل
+// (#pvp-battle-log الذي ينشئه ensureLogBox) ويُمرِّره لأسفل تلقائيًا
+function pvpAddBattleLog(text){
+    let box = document.getElementById("pvp-battle-log");
+    if(!box) return;
+    let line = document.createElement("div");
+    line.textContent = text;
+    box.appendChild(line);
+    box.scrollTop = box.scrollHeight;
 }
 
 // ========================================
