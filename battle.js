@@ -1930,6 +1930,15 @@ async function enemyAct(){
 
         enemy.lastHitSnapshot.consumed = true;
 
+        // لو كانت الضربة المُلغاة من نوع امتصاص، يُسترجع الشفاء الذي كسبه
+        // المهاجم (اللاعب) منها — لا يصح أن يبقى على صحته الجديدة من ضربة
+        // أُلغيت أساسًا
+        if(enemy.lastHitSnapshot.attackerLifestealHeal > 0){
+
+            battle.player.hp = Math.max(0, battle.player.hp - enemy.lastHitSnapshot.attackerLifestealHeal);
+
+        }
+
         let enduranceHits = Math.max(1, Number(defenseSkill.damage) || 1);
 
         enemy.shieldCharges = (enemy.shieldCharges || 0) + (enduranceHits - 1);
@@ -2275,6 +2284,21 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
 
     let dmgApplied = Math.min(dmg, hpBefore);
 
+    // مهارة "امتصاص" (lifesteal): يعالج المهاجم نفسه بمقدار الضرر الفعلي
+    // الذي تسبّبه (بعد الدرع/الصد)، أي إن مُنع الضرر كله فلا شفاء — وصولاً
+    // للحد الأقصى من الصحة فقط. تُحسب أولًا حتى تُخزَّن قيمة الشفاء في لقطة
+    // الضربة، فإذا ألغى المدافع الضربة لاحقًا (دفاع) يُسترجع الشفاء من
+    // المهاجم لأنه لا يصح منطقيًا أن يكسب صحة من ضربة أُلغيت
+    let healedAmount = 0;
+
+    if(skill.effect === "lifesteal" && dmg > 0 && attacker.hp < attacker.maxHp){
+
+        healedAmount = Math.min(dmg, attacker.maxHp - attacker.hp);
+
+        attacker.hp += healedAmount;
+
+    }
+
     // لقطة آخر ضربة وقعت على المدافع: تُستعمل في "الدفاع" (إلغاء الضربة
     // واسترجاع الصحة) وأيضًا في "الانعكاس" (عكس الهجوم السابق على مصدره).
     // الضربة "لا تُصد" (unblockable) لا تكون قابلة للانعكاس أبدًا، والضربة
@@ -2286,21 +2310,9 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
             hpBefore: hpBefore,
             dmgDealt: dmgApplied,
             consumed: !!skill.unblockable || absorbedByShield,
-            reflectable: !skill.unblockable && dmgApplied > 0
+            reflectable: !skill.unblockable && dmgApplied > 0,
+            attackerLifestealHeal: (skill.effect === "lifesteal") ? healedAmount : 0
         };
-
-    }
-
-    // مهارة "امتصاص" (lifesteal): يعالج المهاجم نفسه بمقدار الضرر الفعلي
-    // الذي تسبّبه (بعد الدرع/الصد)، أي إن مُنع الضرر كله فلا شفاء — وصولاً
-    // للحد الأقصى من الصحة فقط
-    let healedAmount = 0;
-
-    if(skill.effect === "lifesteal" && dmg > 0 && attacker.hp < attacker.maxHp){
-
-        healedAmount = Math.min(dmg, attacker.maxHp - attacker.hp);
-
-        attacker.hp += healedAmount;
 
     }
 
@@ -2447,6 +2459,15 @@ function applyReflectCounter(user, target, reflectSkill){
     user.hp = snapshot.hpBefore;
 
     snapshot.consumed = true;
+
+    // لو كان الهجوم المُعكس من نوع امتصاص، يُسترجع الشفاء الذي كسبه مصدر
+    // الهجوم (الخصم) منه — لا يصح أن يبقى على صحته الجديدة من ضربة أُلغيت
+    // بالانعكاس
+    if(snapshot.attackerLifestealHeal > 0){
+
+        target.hp = Math.max(0, target.hp - snapshot.attackerLifestealHeal);
+
+    }
 
     target.hp = Math.max(0, target.hp - reflectedDmg);
 
@@ -2596,6 +2617,15 @@ function useDefense(defenseSkill){
     battle.player.hp = snapshot.hpBefore;
 
     snapshot.consumed = true;
+
+    // لو كانت الضربة المُلغاة من نوع امتصاص، يُسترجع الشفاء الذي كسبه
+    // المهاجم (الخصم) منها — لا يصح أن يبقى على صحته الجديدة من ضربة
+    // أُلغيت أساسًا
+    if(snapshot.attackerLifestealHeal > 0){
+
+        battle.enemy.hp = Math.max(0, battle.enemy.hp - snapshot.attackerLifestealHeal);
+
+    }
 
     // رقم مهارة الدفاع الآن يمثّل "عدد الضربات التي يمكن تحمّلها": الضربة
     // الحالية تُلغى فورًا، وأي ضربات إضافية (N-1) تُمتص تلقائيًا لاحقًا
@@ -2955,6 +2985,14 @@ function runStolenSkillsQueue(queue, index, consumesPlayerTurn){
 
             snapshot.consumed = true;
 
+            // لو كانت الضربة المُلغاة من نوع امتصاص، يُسترجع الشفاء الذي
+            // كسبه المهاجم (الخصم) منها
+            if(snapshot.attackerLifestealHeal > 0){
+
+                battle.enemy.hp = Math.max(0, battle.enemy.hp - snapshot.attackerLifestealHeal);
+
+            }
+
             let enduranceHits = Math.max(1, Number(targetSkill.damage) || 1);
 
             battle.player.shieldCharges = (battle.player.shieldCharges || 0) + (enduranceHits - 1);
@@ -3296,6 +3334,14 @@ function runCopiedSkillsQueue(queue, index, consumesPlayerTurn){
             battle.player.hp = snapshot.hpBefore;
 
             snapshot.consumed = true;
+
+            // لو كانت الضربة المُلغاة من نوع امتصاص، يُسترجع الشفاء الذي
+            // كسبه المهاجم (الخصم) منها
+            if(snapshot.attackerLifestealHeal > 0){
+
+                battle.enemy.hp = Math.max(0, battle.enemy.hp - snapshot.attackerLifestealHeal);
+
+            }
 
             let enduranceHits = Math.max(1, Number(targetSkill.damage) || 1);
 
