@@ -21,7 +21,9 @@ jobs:
           java-version: '17'
 
       - name: Install dependencies
-        run: npm install
+        run: |
+          npm install
+          chmod -R +x node_modules/.bin/
 
       - name: Prepare web assets folder
         run: |
@@ -29,13 +31,13 @@ jobs:
           cp *.html *.js *.css www/ 2>/dev/null || true
 
       - name: Add Android platform
-        run: node ./node_modules/.bin/cap add android
+        run: ./node_modules/.bin/cap add android
 
       - name: Generate app icon
         run: npx @capacitor/assets generate --android
 
       - name: Sync web assets
-        run: node ./node_modules/.bin/cap sync android
+        run: ./node_modules/.bin/cap sync android
 
       - name: Build debug APK
         run: |
