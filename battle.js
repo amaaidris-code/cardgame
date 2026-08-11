@@ -1030,8 +1030,6 @@ function renderFighterStatusBadge(idPrefix, fighter){
 
     if((fighter.tempAtk || 0) > 0) badges.push("⚔️+" + fighter.tempAtk);
 
-    if((fighter.tempHp || 0) > 0) badges.push("🩵+" + fighter.tempHp);
-
     if((fighter.extraTurns || 0) > 0) badges.push("⚡×" + fighter.extraTurns);
 
     if((fighter.reflectMult || 0) > 0) badges.push("🔁×" + fighter.reflectMult);
@@ -2475,11 +2473,11 @@ function applyPveBuff(fighter, skill){
 
     if(skill.effect === "hp_boost"){
 
-        fighter.maxHp += amount;
+        let healed = Math.min(amount, Math.max(0, fighter.maxHp - fighter.hp));
 
-        fighter.hp = Math.min(fighter.hp + amount, fighter.maxHp);
+        fighter.hp = Math.min(fighter.maxHp, fighter.hp + amount);
 
-        return `${fighter.name} عزّز صحته القصوى! +${amount} صحة (الحد الأقصى الآن ${fighter.maxHp})`;
+        return `${fighter.name} استعاد ${healed} صحة!`;
 
     }
 
@@ -3309,16 +3307,17 @@ function resolveAction(attacker, defender, skill, trackUsed = true, isReflectedH
 
     }
 
-    // درع الامتصاص (absorb_atk / absorb_hp): الضربة القابلة للصد تُمتَص بدل
-    // أن تُلحق ضررًا، وتتحول إلى قوة مؤقتة (atk) أو صحة مؤقتة (hp). يأتي
-    // بعد درع الانعكاس وقبل درع "تحمّل عدة ضربات" — مطابق لترتيب السيرفر
+    // درع الامتصاص (absorb_atk / absorb_hp): أي ضربة تُمتَص بدل أن تُلحق
+    // ضررًا — قابلة للصد أو "لا تُصد" على حد سواء — وتتحول إلى قوة مؤقتة
+    // (atk) أو صحة مسترجعة (hp). يأتي بعد درع الانعكاس وقبل درع "تحمّل
+    // عدة ضربات" — مطابق لترتيب السيرفر
     let absorbedByAbsorb = false;
 
     let absorbedAmount = 0;
 
     let absorbModeForMsg = null;
 
-    if(!reflected && dmg > 0 && !skill.unblockable && !isReflectedHit && (defender.absorbHits || 0) > 0){
+    if(!reflected && dmg > 0 && !isReflectedHit && (defender.absorbHits || 0) > 0){
 
         absorbedByAbsorb = true;
 
@@ -3332,7 +3331,7 @@ function resolveAction(attacker, defender, skill, trackUsed = true, isReflectedH
 
         } else {
 
-            defender.tempHp = (defender.tempHp || 0) + absorbedAmount;
+            defender.hp = Math.min(defender.maxHp, defender.hp + absorbedAmount);
 
         }
 
@@ -3461,6 +3460,13 @@ function resolveAction(attacker, defender, skill, trackUsed = true, isReflectedH
 
     }
 
+    // امتصاص → صحة: رقم الصحة المسترجعة يظهر فوق بطاقة المدافع (قيمة خضراء +)
+    if(absorbedByAbsorb && absorbModeForMsg === "hp"){
+
+        showDamagePopup(defenderPrefix, absorbedAmount, true);
+
+    }
+
     // شارة الحدث في منتصف الساحة: توضّح فورًا هل الضربة نجحت، أم امتصّها
     // الدرع، أم كانت تجميدًا — دون الحاجة لفتح سجل المعركة
     let iAmDefender = (defender === battle.player);
@@ -3525,7 +3531,7 @@ function resolveAction(attacker, defender, skill, trackUsed = true, isReflectedH
 
     } else if(absorbedByAbsorb){
 
-        let statWord = (absorbModeForMsg === "atk") ? "قوة مؤقتة" : "صحة مؤقتة";
+        let statWord = (absorbModeForMsg === "atk") ? "قوة مؤقتة" : "صحة";
 
         addBattleLog(`${defender.name} امتصّ ${skill.name} من ${attacker.name}! +${absorbedAmount} ${statWord} (متبقٍ ${defender.absorbHits})`);
 

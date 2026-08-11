@@ -1155,14 +1155,12 @@ function pvpRenderStatusBadges(data){
     if(pvpState.isPlayer1){
         my = {
             tempAtk: data.player1_temp_atk || 0,
-            tempHp: data.player1_temp_hp || 0,
             extraTurns: data.player1_extra_turns || 0,
             reflectMult: data.player1_reflect_multiplier || 0,
             absorbHits: data.player1_absorb_hits || 0
         };
         opp = {
             tempAtk: data.player2_temp_atk || 0,
-            tempHp: data.player2_temp_hp || 0,
             extraTurns: data.player2_extra_turns || 0,
             reflectMult: data.player2_reflect_multiplier || 0,
             absorbHits: data.player2_absorb_hits || 0
@@ -1170,14 +1168,12 @@ function pvpRenderStatusBadges(data){
     } else {
         my = {
             tempAtk: data.player2_temp_atk || 0,
-            tempHp: data.player2_temp_hp || 0,
             extraTurns: data.player2_extra_turns || 0,
             reflectMult: data.player2_reflect_multiplier || 0,
             absorbHits: data.player2_absorb_hits || 0
         };
         opp = {
             tempAtk: data.player1_temp_atk || 0,
-            tempHp: data.player1_temp_hp || 0,
             extraTurns: data.player1_extra_turns || 0,
             reflectMult: data.player1_reflect_multiplier || 0,
             absorbHits: data.player1_absorb_hits || 0
@@ -1193,7 +1189,6 @@ function pvpRenderFighterStatusBadge(idPrefix, fighter){
 
     let badges = [];
     if((fighter.tempAtk || 0) > 0) badges.push("⚔️+" + fighter.tempAtk);
-    if((fighter.tempHp || 0) > 0) badges.push("🩵+" + fighter.tempHp);
     if((fighter.extraTurns || 0) > 0) badges.push("⚡×" + fighter.extraTurns);
     if((fighter.reflectMult || 0) > 0) badges.push("🔁×" + fighter.reflectMult);
     if((fighter.absorbHits || 0) > 0) badges.push("🧲×" + fighter.absorbHits);

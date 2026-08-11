@@ -3399,8 +3399,8 @@ function skillTypeOptionsHtml(selected){
         ["unseal", "🔓 فك الختم (إزالة ختم عن مهارة من مهاراتك)"],
         ["consecutive_turns", "⚡ أدوار متتالية (مهارة تعطيك أدوارًا إضافية متتالية)"],
         ["absorb_atk", "🧲 امتصاص → قوة (تحويل الضربات القادمة إلى قوة هجوم مؤقتة)"],
-        ["absorb_hp", "🩵 امتصاص → صحة (تحويل الضربات القادمة إلى صحة مؤقتة فوق الحد)"],
-        ["hp_boost", "❤️ رفع الصحة (زيادة دائمة في الحد الأقصى للصحة)"],
+        ["absorb_hp", "🩵 امتصاص → شفاء (تحويل الضربات القادمة إلى صحة مسترجعة)"],
+        ["hp_boost", "❤️ استرجاع الصحة (شفاء فوري دون تغيير الحد الأقصى)"],
         ["atk_boost", "⚔️ رفع القوة (قوة هجوم مؤقتة تُضاف لضرر كل ضربة)"],
         ["delay_cooldown", "⏳ تأجيل التهدئة (تأخير تهدئة مهارة يملكها الخصم)"],
         ["shadow", "🌑 الظل (استدعاء مهارة شخصية من قائمة الظل المؤهلة)"]
@@ -3437,7 +3437,7 @@ function skillTypeLabel(skill){
 
     if(skill.effect === "absorb_hp") return "امتصاص → صحة";
 
-    if(skill.effect === "hp_boost") return "رفع الصحة";
+    if(skill.effect === "hp_boost") return "استرجاع الصحة";
 
     if(skill.effect === "atk_boost") return "رفع القوة";
 
@@ -3478,7 +3478,7 @@ function skillNumberFieldLabel(skill){
 
     if(skill.effect === "absorb_hp") return "عدد الضربات الممتصة (أو عيّن absorb_hits في المعاملات)";
 
-    if(skill.effect === "hp_boost") return "قيمة رفع الصحة (أو عيّن amount في المعاملات)";
+    if(skill.effect === "hp_boost") return "قيمة الصحة المسترجعة (أو عيّن amount في المعاملات)";
 
     if(skill.effect === "atk_boost") return "قيمة رفع القوة (أو عيّن amount في المعاملات)";
 
@@ -3517,7 +3517,7 @@ function newSkillNumberFieldLabel(typeChoice){
 
     if(typeChoice === "absorb_hp") return "عدد الضربات الممتصة (أو عيّن absorb_hits في المعاملات)";
 
-    if(typeChoice === "hp_boost") return "قيمة رفع الصحة (أو عيّن amount في المعاملات)";
+    if(typeChoice === "hp_boost") return "قيمة الصحة المسترجعة (أو عيّن amount في المعاملات)";
 
     if(typeChoice === "atk_boost") return "قيمة رفع القوة (أو عيّن amount في المعاملات)";
 
