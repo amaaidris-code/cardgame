@@ -2007,6 +2007,19 @@ async function enemyAct(){
     let sealablePlayerSkills =
     battle.playerUsedSkills.filter(s => !isSkillSealed(battle.player, s));
 
+    // مثل اتجاه اللاعب: مهارة دفاع اللاعب تبقى قابلة للختم من الخصم دائمًا
+    // حتى لو لم يستخدمها في هذا النزال بعد (الدفاع مهارة أساسية)
+    let playerDefenseSkill =
+    battle.player.skills.find(s => s.type === "defense");
+
+    if(playerDefenseSkill
+    && !isSkillSealed(battle.player, playerDefenseSkill)
+    && !sealablePlayerSkills.find(s => s.id === playerDefenseSkill.id)){
+
+        sealablePlayerSkills.push(playerDefenseSkill);
+
+    }
+
     let sealChoice =
     (sealSkill && sealablePlayerSkills.length > 0 && Math.random() < 0.6)
     ? sealSkill
@@ -2081,6 +2094,18 @@ function enemyUseSealOrUnseal(skill){
 
         let sealable =
         battle.playerUsedSkills.filter(s => !isSkillSealed(battle.player, s));
+
+        // دفاع اللاعب قابل للختم دائمًا (مهارة أساسية) حتى لو لم يستخدمه بعد
+        let playerDefenseSkill =
+        battle.player.skills.find(s => s.type === "defense");
+
+        if(playerDefenseSkill
+        && !isSkillSealed(battle.player, playerDefenseSkill)
+        && !sealable.find(s => s.id === playerDefenseSkill.id)){
+
+            sealable.push(playerDefenseSkill);
+
+        }
 
         let target = sealable[Math.floor(Math.random() * sealable.length)];
 
@@ -3470,10 +3495,23 @@ function openSealMenu(sealSkill){
 
     let selectedNames = [];
 
-    // تُختم فقط المهارات التي استخدمها الخصم في هذا النزال بالذات وغير
-    // المختومة مسبقًا (لا فائدة من ختم ما هو مختوم فعلًا)
+    // تُختم المهارات التي استخدمها الخصم في هذا النزال بالذات وغير المختومة
+    // مسبقًا (لا فائدة من ختم ما هو مختوم فعلًا) — بالإضافة إلى مهارة دفاع
+    // الخصم التي تبقى قابلة للختم دائمًا حتى لو لم يستخدمها في هذا النزال
+    // بعد، فالدفاع مهارة أساسية لدى أي مقاتل ويجب أن يبقى ممكنًا منعُه
     let sealableSkills =
     battle.enemyUsedSkillsThisBattle.filter(s => !isSkillSealed(battle.enemy, s));
+
+    let enemyDefenseSkill =
+    battle.enemy.skills.find(s => s.type === "defense");
+
+    if(enemyDefenseSkill
+    && !isSkillSealed(battle.enemy, enemyDefenseSkill)
+    && !sealableSkills.find(s => s.id === enemyDefenseSkill.id)){
+
+        sealableSkills.push(enemyDefenseSkill);
+
+    }
 
     let usedListHtml = sealableSkills.length > 0
     ? sealableSkills
@@ -3613,7 +3651,9 @@ function attemptSealMulti(sealSkill, names){
     for(let name of uniqueNames){
 
         let targetSkill =
-        battle.enemyUsedSkillsThisBattle.find(s => s.name.trim() === name);
+        battle.enemyUsedSkillsThisBattle.find(s => s.name.trim() === name)
+        // مهارة الدفاع قابلة للختم حتى لو لم يستخدمها الخصم في هذا النزال بعد
+        || battle.enemy.skills.find(s => s.type === "defense" && s.name.trim() === name);
 
         if(!targetSkill){
 

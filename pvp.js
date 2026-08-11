@@ -17,6 +17,10 @@ let pvpState = {
     skillCache: {}, // skill_id -> سجل المهارة الكامل (اسم/نوع/effect/damage/cooldown...)
     stealMenuOpen: false,
 
+    // مهارات دفاع الخصم (type = "defense"): تُبقى دائمًا خيارًا للختم حتى لو
+    // لم يستخدمها في هذه المباراة بعد (الدفاع مهارة أساسية لدى أي مقاتل)
+    oppDefenseSkillIds: [],
+
     // تهدئة مهاراتي في هذه المباراة: skill_id -> last_used_turn
     myCooldowns: {},
     myTurnsTaken: 0,
@@ -897,6 +901,7 @@ async function pvpRefreshState(isFirstLoad){
     pvpState.oppUsedSkillIds = oppUsedIds;
     pvpState.mySealedSkillIds = mySealedIds;
     pvpState.oppSealedSkillIds = oppSealedIds;
+    pvpState.oppDefenseSkillIds = data.opponent_defense_skill_ids || [];
     pvpState.myTurnsTaken = myTurnsTaken;
     pvpState.lastMyHp = myHp;
     pvpState.lastOppHp = oppHp;
@@ -906,7 +911,7 @@ async function pvpRefreshState(isFirstLoad){
         pvpState.myCooldowns[c.skill_id] = c.last_used_turn;
     });
 
-    await pvpEnsureSkillsCached([...myUsedIds, ...oppUsedIds, ...mySealedIds, ...oppSealedIds]);
+    await pvpEnsureSkillsCached([...myUsedIds, ...oppUsedIds, ...mySealedIds, ...oppSealedIds, ...(data.opponent_defense_skill_ids || [])]);
     pvpRenderUsedSkillsUI();
 
     let myTurn = (data.turn_player_id === (pvpState.isPlayer1 ? data.player1_id : data.player2_id));
@@ -1559,9 +1564,26 @@ function pvpOpenSealMenu(abilitySkill){
 
     pvpCloseSealMenu();
 
-    let candidates = pvpState.oppUsedSkillIds
+    let usedCandidates = pvpState.oppUsedSkillIds
     .map(id => pvpState.skillCache[id])
     .filter(s => s && !(pvpState.oppSealedSkillIds || []).includes(s.id));
+
+    // دفاع الخصم مهارة أساسية: يبقى خيارًا للختم دائمًا حتى لو لم يستخدمه
+    // في هذه المباراة بعد (مطابقة لمنطق الخادم pvp_seal_or_unseal_skill)
+    let defenseCandidates = (pvpState.oppDefenseSkillIds || [])
+    .map(id => pvpState.skillCache[id])
+    .filter(s => s && !(pvpState.oppSealedSkillIds || []).includes(s.id));
+
+    let candidates = [];
+    let seenIds = {};
+    [usedCandidates, defenseCandidates].forEach(list => {
+        list.forEach(s => {
+            if(!seenIds[s.id]){
+                seenIds[s.id] = true;
+                candidates.push(s);
+            }
+        });
+    });
 
     if(candidates.length === 0){
         alert("لا توجد مهارة قابلة للختم الآن (الخصم لم يستخدم أي مهارة غير مختومة في هذه المباراة)");
