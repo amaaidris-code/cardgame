@@ -1357,11 +1357,17 @@ opacity: 0.6;
 }
 
 
-/* مهارات اللاعب */
+/* مهارات اللاعب (PvE وPvP معًا):
+   خلفية شفافة قليلًا مع تعتيم بسيط خلف الزر، بحيث تظهر خلفية
+   الصفحة المخصصة من خلف الأزرار مع بقاء اسم المهارة واضحًا */
 
 .skills-page button{
 
-background: linear-gradient(160deg,#20202a,#141418);
+background: linear-gradient(160deg, rgba(32,32,42,0.55), rgba(20,20,24,0.45));
+
+-webkit-backdrop-filter: blur(3px);
+
+backdrop-filter: blur(3px);
 
 border:1px solid rgba(255,255,255,0.1);
 
