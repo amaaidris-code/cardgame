@@ -29,13 +29,13 @@ jobs:
           cp *.html *.js *.css www/ 2>/dev/null || true
 
       - name: Add Android platform
-        run: ./node_modules/.bin/cap add android
+        run: node ./node_modules/.bin/cap add android
 
       - name: Generate app icon
         run: npx @capacitor/assets generate --android
 
       - name: Sync web assets
-        run: npx cap sync android
+        run: node ./node_modules/.bin/cap sync android
 
       - name: Build debug APK
         run: |
