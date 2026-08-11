@@ -2500,6 +2500,16 @@ function playerUseReflect(reflectSkill){
 
     }
 
+    // اللاعب صدّ هجوم الخصم بالانعكاس، فاكتمل التبادل وانتهى: نُنهي أي
+    // أثر معلّق لهجوم اللاعب السابق على الخصم (آخر ضربة في انتظار الرد)
+    // حتى لا يبطلها الخصم بدفاعه بعد ذلك فيُنقص من صحة اللاعب شفاءً من
+    // ضربة قديمة — اللاعب صدّ الهجوم فلا ينزل من صحته شيء بسبب هذه الصفقة
+    if(battle.enemy.lastHitSnapshot && !battle.enemy.lastHitSnapshot.consumed){
+
+        battle.enemy.lastHitSnapshot.consumed = true;
+
+    }
+
     clearTurnTimer();
 
     battle.player.turnsTaken++;
