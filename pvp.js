@@ -898,6 +898,8 @@ async function pvpRefreshState(isFirstLoad){
     updateHpDisplay("pvp-player", myHp, myMaxHp);
     updateHpDisplay("pvp-enemy", oppHp, oppMaxHp);
 
+    pvpRenderStatusBadges(data);
+
     pvpState.myUsedSkillIds = myUsedIds;
     pvpState.oppUsedSkillIds = oppUsedIds;
     pvpState.mySealedSkillIds = mySealedIds;
@@ -909,7 +911,10 @@ async function pvpRefreshState(isFirstLoad){
 
     pvpState.myCooldowns = {};
     (data.my_cooldowns || []).forEach(c => {
-        pvpState.myCooldowns[c.skill_id] = c.last_used_turn;
+        pvpState.myCooldowns[c.skill_id] = {
+            lastUsedTurn: c.last_used_turn,
+            extraCooldown: c.extra_cooldown || 0
+        };
     });
 
     await pvpEnsureSkillsCached([...myUsedIds, ...oppUsedIds, ...mySealedIds, ...oppSealedIds, ...(data.opponent_defense_skill_ids || [])]);
@@ -923,6 +928,8 @@ async function pvpRefreshState(isFirstLoad){
 
     if(!(myTurn && data.status === "active")){
         pvpCloseStealMenu();
+        pvpCloseDelayMenu();
+        pvpCloseShadowMenu();
     }
 
     // مؤشر تجميد بصري فوق صورة أي طرف لا يزال له أدوار متبقية من التجميد
@@ -1118,6 +1125,8 @@ async function pvpRefreshState(isFirstLoad){
         pvpStopPolling();
         pvpStopTurnTimer();
         pvpCloseStealMenu();
+        pvpCloseDelayMenu();
+        pvpCloseShadowMenu();
         let iWon = data.winner_id === (pvpState.isPlayer1 ? data.player1_id : data.player2_id);
         pvpShowResult(iWon);
     }
@@ -1135,6 +1144,71 @@ function updateHpDisplay(prefix, hp, maxHp){
     if(text) text.textContent = hp + " / " + maxHp;
 
     if(bar) updateHpBarColor(bar, hp, maxHp);
+}
+
+// ========================================
+// شارات الحالة فوق بطاقات المقاتلين (PvP): قوة مؤقتة / صحة مؤقتة /
+// أدوار إضافية / درع انعكاس / درع امتصاص — من حقول pvp_get_match_state
+// ========================================
+function pvpRenderStatusBadges(data){
+    let my = {}, opp = {};
+    if(pvpState.isPlayer1){
+        my = {
+            tempAtk: data.player1_temp_atk || 0,
+            tempHp: data.player1_temp_hp || 0,
+            extraTurns: data.player1_extra_turns || 0,
+            reflectMult: data.player1_reflect_multiplier || 0,
+            absorbHits: data.player1_absorb_hits || 0
+        };
+        opp = {
+            tempAtk: data.player2_temp_atk || 0,
+            tempHp: data.player2_temp_hp || 0,
+            extraTurns: data.player2_extra_turns || 0,
+            reflectMult: data.player2_reflect_multiplier || 0,
+            absorbHits: data.player2_absorb_hits || 0
+        };
+    } else {
+        my = {
+            tempAtk: data.player2_temp_atk || 0,
+            tempHp: data.player2_temp_hp || 0,
+            extraTurns: data.player2_extra_turns || 0,
+            reflectMult: data.player2_reflect_multiplier || 0,
+            absorbHits: data.player2_absorb_hits || 0
+        };
+        opp = {
+            tempAtk: data.player1_temp_atk || 0,
+            tempHp: data.player1_temp_hp || 0,
+            extraTurns: data.player1_extra_turns || 0,
+            reflectMult: data.player1_reflect_multiplier || 0,
+            absorbHits: data.player1_absorb_hits || 0
+        };
+    }
+    pvpRenderFighterStatusBadge("pvp-player", my);
+    pvpRenderFighterStatusBadge("pvp-enemy", opp);
+}
+
+function pvpRenderFighterStatusBadge(idPrefix, fighter){
+    let el = document.getElementById(idPrefix + "-status");
+    if(!el) return;
+
+    let badges = [];
+    if((fighter.tempAtk || 0) > 0) badges.push("⚔️+" + fighter.tempAtk);
+    if((fighter.tempHp || 0) > 0) badges.push("🩵+" + fighter.tempHp);
+    if((fighter.extraTurns || 0) > 0) badges.push("⚡×" + fighter.extraTurns);
+    if((fighter.reflectMult || 0) > 0) badges.push("🔁×" + fighter.reflectMult);
+    if((fighter.absorbHits || 0) > 0) badges.push("🧲×" + fighter.absorbHits);
+
+    let key = badges.join("|");
+    if(el.dataset.renderedKey === key) return;
+    el.dataset.renderedKey = key;
+
+    el.innerHTML = "";
+    badges.forEach(b => {
+        let span = document.createElement("span");
+        span.className = "status-badge";
+        span.textContent = b;
+        el.appendChild(span);
+    });
 }
 
 // ========================================
@@ -1217,7 +1291,28 @@ function renderPVPSkillButtons(){
 
                 btn.onclick = () => pvpOpenUnsealMenu(skill);
 
+            } else if(skill.effect === "delay_cooldown"){
+
+                btn.querySelector(".skill-name").textContent =
+                    skill.name + " ⏳";
+
+                btn.onclick = () => pvpOpenDelayMenu(skill);
+
+            } else if(skill.effect === "shadow"){
+
+                btn.querySelector(".skill-name").textContent =
+                    skill.name + " 🌑";
+
+                btn.onclick = () => pvpOpenShadowMenu(skill);
+
             } else {
+
+                if(pvpIsNewBuffEffect(skill.effect)){
+
+                    btn.querySelector(".skill-name").textContent =
+                        skill.name + " ✨";
+
+                }
 
                 btn.onclick = () => pvpUseSkill(skill.id);
 
@@ -1334,15 +1429,16 @@ function renderPVPSkillButtons(){
     pvpApplyCooldownBadges();
 }
 
-// يحسب كم دورًا متبقيًا لتهدئة مهارة معيّنة بالاعتماد على my_cooldowns
-// و عدد أدواري المُستهلكة، بنفس منطق cooldownTurnsRemaining في battle.js
+// يحسب كم دورًا متبقيًا لتهدئة مهارة معيّنة بنفس معادلة السيرفر
+// (pvp_skill_remaining_cd): التهدئة الأساسية + التهدئة الإضافية من
+// مهارة تأجيل التهديدة، مطروحًا منها ما مر من أدوار هذا المقاتل نفسه
 function pvpCooldownRemaining(skill){
     if(!skill.cooldown || skill.cooldown <= 0) return 0;
 
-    let lastUsed = pvpState.myCooldowns[skill.id];
-    if(lastUsed === undefined || lastUsed === null) return 0;
+    let entry = pvpState.myCooldowns[skill.id];
+    if(!entry || entry.lastUsedTurn === undefined || entry.lastUsedTurn === null) return 0;
 
-    let remaining = skill.cooldown - (pvpState.myTurnsTaken - lastUsed);
+    let remaining = skill.cooldown + (entry.extraCooldown || 0) - (pvpState.myTurnsTaken - entry.lastUsedTurn);
     return remaining > 0 ? remaining : 0;
 }
 
@@ -1740,6 +1836,265 @@ async function pvpUseSealOrUnseal(abilitySkillId, targetSkillId){
     pvpRefreshState(false);
 }
 
+// هل هذا الأثر من مفاعيل الأنواع الجديدة (تأثير ذاتي يستهلك الدور)؟ نفس
+// منطق isNewBuffEffect في battle.js — تُنفَّذ عبر pvp_use_skill مباشرة
+function pvpIsNewBuffEffect(effect){
+    return effect === "consecutive_turns"
+        || effect === "absorb_atk"
+        || effect === "absorb_hp"
+        || effect === "hp_boost"
+        || effect === "atk_boost";
+}
+
+// قيمة مفعول مهارة: تُقرأ من skill.params (إن وُجدت) وإلا من رقم المهارة
+// نفسه (skill.damage) كمقابل احتياطي — مطابق لمنطق السيرفر
+function pvpSkillParamAmount(skill, key, fallback){
+    let p = skill && skill.params;
+    if(p && p[key] !== undefined && p[key] !== null && p[key] !== ""){
+        let v = Number(p[key]);
+        if(!isNaN(v)) return v;
+    }
+    let fb = Number(fallback);
+    if(!isNaN(fb)) return fb;
+    return 1;
+}
+
+// ========================================
+// قائمة تأجيل التهدئة: نعرض مهارات الخصم المعروفة لدينا (ما استخدمه في
+// هذه المباراة + دفاعه) التي لها تهدئة وغير مختومة — السيرفر يتحقق فعليًا
+// من ملكية الخصم للمهارة المستهدفة
+// ========================================
+function pvpOpenDelayMenu(abilitySkill){
+
+    pvpCloseDelayMenu();
+
+    let knownIds = [...new Set([...(pvpState.oppUsedSkillIds || []), ...(pvpState.oppDefenseSkillIds || [])])];
+
+    let candidates = knownIds
+    .map(id => pvpState.skillCache[id])
+    .filter(s => s && s.cooldown > 0 && !(pvpState.oppSealedSkillIds || []).includes(s.id));
+
+    if(candidates.length === 0){
+        alert("لا توجد مهارة خصم معروفة لها تهدئة لتأجيلها الآن");
+        return;
+    }
+
+    let delayTurns = pvpSkillParamAmount(abilitySkill, "turns", abilitySkill.damage);
+
+    let modal = document.createElement("div");
+    modal.id = "pvp-steal-modal";
+    modal.className = "steal-modal";
+    modal.dataset.modalFor = "delay";
+    modal.innerHTML = `
+        <div class="steal-modal-box">
+            <h3>⏳ أخّر تهدئة مهارة الخصم (+${delayTurns} ${delayTurns === 1 ? "دور" : "أدوار"})</h3>
+            <div class="steal-options-list" id="pvp-steal-options-list"></div>
+            <div class="steal-modal-buttons">
+                <button id="pvp-steal-cancel-btn">إلغاء</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    let list = modal.querySelector("#pvp-steal-options-list");
+    candidates.forEach(skill => {
+        let btn = document.createElement("button");
+        btn.className = "steal-option";
+        btn.textContent = skill.name;
+        btn.onclick = () => {
+            pvpCloseDelayMenu();
+            pvpUseDelaySkill(abilitySkill.id, skill.id);
+        };
+        list.appendChild(btn);
+    });
+
+    modal.querySelector("#pvp-steal-cancel-btn").onclick = pvpCloseDelayMenu;
+}
+
+function pvpCloseDelayMenu(){
+    let modal = document.getElementById("pvp-steal-modal");
+    if(modal && modal.dataset.modalFor === "delay") modal.remove();
+}
+
+// ========================================
+// تنفيذ تأجيل التهدئة — التحقق الفعلي (الملكية، الدور، الحالة النشطة...)
+// كله على السيرفر عبر pvp_delay_cooldown
+// ========================================
+async function pvpUseDelaySkill(abilitySkillId, targetSkillId){
+
+    pvpSetSkillsEnabled(false);
+
+    let { data, error } =
+    await supabaseClient
+    .rpc("pvp_delay_cooldown", {
+        p_token: pvpGetToken(),
+        p_match_id: pvpState.matchId,
+        p_ability_skill_id: abilitySkillId,
+        p_target_skill_id: targetSkillId
+    })
+    .single();
+
+    if(error){
+        alert(error.message || "تعذر تنفيذ الحركة");
+        pvpRefreshState(false);
+        return;
+    }
+
+    pvpRefreshState(false);
+}
+
+// ========================================
+// قائمة الظل (PvP): نعرض الشخصيات المؤهلة من shadow_eligible_characters
+// (عبر pvp_list_shadow_pool) ثم مهارات الشخصية المختارة
+// ========================================
+async function pvpOpenShadowMenu(abilitySkill){
+
+    pvpCloseShadowMenu();
+
+    let { data, error } =
+    await supabaseClient
+    .rpc("pvp_list_shadow_pool", { p_token: pvpGetToken() });
+
+    if(error || !data){
+        alert(error ? (error.message || "تعذر جلب قائمة الظل") : "قائمة الظل فارغة");
+        return;
+    }
+
+    // البيانات تأتي صفًا واحدًا لكل مهارة — نجمعها حسب الشخصية
+    let chars = {};
+    data.forEach(row => {
+        if(!chars[row.character_id]){
+            chars[row.character_id] = {
+                id: row.character_id,
+                name: row.character_name || "وحش",
+                image: row.identity_image || "",
+                skills: []
+            };
+        }
+        if(row.skill_id){
+            chars[row.character_id].skills.push({
+                id: row.skill_id,
+                name: row.skill_name,
+                type: row.skill_type,
+                damage: row.skill_damage,
+                cooldown: row.skill_cooldown,
+                effect: row.skill_effect,
+                unblockable: row.skill_unblockable,
+                color: row.skill_color,
+                description: row.skill_description,
+                params: row.skill_params
+            });
+        }
+    });
+
+    let charList = Object.values(chars);
+
+    let listHtml = charList.length > 0
+    ? charList
+        .map(c => `<button class="steal-option shadow-char-option" data-id="${escapeHtml(String(c.id))}">🌑 ${escapeHtml(c.name)}</button>`)
+        .join("")
+    : "<p>لا توجد شخصيات مؤهلة في قائمة الظل حاليًا</p>";
+
+    let modal = document.createElement("div");
+    modal.id = "pvp-steal-modal";
+    modal.className = "steal-modal";
+    modal.dataset.modalFor = "shadow";
+    modal.innerHTML = `
+        <div class="steal-modal-box">
+            <h3>🌑 استدعِ ظل شخصية واستخدم إحدى مهاراته</h3>
+            <div class="steal-options-list">${listHtml}</div>
+            <div class="steal-modal-buttons">
+                <button id="pvp-steal-cancel-btn">إلغاء</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    modal.querySelectorAll(".shadow-char-option").forEach(btn => {
+        btn.onclick = () => {
+            let charId = btn.dataset.id;
+            pvpCloseShadowMenu();
+            pvpOpenShadowSkillMenu(abilitySkill, charId, chars[charId]);
+        };
+    });
+
+    modal.querySelector("#pvp-steal-cancel-btn").onclick = pvpCloseShadowMenu;
+}
+
+function pvpOpenShadowSkillMenu(abilitySkill, charId, charEntry){
+
+    if(!charEntry) return;
+
+    let usable = charEntry.skills || [];
+
+    let listHtml = usable.length > 0
+    ? usable
+        .map(s => `<button class="steal-option shadow-skill-option" data-id="${escapeHtml(String(s.id))}">${escapeHtml(s.name)}</button>`)
+        .join("")
+    : "<p>لا توجد مهارة صالحة في هذا الظل</p>";
+
+    let modal = document.createElement("div");
+    modal.id = "pvp-steal-modal";
+    modal.className = "steal-modal";
+    modal.dataset.modalFor = "shadow";
+    modal.innerHTML = `
+        <div class="steal-modal-box">
+            <h3>🌑 استخدم مهارة من ظل "${escapeHtml(charEntry.name)}"</h3>
+            <div class="steal-options-list">${listHtml}</div>
+            <div class="steal-modal-buttons">
+                <button id="pvp-steal-cancel-btn">إلغاء</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    modal.querySelectorAll(".shadow-skill-option").forEach(btn => {
+        btn.onclick = () => {
+            let skillId = btn.dataset.id;
+            pvpCloseShadowMenu();
+            pvpUseShadowSkill(abilitySkill.id, charId, skillId);
+        };
+    });
+
+    modal.querySelector("#pvp-steal-cancel-btn").onclick = pvpCloseShadowMenu;
+}
+
+function pvpCloseShadowMenu(){
+    let modal = document.getElementById("pvp-steal-modal");
+    if(modal && modal.dataset.modalFor === "shadow") modal.remove();
+}
+
+// ========================================
+// تنفيذ مهارة الظل — التحقق الفعلي (هل الشخصية في القائمة، هل المهارة من
+// مهاراتها...) كله على السيرفر عبر pvp_use_shadow
+// ========================================
+async function pvpUseShadowSkill(abilitySkillId, charId, skillId){
+
+    pvpSetSkillsEnabled(false);
+
+    let { data, error } =
+    await supabaseClient
+    .rpc("pvp_use_shadow", {
+        p_token: pvpGetToken(),
+        p_match_id: pvpState.matchId,
+        p_ability_skill_id: abilitySkillId,
+        p_character_id: charId,
+        p_skill_id: skillId
+    })
+    .single();
+
+    if(error){
+        alert(error.message || "تعذر تنفيذ الحركة");
+        pvpRefreshState(false);
+        return;
+    }
+
+    pvpRefreshState(false);
+}
+
 // ========================================
 // الاستسلام / الخروج من الشاشة
 // ========================================
@@ -1755,6 +2110,8 @@ async function pvpLeaveMatch(){
     }
 
     pvpCloseStealMenu();
+    pvpCloseDelayMenu();
+    pvpCloseShadowMenu();
     pvpStopPolling();
     pvpStopTurnTimer();
     pvpState.matchId = null;

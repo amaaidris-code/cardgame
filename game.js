@@ -3086,6 +3086,8 @@ async function openEditCharacterModal(characterId){
 
             <textarea id="skill-desc-${s.id}" class="admin-skill-desc-input" placeholder="وصف المهارة (يظهر عند الضغط المطوّل)">${escapeHtml(s.description || '')}</textarea>
 
+            <input type="text" id="skill-params-${s.id}" class="admin-skill-params-input" value="${escapeHtml(JSON.stringify(s.params || {}))}" placeholder="معاملات JSON — مثل {&quot;amount&quot;:50}">
+
             <label class="admin-color-row skill-color-row">
                 🎨 لون اسم المهارة
                 <input type="color" id="skill-color-${s.id}" value="${(s.color && /^#[0-9A-Fa-f]{6}$/.test(s.color)) ? s.color : '#ffffff'}">
@@ -3195,6 +3197,8 @@ async function openEditCharacterModal(characterId){
 
                 <textarea id="new-skill-description" placeholder="وصف المهارة (يظهر للاعب عند الضغط المطوّل على الزر)"></textarea>
 
+                <input id="new-skill-params" type="text" placeholder="معاملات إضافية بصيغة JSON — مثل {&quot;amount&quot;:50} (اختياري)">
+
                 <label class="admin-color-row skill-color-row">
                     🎨 لون اسم المهارة
                     <input id="new-skill-color" type="color" value="#ffffff">
@@ -3289,6 +3293,48 @@ function skillTypeChoiceToFields(typeChoice){
 
         effect = "unseal";
 
+    } else if(typeChoice === "consecutive_turns"){
+
+        type = "special";
+
+        effect = "consecutive_turns";
+
+    } else if(typeChoice === "absorb_atk"){
+
+        type = "special";
+
+        effect = "absorb_atk";
+
+    } else if(typeChoice === "absorb_hp"){
+
+        type = "special";
+
+        effect = "absorb_hp";
+
+    } else if(typeChoice === "hp_boost"){
+
+        type = "special";
+
+        effect = "hp_boost";
+
+    } else if(typeChoice === "atk_boost"){
+
+        type = "special";
+
+        effect = "atk_boost";
+
+    } else if(typeChoice === "delay_cooldown"){
+
+        type = "special";
+
+        effect = "delay_cooldown";
+
+    } else if(typeChoice === "shadow"){
+
+        type = "special";
+
+        effect = "shadow";
+
     }
 
     return {type, effect, unblockable};
@@ -3316,6 +3362,20 @@ function skillFieldsToTypeChoice(skill){
 
     if(skill.effect === "unseal") return "unseal";
 
+    if(skill.effect === "consecutive_turns") return "consecutive_turns";
+
+    if(skill.effect === "absorb_atk") return "absorb_atk";
+
+    if(skill.effect === "absorb_hp") return "absorb_hp";
+
+    if(skill.effect === "hp_boost") return "hp_boost";
+
+    if(skill.effect === "atk_boost") return "atk_boost";
+
+    if(skill.effect === "delay_cooldown") return "delay_cooldown";
+
+    if(skill.effect === "shadow") return "shadow";
+
     if(skill.type === "defense") return "defense";
 
     return "attack";
@@ -3336,7 +3396,14 @@ function skillTypeOptionsHtml(selected){
         ["lifesteal", "🩸 امتصاص (شفاء بقدر الضرر)"],
         ["reflect", "🔁 انعكاس (المرة القادمة يعكس المهاجمُ عليه هجومَه السابق)"],
         ["seal", "🔒 ختم (منع مهارة استخدمها الخصم حتى نهاية النزال)"],
-        ["unseal", "🔓 فك الختم (إزالة ختم عن مهارة من مهاراتك)"]
+        ["unseal", "🔓 فك الختم (إزالة ختم عن مهارة من مهاراتك)"],
+        ["consecutive_turns", "⚡ أدوار متتالية (مهارة تعطيك أدوارًا إضافية متتالية)"],
+        ["absorb_atk", "🧲 امتصاص → قوة (تحويل الضربات القادمة إلى قوة هجوم مؤقتة)"],
+        ["absorb_hp", "🩵 امتصاص → صحة (تحويل الضربات القادمة إلى صحة مؤقتة فوق الحد)"],
+        ["hp_boost", "❤️ رفع الصحة (زيادة دائمة في الحد الأقصى للصحة)"],
+        ["atk_boost", "⚔️ رفع القوة (قوة هجوم مؤقتة تُضاف لضرر كل ضربة)"],
+        ["delay_cooldown", "⏳ تأجيل التهدئة (تأخير تهدئة مهارة يملكها الخصم)"],
+        ["shadow", "🌑 الظل (استدعاء مهارة شخصية من قائمة الظل المؤهلة)"]
     ];
 
     return options.map(([val, label]) =>
@@ -3363,6 +3430,20 @@ function skillTypeLabel(skill){
     if(skill.effect === "seal") return "ختم";
 
     if(skill.effect === "unseal") return "فك الختم";
+
+    if(skill.effect === "consecutive_turns") return "أدوار متتالية";
+
+    if(skill.effect === "absorb_atk") return "امتصاص → قوة";
+
+    if(skill.effect === "absorb_hp") return "امتصاص → صحة";
+
+    if(skill.effect === "hp_boost") return "رفع الصحة";
+
+    if(skill.effect === "atk_boost") return "رفع القوة";
+
+    if(skill.effect === "delay_cooldown") return "تأجيل التهدئة";
+
+    if(skill.effect === "shadow") return "الظل";
 
     if(skill.type === "defense") return "دفاع";
 
@@ -3391,6 +3472,20 @@ function skillNumberFieldLabel(skill){
 
     if(skill.effect === "unseal") return "عدد المهارات القابلة لفك الختم عنها (من مهاراتك المختومة)";
 
+    if(skill.effect === "consecutive_turns") return "عدد الأدوار الإضافية المتتالية (أو عيّن extra_turns في المعاملات)";
+
+    if(skill.effect === "absorb_atk") return "عدد الضربات الممتصة (أو عيّن absorb_hits في المعاملات)";
+
+    if(skill.effect === "absorb_hp") return "عدد الضربات الممتصة (أو عيّن absorb_hits في المعاملات)";
+
+    if(skill.effect === "hp_boost") return "قيمة رفع الصحة (أو عيّن amount في المعاملات)";
+
+    if(skill.effect === "atk_boost") return "قيمة رفع القوة (أو عيّن amount في المعاملات)";
+
+    if(skill.effect === "delay_cooldown") return "عدد أدوار التأجيل (أو عيّن delay في المعاملات)";
+
+    if(skill.effect === "shadow") return "لا يُستخدم (تُدار عبر قائمة الظل)";
+
     return "الضرر";
 
 }
@@ -3415,6 +3510,20 @@ function newSkillNumberFieldLabel(typeChoice){
     if(typeChoice === "seal") return "عدد المهارات القابلة للختم (من مهارات الخصم المستخدمة)";
 
     if(typeChoice === "unseal") return "عدد المهارات القابلة لفك الختم عنها (من مهاراتك المختومة)";
+
+    if(typeChoice === "consecutive_turns") return "عدد الأدوار الإضافية المتتالية (أو عيّن extra_turns في المعاملات)";
+
+    if(typeChoice === "absorb_atk") return "عدد الضربات الممتصة (أو عيّن absorb_hits في المعاملات)";
+
+    if(typeChoice === "absorb_hp") return "عدد الضربات الممتصة (أو عيّن absorb_hits في المعاملات)";
+
+    if(typeChoice === "hp_boost") return "قيمة رفع الصحة (أو عيّن amount في المعاملات)";
+
+    if(typeChoice === "atk_boost") return "قيمة رفع القوة (أو عيّن amount في المعاملات)";
+
+    if(typeChoice === "delay_cooldown") return "عدد أدوار التأجيل (أو عيّن delay في المعاملات)";
+
+    if(typeChoice === "shadow") return "لا يُستخدم (تُدار عبر قائمة الظل)";
 
     return "الضرر";
 
@@ -3448,6 +3557,35 @@ function updateSkillNumberLabelFor(skillId){
 }
 
 
+// يقرأ حقل المعاملات JSON (إن وُجد) ويعيد كائن params آمنًا يُمرَّر إلى
+// admin_add_skill / admin_update_skill. أي صيغة خاطئة تُسقط بصمت مع {}.
+function parseSkillParams(input){
+
+    let raw = input ? input.value.trim() : "";
+
+    if(!raw) return {};
+
+    try{
+
+        let obj = JSON.parse(raw);
+
+        if(obj && typeof obj === "object" && !Array.isArray(obj)){
+
+            return obj;
+
+        }
+
+        return {};
+
+    }catch(e){
+
+        return {};
+
+    }
+
+}
+
+
 async function addSkillToCharacter(characterId){
 
     let name = document.getElementById("new-skill-name").value.trim();
@@ -3463,6 +3601,8 @@ async function addSkillToCharacter(characterId){
     let colorInput = document.getElementById("new-skill-color");
 
     let color = colorInput && colorInput.value ? colorInput.value : null;
+
+    let params = parseSkillParams(document.getElementById("new-skill-params"));
 
     if(name === ""){
 
@@ -3501,7 +3641,9 @@ async function addSkillToCharacter(characterId){
 
         p_description: description,
 
-        p_color: color
+        p_color: color,
+
+        p_params: params
 
     });
 
@@ -3673,6 +3815,8 @@ async function saveSkillEdit(skillId){
 
     let colorInput = document.getElementById("skill-color-" + skillId);
 
+    let params = parseSkillParams(document.getElementById("skill-params-" + skillId));
+
     let name = nameInput ? nameInput.value.trim() : "";
 
     let typeChoice = typeSelect ? typeSelect.value : "attack";
@@ -3720,7 +3864,9 @@ async function saveSkillEdit(skillId){
 
         p_description: description,
 
-        p_color: color
+        p_color: color,
+
+        p_params: params
 
     });
 

@@ -209,6 +209,14 @@ function resetBattleVisuals(prefix){
     if(enemyUsedBox) delete enemyUsedBox.dataset.renderedKey;
     if(playerUsedBox) delete playerUsedBox.dataset.renderedKey;
 
+    // نفس الشيء لشارات الحالة (قوة/صحة مؤقتة، أدوار إضافية، دروع...)
+    let enemyStatus = document.getElementById(prefix + "-enemy-status");
+    let playerStatus = document.getElementById(prefix + "-player-status");
+    if(enemyStatus) delete enemyStatus.dataset.renderedKey;
+    if(playerStatus) delete playerStatus.dataset.renderedKey;
+    if(enemyStatus) enemyStatus.innerHTML = "";
+    if(playerStatus) playerStatus.innerHTML = "";
+
 }
 
 
@@ -507,6 +515,29 @@ function buildFighter(pc, skills, isPlayer){
         // النزال، إلا إذا فُكّ ختمها بمهارة "فك الختم"
         sealedSkillIds: [],
 
+        // ===== مفاعيل الأنواع الجديدة (مطابقة لمنطق السيرفر في PvP) =====
+
+        // قوة هجوم مؤقتة (atk_boost): تُضاف لضرر كل هجوم/مهارة ضررية
+        tempAtk: 0,
+
+        // صحة مؤقتة فوق الحد الأقصى (absorb_hp): تُمتَص بها الضربات
+        tempHp: 0,
+
+        // أدوار إضافية (consecutive_turns): بعد استهلاك الدور يُستمر به
+        extraTurns: 0,
+
+        // درع امتصاص: absorbMode = "atk" (يحوّل الضربة لقوة مؤقتة) أو
+        // "hp" (يحوّلها لصحة مؤقتة)، وعدد الضربات المتبقية في absorbHits
+        absorbMode: null,
+        absorbHits: 0,
+
+        // درع الانعكاس: عند تفعيل مهارة "انعكاس" يُثبَّت المضاعف هنا،
+        // وأول ضربة قابلة للصد قادمة على صاحب الدرع ترتد على مهاجمها
+        reflectMult: 0,
+
+        // أدوار تهدئة إضافية تُضاف لمهارة معيّنة (مهارة "تأجيل التهدئة")
+        cooldownExtra: {},
+
         playerCharacterId: pc.id,
 
         characterId: pc.character_id,
@@ -544,10 +575,58 @@ function calcDamage(skill){
 
     if(skill.effect === "unseal") return 0;
 
+    // مفاعيل الأنواع الجديدة لا تُلحق ضررًا مباشرًا إطلاقًا (كلها مهارات
+    // خاصة تُنفَّذ عبر معالجاتها الخاصة خارج resolveAction)
+    if(isNewBuffEffect(skill.effect)) return 0;
+
+    if(skill.effect === "delay_cooldown") return 0;
+
+    if(skill.effect === "shadow") return 0;
+
     if(skill.type === "attack" || skill.type === "special")
         return Number(skill.damage) || 0;
 
     return 0;
+
+}
+
+
+// ========================================
+// مساعدات مفاعيل الأنواع الجديدة
+// ========================================
+
+// هل هذا الأثر من مفاعيل الأنواع الجديدة (تأثير ذاتي يستهلك الدور)؟
+function isNewBuffEffect(effect){
+
+    return effect === "consecutive_turns"
+        || effect === "absorb_atk"
+        || effect === "absorb_hp"
+        || effect === "hp_boost"
+        || effect === "atk_boost";
+
+}
+
+
+// قيمة مفعول مهارة: تُقرأ من skill.params (إن وُجدت) وإلا من رقم المهارة
+// نفسه (skill.damage) كمقابل احتياطي — مطابق لمنطق السيرفر الذي يقرأ
+// params أولاً ثم يقع على damage
+function skillParamAmount(skill, key, fallback){
+
+    let p = skill && skill.params;
+
+    if(p && p[key] !== undefined && p[key] !== null && p[key] !== ""){
+
+        let v = Number(p[key]);
+
+        if(!isNaN(v)) return v;
+
+    }
+
+    let fb = Number(fallback);
+
+    if(!isNaN(fb)) return fb;
+
+    return 1;
 
 }
 
@@ -570,7 +649,10 @@ function isSkillReady(fighter, skill){
     if(lastUsed === undefined)
         return true;
 
-    return (fighter.turnsTaken - lastUsed) >= skill.cooldown;
+    // مهارة "تأجيل التهدئة" تمدّد تهدئة المهارة المستهدفة بأدوار إضافية
+    let totalCooldown = skill.cooldown + (fighter.cooldownExtra[skill.id] || 0);
+
+    return (fighter.turnsTaken - lastUsed) >= totalCooldown;
 
 }
 
@@ -586,7 +668,9 @@ function cooldownTurnsRemaining(fighter, skill){
     if(lastUsed === undefined)
         return 0;
 
-    let remaining = skill.cooldown - (fighter.turnsTaken - lastUsed);
+    let totalCooldown = skill.cooldown + (fighter.cooldownExtra[skill.id] || 0);
+
+    let remaining = totalCooldown - (fighter.turnsTaken - lastUsed);
 
     return remaining > 0 ? remaining : 0;
 
@@ -660,6 +744,21 @@ function buildMonsterFighter(character, skills){
 
         // المهارات المختومة حتى نهاية النزال (تُمنع بإضافة معرّفاتها هنا)
         sealedSkillIds: [],
+
+        // ===== مفاعيل الأنواع الجديدة (مطابقة لمنطق السيرفر في PvP) =====
+
+        tempAtk: 0,
+
+        tempHp: 0,
+
+        extraTurns: 0,
+
+        absorbMode: null,
+        absorbHits: 0,
+
+        reflectMult: 0,
+
+        cooldownExtra: {},
 
         isPlayer: false,
 
@@ -904,6 +1003,60 @@ function updateBattleScreen(){
     renderSkillButtons(prefix);
 
     renderUsedSkillsUI(prefix);
+
+    renderStatusBadges(prefix);
+
+}
+
+
+// شارات الحالة فوق بطاقات المقاتلين: قوة مؤقتة / صحة مؤقتة / أدوار إضافية /
+// درع انعكاس / درع امتصاص (من مفاعيل الأنواع الجديدة)
+function renderStatusBadges(prefix){
+
+    renderFighterStatusBadge(prefix + "-enemy", battle.enemy);
+
+    renderFighterStatusBadge(prefix + "-player", battle.player);
+
+}
+
+
+function renderFighterStatusBadge(idPrefix, fighter){
+
+    let el = document.getElementById(idPrefix + "-status");
+
+    if(!el) return;
+
+    let badges = [];
+
+    if((fighter.tempAtk || 0) > 0) badges.push("⚔️+" + fighter.tempAtk);
+
+    if((fighter.tempHp || 0) > 0) badges.push("🩵+" + fighter.tempHp);
+
+    if((fighter.extraTurns || 0) > 0) badges.push("⚡×" + fighter.extraTurns);
+
+    if((fighter.reflectMult || 0) > 0) badges.push("🔁×" + fighter.reflectMult);
+
+    if((fighter.absorbHits || 0) > 0) badges.push("🧲×" + fighter.absorbHits);
+
+    let key = badges.join("|");
+
+    if(el.dataset.renderedKey === key) return;
+
+    el.dataset.renderedKey = key;
+
+    el.innerHTML = "";
+
+    badges.forEach(b => {
+
+        let span = document.createElement("span");
+
+        span.className = "status-badge";
+
+        span.textContent = b;
+
+        el.appendChild(span);
+
+    });
 
 }
 
@@ -1298,6 +1451,39 @@ function processTurn(){
 }
 
 
+// ========================================
+// تسليم الدور بعد فعل يستهلك الدور (لللاعب أو الخصم) مع مراعاة مهارة
+// "الأدوار المتتالية" (consecutive_turns): إن كان لدى المقاتل أدوار إضافية
+// (extraTurns) يبقى الدور عنده ويُنقص دور واحد، وإلا ينتقل الدور للطرف الآخر.
+// يستخدمها كل الفاعلين الذين يستهلكون الدور بدل تكرار نفس النهاية يدويًا
+// ========================================
+
+function pveEndTurn(owner){
+
+    if(battle.finished) return;
+
+    let fighter = (owner === "player") ? battle.player : battle.enemy;
+
+    if((fighter.extraTurns || 0) > 0){
+
+        fighter.extraTurns--;
+
+        battle.turnOwner = owner;
+
+        addBattleLog(`⚡ دور إضافي! ${fighter.name} يستمر في الدور (متبقي ${fighter.extraTurns})`);
+
+        setTimeout(processTurn, 900);
+
+        return;
+
+    }
+
+    battle.turnOwner = (owner === "player") ? "enemy" : "player";
+
+    setTimeout(processTurn, 900);
+
+}
+
 
 // ========================================
 // رسم أزرار المهارات (هجوم / مهارة مميزة + المهارات المسروقة)
@@ -1639,6 +1825,40 @@ function handleSkillClick(skill){
 
     }
 
+    if(skill.effect === "delay_cooldown"){
+
+        openDelayMenu(skill);
+
+        return;
+
+    }
+
+    if(skill.effect === "shadow"){
+
+        openShadowMenu(skill);
+
+        return;
+
+    }
+
+    if(isNewBuffEffect(skill.effect)){
+
+        if(battle.turnOwner !== "player") return;
+
+        if(!isSkillReady(battle.player, skill)){
+
+            alert("هذه المهارة ما زالت في التهدئة");
+
+            return;
+
+        }
+
+        playerUseBuffSkill(skill);
+
+        return;
+
+    }
+
     // هجوم عادي أو مهارة مميزة ضررية = فعل يستهلك الدور
     if(battle.turnOwner !== "player") return;
 
@@ -1895,9 +2115,7 @@ function playerConsumeTurn(skill, target){
 
     if(checkBattleEnd()) return;
 
-    battle.turnOwner = "enemy";
-
-    setTimeout(processTurn, 900);
+    pveEndTurn("player");
 
 }
 
@@ -1964,33 +2182,86 @@ async function enemyAct(){
 
         if(checkBattleEnd()) return;
 
-        battle.turnOwner = "player";
-
-        processTurn();
+        pveEndTurn("enemy");
 
         return;
 
     }
 
+    // المهارات الضررية الخاصة العادية (استثناءًا من مهارات الأنواع الجديدة
+    // التي تُعالَج بخيارات احتمالية منفصلة أدناه)
     let special =
     enemy.skills.find(s =>
         s.type === "special"
         && s.effect !== "steal" && s.effect !== "copy" && s.effect !== "reflect"
         && s.effect !== "seal" && s.effect !== "unseal"
+        && !isNewBuffEffect(s.effect)
+        && s.effect !== "delay_cooldown" && s.effect !== "shadow"
         && !isSkillSealed(enemy, s)
         && isSkillReady(enemy, s));
 
-    // الانعكاس خيار احتياطي: يردّ الخصم آخرَ ضربة عادية (قابلة للصد) تلقّاه
-    // من اللاعب وغير مستهلكة بعد — إن لم توجد ضربة صالحة لا يختارها أصلًا
-    let canReflect =
-    enemy.lastHitSnapshot
-    && !enemy.lastHitSnapshot.consumed
-    && enemy.lastHitSnapshot.reflectable;
-
+    // الانعكاس (النمط الجديد) درع استباقي: يفعّله الخصم أحيانًا ليُرتدّ
+    // هجوم اللاعب القابل للصد القادم عليه — يُفعَّل فقط إن لم يكن لديه
+    // درع انعكاس نشط أصلًا
     let reflectSkill =
-    canReflect &&
     enemy.skills.find(s =>
         s.type === "special" && s.effect === "reflect" && !isSkillSealed(enemy, s) && isSkillReady(enemy, s));
+
+    let reflectChoice =
+    (reflectSkill && !(enemy.reflectMult > 0) && Math.random() < 0.3)
+    ? reflectSkill
+    : null;
+
+    // مهارات الأنواع الجديدة الذاتية (تعزيز/امتصاص/أدوار متتالية): يستخدمها
+    // الخصم وفق احتمالات وظروف أولوية بسيطة حتى لا يكررها في كل دور
+    let buffSkill =
+    enemy.skills.find(s =>
+        s.type === "special"
+        && isNewBuffEffect(s.effect)
+        && !isSkillSealed(enemy, s)
+        && isSkillReady(enemy, s));
+
+    let buffChoice = null;
+
+    if(buffSkill){
+
+        let want = 0.35;
+
+        if(buffSkill.effect === "hp_boost" || buffSkill.effect === "absorb_hp"){
+
+            if(enemy.hp / enemy.maxHp < 0.45) want = 0.8;
+
+        }
+
+        if(buffSkill.effect === "consecutive_turns" && (enemy.extraTurns || 0) > 0) want = 0.05;
+
+        if(buffSkill.effect === "absorb_atk" && (enemy.absorbHits || 0) > 0) want = 0.15;
+
+        if(buffSkill.effect === "atk_boost" && (enemy.tempAtk || 0) > 0) want = 0.2;
+
+        if(Math.random() < want) buffChoice = buffSkill;
+
+    }
+
+    // تأجيل التهدئة: يؤخّر الخصم تهدئة إحدى مهارات اللاعب المستخدمة أحيانًا
+    let delaySkill =
+    enemy.skills.find(s =>
+        s.type === "special" && s.effect === "delay_cooldown" && !isSkillSealed(enemy, s) && isSkillReady(enemy, s));
+
+    let delayChoice =
+    (delaySkill && battle.playerUsedSkills.length > 0 && Math.random() < 0.4)
+    ? delaySkill
+    : null;
+
+    // الظل: يستدعي الخصم وحشًا مُهزَمًا من مخزونه أحيانًا لاستخدام إحدى مهاراته
+    let shadowSkill =
+    enemy.skills.find(s =>
+        s.type === "special" && s.effect === "shadow" && !isSkillSealed(enemy, s) && isSkillReady(enemy, s));
+
+    let shadowChoice =
+    (shadowSkill && pveShadowPool().length > 0 && Math.random() < 0.45)
+    ? shadowSkill
+    : null;
 
     // مهارة الختم: يختم الخصم مهارة عشوائية استخدمها اللاعب في هذا النزال
     // (غير مختومة). مهارة فك الختم: يحرر عشوائيًا إحدى مهاراته المختومة.
@@ -2032,16 +2303,19 @@ async function enemyAct(){
 
     let chosen =
     special
+    || buffChoice
+    || delayChoice
+    || shadowChoice
     || sealChoice
     || unsealChoice
-    || reflectSkill
+    || reflectChoice
     || enemy.skills.find(s => s.type === "attack" && !isSkillSealed(enemy, s));
 
-    // إصلاح ثغرة: إذا لم يدافع الخصم عن آخر ضربة تلقاها ولم يعكسها أيضًا
-    // (اختار هجومًا أو مهارة أخرى)، تُصبح تلك الضربة "فائتة" ولا يجوز
-    // إلغاؤها لاحقًا بعد أدوار قادمة — وإلا يرجع دمه من العدم في جولة
-    // لاحقة دون أي ضربة جديدة فعلية
-    if(chosen.effect !== "reflect" && enemy.lastHitSnapshot && !enemy.lastHitSnapshot.consumed){
+    // إصلاح ثغرة: إذا لم يدافع الخصم عن آخر ضربة تلقاها (اختار أي فعل آخر)
+    // تُصبح تلك الضربة "فائتة" ولا يجوز إلغاؤها لاحقًا بعد أدوار قادمة —
+    // وإلا يرجع دمه من العدم في جولة لاحقة دون أي ضربة جديدة فعلية.
+    // الانعكاس الجديد درع استباقي لا يعتمد على اللقطة إطلاقًا
+    if(enemy.lastHitSnapshot && !enemy.lastHitSnapshot.consumed){
 
         enemy.lastHitSnapshot.consumed = true;
 
@@ -2071,13 +2345,21 @@ async function enemyAct(){
 
     }
 
+    // مهارات الأنواع الجديدة (تعزيز/امتصاص/أدوار متتالية/تأجيل التهدئة/الظل)
+    // تُنفَّذ عبر معالج الخصم الخاص (الدور والتهدئة سُجّلا أعلاه)
+    if(isNewBuffEffect(chosen.effect) || chosen.effect === "delay_cooldown" || chosen.effect === "shadow"){
+
+        enemyUseNewEffect(chosen);
+
+        return;
+
+    }
+
     resolveAction(enemy, battle.player, chosen);
 
     if(checkBattleEnd()) return;
 
-    battle.turnOwner = "player";
-
-    processTurn();
+    pveEndTurn("enemy");
 
 }
 
@@ -2163,9 +2445,719 @@ function enemyUseSealOrUnseal(skill){
 
     if(checkBattleEnd()) return;
 
-    battle.turnOwner = "player";
+    pveEndTurn("enemy");
 
-    processTurn();
+}
+
+
+// ========================================
+// مفاعيل الأنواع الجديدة (PvE)
+// ========================================
+
+// المهارات الممنوعة من استخدامها عبر "الظل" (مطابقة لقائمة المنع في السيرفر)
+const PVE_SHADOW_EXCLUDED_EFFECTS = ["steal", "copy", "seal", "unseal", "shadow", "delay_cooldown"];
+
+
+// يُطبّق المفعول الذاتي لمهارات الأنواع الجديدة (تعزيز/امتصاص/أدوار متتالية)
+// على مقاتل معيّن، ويعيد سطر سجل جاهزًا للمعاينة. القيم تُقرأ من skill.params
+// وإلا من رقم المهارة (damage) — مطابق لمنطق السيرفر
+function applyPveBuff(fighter, skill){
+
+    let amount = Math.max(1, skillParamAmount(skill, "amount", skill.damage));
+
+    if(skill.effect === "atk_boost"){
+
+        fighter.tempAtk = (fighter.tempAtk || 0) + amount;
+
+        return `${fighter.name} عزّز قوته الهجومية! +${amount} قوة مؤقتة`;
+
+    }
+
+    if(skill.effect === "hp_boost"){
+
+        fighter.maxHp += amount;
+
+        fighter.hp = Math.min(fighter.hp + amount, fighter.maxHp);
+
+        return `${fighter.name} عزّز صحته القصوى! +${amount} صحة (الحد الأقصى الآن ${fighter.maxHp})`;
+
+    }
+
+    if(skill.effect === "absorb_atk"){
+
+        fighter.absorbMode = "atk";
+
+        fighter.absorbHits = (fighter.absorbHits || 0) + amount;
+
+        return `${fighter.name} جهّز درع امتصاص! يحوّل أول ${amount} ${amount === 1 ? "ضربة" : "ضربات"} إلى قوة هجومية مؤقتة`;
+
+    }
+
+    if(skill.effect === "absorb_hp"){
+
+        fighter.absorbMode = "hp";
+
+        fighter.absorbHits = (fighter.absorbHits || 0) + amount;
+
+        return `${fighter.name} جهّز درع امتصاص! يحوّل أول ${amount} ${amount === 1 ? "ضربة" : "ضربات"} إلى صحة مؤقتة`;
+
+    }
+
+    if(skill.effect === "consecutive_turns"){
+
+        fighter.extraTurns = (fighter.extraTurns || 0) + amount;
+
+        return `${fighter.name} حصل على ${amount} ${amount === 1 ? "دور إضافي" : "أدوار إضافية"}`;
+
+    }
+
+    return "";
+
+}
+
+
+// يُنفّذ مهارة الأنواع الجديدة من جانب الخصم (الدور والتهدئة سُجّلا في
+// enemyAct قبل الوصول إلى هنا)
+function enemyUseNewEffect(skill){
+
+    let enemy = battle.enemy;
+
+    markEnemySkillUsed(skill);
+
+    if(skill.effect === "delay_cooldown"){
+
+        let candidates = battle.playerUsedSkills.filter(s => s.cooldown > 0);
+
+        if(candidates.length === 0) candidates = battle.player.skills.filter(s => s.cooldown > 0);
+
+        let target = candidates[Math.floor(Math.random() * candidates.length)];
+
+        if(target){
+
+            let delayTurns = Math.max(1, skillParamAmount(skill, "turns", skill.damage));
+
+            battle.player.cooldownExtra[target.id] = (battle.player.cooldownExtra[target.id] || 0) + delayTurns;
+
+            addBattleLog(`${enemy.name} أخّر تهدئة "${target.name}" عندك! (+${delayTurns} ${delayTurns === 1 ? "دور" : "أدوار"})`);
+
+            showBattleEffectBanner(battle.prefix, `⏳ ${enemy.name} أخّر تهدئة "${target.name}"!`, "info");
+
+        } else {
+
+            addBattleLog(`${enemy.name} حاول تأجيل التهدئة لكن لا توجد مهارة مناسبة لديك`);
+
+        }
+
+    } else if(skill.effect === "shadow"){
+
+        let pool = pveShadowPool();
+
+        let entry = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : null;
+
+        let available = entry ? (entry.skills || []).filter(s => !PVE_SHADOW_EXCLUDED_EFFECTS.includes(s.effect)) : [];
+
+        let targetSkill = available.length > 0 ? available[Math.floor(Math.random() * available.length)] : null;
+
+        if(entry && targetSkill){
+
+            addBattleLog(`${enemy.name} استدعى ظل "${entry.name}" واستخدم "${targetSkill.name}"!`);
+
+            showBattleEffectBanner(battle.prefix, `🌑 ${enemy.name} استخدم "${targetSkill.name}" من ظل ${entry.name}!`, "info");
+
+            executeShadowSkill(battle.enemy, battle.player, targetSkill);
+
+        } else {
+
+            addBattleLog(`${enemy.name} استدعى الظل لكن لا توجد مهارة صالحة للاستخدام`);
+
+        }
+
+    } else {
+
+        let logLine = applyPveBuff(enemy, skill);
+
+        if(logLine) addBattleLog(logLine);
+
+        showBattleEffectBanner(battle.prefix, logLine || "الخصم استخدم مهارة خاصة", "info");
+
+    }
+
+    renderUsedSkillsUI(battle.prefix);
+
+    renderSkillButtons(battle.prefix);
+
+    updateBattleScreen();
+
+    if(checkBattleEnd()) return;
+
+    pveEndTurn("enemy");
+
+}
+
+
+// يُنفّذ مهارةً مستدعاةً من "الظل" وكأن صاحب الظل استخدمها: دفاع → إلغاء
+// ضربة على المستخدم، انعكاس → درع استباقي، مفاعيل ذاتية → تطبيق مباشر،
+// وأي مهارة ضررية/تجميد → resolveAction على الهدف (trackUsed=false لأنها
+// ليست من مهارات المستخدم نفسه)
+function executeShadowSkill(user, target, skill){
+
+    if(skill.type === "defense"){
+
+        let snapshot = user.lastHitSnapshot;
+
+        if(snapshot && !snapshot.consumed){
+
+            user.hp = snapshot.hpBefore;
+
+            snapshot.consumed = true;
+
+            if(snapshot.attackerLifestealHeal > 0){
+
+                target.hp = Math.max(0, target.hp - snapshot.attackerLifestealHeal);
+
+            }
+
+            updateBattleScreen();
+
+            addBattleLog(`${user.name} استخدم "${skill.name}" الظلية دفاعيًا وألغى الضربة!`);
+
+        } else {
+
+            addBattleLog(`لا يوجد ضرر حالي لصده بمهارة "${skill.name}" الظلية`);
+
+        }
+
+        return;
+
+    }
+
+    if(skill.effect === "reflect"){
+
+        let reflectMult = Math.max(1, skillParamAmount(skill, "reflect_mult", skill.damage));
+
+        user.reflectMult = reflectMult;
+
+        updateBattleScreen();
+
+        addBattleLog(`${user.name} جهّز درع انعكاس بمهارة "${skill.name}" الظلية! (×${reflectMult})`);
+
+        return;
+
+    }
+
+    if(isNewBuffEffect(skill.effect)){
+
+        let logLine = applyPveBuff(user, skill);
+
+        if(logLine) addBattleLog(logLine);
+
+        updateBattleScreen();
+
+        return;
+
+    }
+
+    resolveAction(user, target, skill, false);
+
+}
+
+
+// ========================================
+// مخزون الظل (الوحوش المهزومة — يُحفظ محليًا ليُستخدم في مهارة "الظل")
+// ========================================
+
+function pveShadowPoolStorageKey(){
+
+    return "pve_shadow_pool";
+
+}
+
+
+function pveLoadShadowPool(){
+
+    try{
+
+        let raw = localStorage.getItem(pveShadowPoolStorageKey());
+
+        let pool = raw ? JSON.parse(raw) : [];
+
+        return Array.isArray(pool) ? pool : [];
+
+    }catch(e){
+
+        return [];
+
+    }
+
+}
+
+
+function pveSaveShadowPool(pool){
+
+    try{
+
+        localStorage.setItem(pveShadowPoolStorageKey(), JSON.stringify(pool));
+
+    }catch(e){}
+
+}
+
+
+function pveShadowPool(){
+
+    return pveLoadShadowPool();
+
+}
+
+
+function pveAddDefeatedToShadowPool(enemy){
+
+    if(!enemy || !enemy.id) return;
+
+    let pool = pveLoadShadowPool();
+
+    let entry = {
+        id: enemy.id,
+        name: enemy.name,
+        image: enemy.image || "",
+        skills: (enemy.skills || []).map(s => ({
+            id: s.id,
+            name: s.name,
+            type: s.type,
+            damage: s.damage,
+            cooldown: s.cooldown,
+            effect: s.effect,
+            unblockable: s.unblockable,
+            params: s.params || null,
+            description: s.description || "",
+            color: s.color || ""
+        }))
+    };
+
+    let existing = pool.find(e => String(e.id) === String(entry.id));
+
+    if(existing){
+
+        existing.name = entry.name;
+        existing.image = entry.image;
+        existing.skills = entry.skills;
+
+    } else {
+
+        pool.push(entry);
+
+    }
+
+    pveSaveShadowPool(pool);
+
+}
+
+
+// ========================================
+// معالجات اللاعب لمهارات الأنواع الجديدة
+// ========================================
+
+function playerUseBuffSkill(skill){
+
+    clearTurnTimer();
+
+    let logLine = applyPveBuff(battle.player, skill);
+
+    battle.player.turnsTaken++;
+
+    if(skill.cooldown > 0)
+        battle.player.cooldownUsedAt[skill.id] = battle.player.turnsTaken;
+
+    if(!battle.playerUsedSkills.find(s => s.id === skill.id)){
+
+        battle.playerUsedSkills.push(skill);
+
+    }
+
+    renderUsedSkillsUI(battle.prefix);
+
+    renderSkillButtons(battle.prefix);
+
+    updateBattleScreen();
+
+    if(logLine) addBattleLog(logLine);
+
+    showBattleEffectBanner(battle.prefix, logLine || "استخدمتَ مهارة خاصة", "info");
+
+    if(checkBattleEnd()) return;
+
+    pveEndTurn("player");
+
+}
+
+
+// تأجيل التهدئة (اللاعب): يختار مهارة خصم ظاهرة لتأخير تهدئتها
+function openDelayMenu(delaySkill){
+
+    if(battle.turnOwner !== "player") return;
+
+    if(battle.finished) return;
+
+    if(isSkillSealed(battle.player, delaySkill)){
+
+        alert("مهارة تأجيل التهدئة هذه مختومة 🔒");
+
+        return;
+
+    }
+
+    if(!isSkillReady(battle.player, delaySkill)){
+
+        alert("مهارة تأجيل التهدئة ما زالت في التهدئة");
+
+        return;
+
+    }
+
+    closeDelayMenu();
+
+    let delayTurns = Math.max(1, skillParamAmount(delaySkill, "turns", delaySkill.damage));
+
+    // الأهداف: مهارات الخصم الظاهرة في هذا النزال ولها تهدئة أصلًا، وإلا
+    // فكل مهارات الخصم ذات التهدئة
+    let targets = battle.enemyUsedSkillsThisBattle.filter(s => s.cooldown > 0);
+
+    if(targets.length === 0){
+
+        targets = battle.enemy.skills.filter(s => s.cooldown > 0);
+
+    }
+
+    let listHtml = targets.length > 0
+    ? targets
+        .map(s => `<button class="steal-option delay-option" data-name="${escapeHtml(s.name)}">${escapeHtml(s.name)}</button>`)
+        .join("")
+    : "<p>لا توجد مهارة خصم لها تهدئة لتعمل عليها</p>";
+
+    let modal = document.createElement("div");
+
+    modal.id = "delay-modal";
+
+    modal.className = "steal-modal";
+
+    modal.innerHTML = `
+
+        <div class="steal-modal-box">
+
+            <h3>⏳ أخّر تهدئة مهارة الخصم (+${delayTurns} ${delayTurns === 1 ? "دور" : "أدوار"})</h3>
+
+            <div class="steal-options-list">
+                ${listHtml}
+            </div>
+
+            <div class="steal-modal-buttons">
+
+                <button id="delay-confirm-btn" disabled>تأجيل التهدئة</button>
+
+                <button id="delay-cancel-btn">إلغاء</button>
+
+            </div>
+
+        </div>
+
+    `;
+
+    document.body.appendChild(modal);
+
+    let selected = null;
+
+    modal.querySelectorAll(".delay-option").forEach(btn => {
+
+        btn.onclick = () => {
+
+            modal.querySelectorAll(".delay-option").forEach(b => b.classList.remove("steal-selected"));
+
+            selected = btn.dataset.name;
+
+            btn.classList.add("steal-selected");
+
+            document.getElementById("delay-confirm-btn").disabled = false;
+
+        };
+
+    });
+
+    modal.querySelector("#delay-confirm-btn").onclick = () => {
+
+        if(!selected) return;
+
+        closeDelayMenu();
+
+        pveUseDelaySkill(delaySkill, selected);
+
+    };
+
+    modal.querySelector("#delay-cancel-btn").onclick = closeDelayMenu;
+
+}
+
+
+function closeDelayMenu(){
+
+    let modal = document.getElementById("delay-modal");
+
+    if(modal) modal.remove();
+
+}
+
+
+function pveUseDelaySkill(delaySkill, targetName){
+
+    if(battle.finished) return;
+
+    let target = battle.enemy.skills.find(s => s.name === targetName);
+
+    if(!target){
+
+        alert("تعذر العثور على المهارة المستهدفة");
+
+        return;
+
+    }
+
+    clearTurnTimer();
+
+    let delayTurns = Math.max(1, skillParamAmount(delaySkill, "turns", delaySkill.damage));
+
+    battle.enemy.cooldownExtra[target.id] = (battle.enemy.cooldownExtra[target.id] || 0) + delayTurns;
+
+    battle.player.turnsTaken++;
+
+    if(delaySkill.cooldown > 0)
+        battle.player.cooldownUsedAt[delaySkill.id] = battle.player.turnsTaken;
+
+    if(!battle.playerUsedSkills.find(s => s.id === delaySkill.id)){
+
+        battle.playerUsedSkills.push(delaySkill);
+
+    }
+
+    renderUsedSkillsUI(battle.prefix);
+
+    renderSkillButtons(battle.prefix);
+
+    updateBattleScreen();
+
+    addBattleLog(`${battle.player.name} أخّر تهدئة "${target.name}" عند الخصم! (+${delayTurns} ${delayTurns === 1 ? "دور" : "أدوار"})`);
+
+    showBattleEffectBanner(battle.prefix, `⏳ أخّرتَ تهدئة "${target.name}"!`, "info");
+
+    if(checkBattleEnd()) return;
+
+    pveEndTurn("player");
+
+}
+
+
+// الظل (اللاعب): قائمة أولية بالوحوش المهزومة، ثم قائمة مهارات الوحش المختار
+function openShadowMenu(shadowSkill){
+
+    if(battle.turnOwner !== "player") return;
+
+    if(battle.finished) return;
+
+    if(isSkillSealed(battle.player, shadowSkill)){
+
+        alert("مهارة الظل هذه مختومة 🔒");
+
+        return;
+
+    }
+
+    if(!isSkillReady(battle.player, shadowSkill)){
+
+        alert("مهارة الظل ما زالت في التهدئة");
+
+        return;
+
+    }
+
+    closeShadowMenu();
+
+    let pool = pveShadowPool();
+
+    let listHtml = pool.length > 0
+    ? pool
+        .map(e => `<button class="steal-option shadow-char-option" data-id="${escapeHtml(String(e.id))}">🌑 ${escapeHtml(e.name || "وحش")}</button>`)
+        .join("")
+    : "<p>لا توجد وحوش مهزومة بعد في مخزون الظل — اهزم الوحوش لتستدعي مهاراتهم</p>";
+
+    let modal = document.createElement("div");
+
+    modal.id = "shadow-modal";
+
+    modal.className = "steal-modal";
+
+    modal.innerHTML = `
+
+        <div class="steal-modal-box">
+
+            <h3>🌑 استدعِ ظل وحش مهزوم واستخدم إحدى مهاراته</h3>
+
+            <div class="steal-options-list">
+                ${listHtml}
+            </div>
+
+            <div class="steal-modal-buttons">
+
+                <button id="shadow-cancel-btn">إلغاء</button>
+
+            </div>
+
+        </div>
+
+    `;
+
+    document.body.appendChild(modal);
+
+    modal.querySelectorAll(".shadow-char-option").forEach(btn => {
+
+        btn.onclick = () => {
+
+            closeShadowMenu();
+
+            openShadowSkillMenu(shadowSkill, btn.dataset.id);
+
+        };
+
+    });
+
+    modal.querySelector("#shadow-cancel-btn").onclick = closeShadowMenu;
+
+}
+
+
+function openShadowSkillMenu(shadowSkill, charId){
+
+    if(battle.finished) return;
+
+    let entry = pveShadowPool().find(e => String(e.id) === String(charId));
+
+    if(!entry) return;
+
+    let usable = (entry.skills || []).filter(s => !PVE_SHADOW_EXCLUDED_EFFECTS.includes(s.effect));
+
+    let listHtml = usable.length > 0
+    ? usable
+        .map(s => `<button class="steal-option shadow-skill-option" data-name="${escapeHtml(s.name)}">${escapeHtml(s.name)}</button>`)
+        .join("")
+    : "<p>لا توجد مهارة صالحة في هذا الظل</p>";
+
+    let modal = document.createElement("div");
+
+    modal.id = "shadow-skill-modal";
+
+    modal.className = "steal-modal";
+
+    modal.innerHTML = `
+
+        <div class="steal-modal-box">
+
+            <h3>🌑 استخدم مهارة من ظل "${escapeHtml(entry.name)}"</h3>
+
+            <div class="steal-options-list">
+                ${listHtml}
+            </div>
+
+            <div class="steal-modal-buttons">
+
+                <button id="shadow-skill-back-btn">رجوع</button>
+
+            </div>
+
+        </div>
+
+    `;
+
+    document.body.appendChild(modal);
+
+    modal.querySelectorAll(".shadow-skill-option").forEach(btn => {
+
+        btn.onclick = () => {
+
+            closeShadowMenu();
+
+            pveUseShadowSkill(shadowSkill, charId, btn.dataset.name);
+
+        };
+
+    });
+
+    modal.querySelector("#shadow-skill-back-btn").onclick = () => {
+
+        let m = document.getElementById("shadow-skill-modal");
+
+        if(m) m.remove();
+
+        openShadowMenu(shadowSkill);
+
+    };
+
+}
+
+
+function closeShadowMenu(){
+
+    let m = document.getElementById("shadow-modal");
+
+    if(m) m.remove();
+
+    let s = document.getElementById("shadow-skill-modal");
+
+    if(s) s.remove();
+
+}
+
+
+function pveUseShadowSkill(shadowSkill, charId, skillName){
+
+    if(battle.finished) return;
+
+    let entry = pveShadowPool().find(e => String(e.id) === String(charId));
+
+    let targetSkill = entry ? (entry.skills || []).find(s => s.name === skillName) : null;
+
+    if(!targetSkill){
+
+        alert("تعذر العثور على المهارة في ظل الوحش");
+
+        return;
+
+    }
+
+    clearTurnTimer();
+
+    battle.player.turnsTaken++;
+
+    if(shadowSkill.cooldown > 0)
+        battle.player.cooldownUsedAt[shadowSkill.id] = battle.player.turnsTaken;
+
+    if(!battle.playerUsedSkills.find(s => s.id === shadowSkill.id)){
+
+        battle.playerUsedSkills.push(shadowSkill);
+
+    }
+
+    renderUsedSkillsUI(battle.prefix);
+
+    renderSkillButtons(battle.prefix);
+
+    updateBattleScreen();
+
+    addBattleLog(`${battle.player.name} استدعى ظل "${entry.name}" واستخدم "${targetSkill.name}"!`);
+
+    showBattleEffectBanner(battle.prefix, `🌑 استخدمتَ "${targetSkill.name}" من ظل ${entry.name}!`, "info");
+
+    executeShadowSkill(battle.player, battle.enemy, targetSkill);
+
+    if(checkBattleEnd()) return;
+
+    pveEndTurn("player");
 
 }
 
@@ -2275,17 +3267,21 @@ function renderUsedSkillsUI(prefix){
 
 
 
-function resolveAction(attacker, defender, skill, trackUsed = true){
+function resolveAction(attacker, defender, skill, trackUsed = true, isReflectedHit = false){
 
     let dmg = calcDamage(skill);
 
-    // مهارة الانعكاس لم تعد تُنفَّذ هنا إطلاقًا: صارت ضربة مضادة فورية
-    // تعكس "الهجوم السابق" الذي تلقّاه مستخدمُها (تُنفَّذ في playerUseReflect
-    // / enemyUseReflect قبل الوصول إلى resolveAction). لو وصلت هنا لأي سبب
-    // نادر فلا تُسبب ضررًا مباشرًا
-    let isReflectSkill = skill.effect === "reflect";
+    // القوة المؤقتة (atk_boost) تُضاف لضرر الهجمات والمهارات الضررية فقط
+    if((skill.type === "attack" || skill.type === "special") && dmg > 0){
 
-    if(isReflectSkill){
+        dmg += (attacker.tempAtk || 0);
+
+    }
+
+    // مهارة الانعكاس لم تعد تُنفَّذ هنا إطلاقًا: صارت درعًا استباقيًا يُفعَّل
+    // عبر playerUseReflect / enemyUseReflect قبل الوصول إلى resolveAction.
+    // لو وصلت هنا لأي سبب نادر فلا تُسبب ضررًا مباشرًا
+    if(skill.effect === "reflect"){
 
         dmg = 0;
 
@@ -2293,18 +3289,82 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
 
     let hpBefore = defender.hp;
 
+    // درع الانعكاس عند المدافع: أول ضربة قابلة للصد (غير "لا تُصد") تصل إليه
+    // ترتد على مهاجمها × المضاعف، ويُستهلك الدرع بعدها. الضربة المُنعكسة
+    // نفسها (isReflectedHit) لا تُعيد تفعيل أي درع — مانع التكرار المطابق
+    // للسيرفر، فلا تُرتد ضربة مرتدّة مرة أخرى أبدًا
+    let reflected = false;
+
+    let reflectedDmg = 0;
+
+    if(dmg > 0 && !skill.unblockable && (defender.reflectMult || 0) > 0 && !isReflectedHit && defender !== attacker){
+
+        reflected = true;
+
+        reflectedDmg = Math.max(1, Math.floor(dmg * defender.reflectMult));
+
+        defender.reflectMult = 0;
+
+        attacker.hp = Math.max(0, attacker.hp - reflectedDmg);
+
+    }
+
+    // درع الامتصاص (absorb_atk / absorb_hp): الضربة القابلة للصد تُمتَص بدل
+    // أن تُلحق ضررًا، وتتحول إلى قوة مؤقتة (atk) أو صحة مؤقتة (hp). يأتي
+    // بعد درع الانعكاس وقبل درع "تحمّل عدة ضربات" — مطابق لترتيب السيرفر
+    let absorbedByAbsorb = false;
+
+    let absorbedAmount = 0;
+
+    let absorbModeForMsg = null;
+
+    if(!reflected && dmg > 0 && !skill.unblockable && !isReflectedHit && (defender.absorbHits || 0) > 0){
+
+        absorbedByAbsorb = true;
+
+        absorbedAmount = dmg;
+
+        absorbModeForMsg = defender.absorbMode;
+
+        if(absorbModeForMsg === "atk"){
+
+            defender.tempAtk = (defender.tempAtk || 0) + absorbedAmount;
+
+        } else {
+
+            defender.tempHp = (defender.tempHp || 0) + absorbedAmount;
+
+        }
+
+        defender.absorbHits--;
+
+        if(defender.absorbHits <= 0){
+
+            defender.absorbMode = null;
+
+            defender.absorbHits = 0;
+
+        }
+
+        dmg = 0;
+
+    }
+
     // درع "تحمّل عدة ضربات" المتبقي من دفاع سابق: يمتص هذه الضربة تلقائيًا
     // (طالما ليست "لا تُصد") وينقص شحنة واحدة، بدل تطبيق الضرر مباشرة
-    let absorbedByShield =
-    !skill.unblockable && dmg > 0 && (defender.shieldCharges || 0) > 0;
+    let absorbedByShield = false;
 
-    if(absorbedByShield){
+    if(!reflected && !absorbedByAbsorb && !skill.unblockable && dmg > 0 && (defender.shieldCharges || 0) > 0){
+
+        absorbedByShield = true;
 
         defender.shieldCharges--;
 
         dmg = 0;
 
-    } else {
+    }
+
+    if(!reflected && !absorbedByAbsorb && !absorbedByShield){
 
         defender.hp = Math.max(0, defender.hp - dmg);
 
@@ -2319,7 +3379,7 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
     // المهاجم لأنه لا يصح منطقيًا أن يكسب صحة من ضربة أُلغيت
     let healedAmount = 0;
 
-    if(skill.effect === "lifesteal" && dmg > 0 && attacker.hp < attacker.maxHp){
+    if(!reflected && skill.effect === "lifesteal" && dmg > 0 && attacker.hp < attacker.maxHp){
 
         healedAmount = Math.min(dmg, attacker.maxHp - attacker.hp);
 
@@ -2328,17 +3388,17 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
     }
 
     // لقطة آخر ضربة وقعت على المدافع: تُستعمل في "الدفاع" (إلغاء الضربة
-    // واسترجاع الصحة) وأيضًا في "الانعكاس" (عكس الهجوم السابق على مصدره).
-    // الضربة "لا تُصد" (unblockable) لا تكون قابلة للانعكاس أبدًا، والضربة
-    // الممتصة بالدرع لا تترك ضررًا يُردّ. مهارة الانعكاس نفسها لا تُنشئ
-    // لقطة على الهدف لأنها لا تُسبب ضررًا مباشرًا
-    if(skill.effect !== "reflect"){
+    // واسترجاع الصحة). الضربة "لا تُصد" (unblockable) لا تترك ضررًا يُلغى،
+    // والضربة الممتصة بدرع (امتصاص أو تحمّل) لا تُنشئ ضررًا يُسترجع.
+    // الانعكاس الجديد استباقي (درع) لا يعتمد على اللقطة إطلاقًا، لذا الضربة
+    // المرتدّة لا تُنشئ لقطة على المدافع (لم يتعرض لأي ضرر)
+    if(skill.effect !== "reflect" && !reflected){
 
         defender.lastHitSnapshot = {
             hpBefore: hpBefore,
             dmgDealt: dmgApplied,
-            consumed: !!skill.unblockable || absorbedByShield,
-            reflectable: !skill.unblockable && dmgApplied > 0,
+            consumed: !!skill.unblockable || absorbedByShield || absorbedByAbsorb,
+            reflectable: false,
             attackerLifestealHeal: (skill.effect === "lifesteal") ? healedAmount : 0
         };
 
@@ -2372,7 +3432,22 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
     ? battle.prefix + "-player"
     : battle.prefix + "-enemy";
 
-    applyDamageEffect(battle.prefix, defenderPrefix, dmg, false);
+    // الضربة المرتدّة تُظهر أثرها على المهاجم نفسه (حامل درع الانعكاس لم
+    // يتعرض لأي ضرر)، بينما الضربات العادية على المدافع
+    if(reflected){
+
+        let attackerPrefix =
+        (attacker === battle.player)
+        ? battle.prefix + "-player"
+        : battle.prefix + "-enemy";
+
+        applyDamageEffect(battle.prefix, attackerPrefix, reflectedDmg, false);
+
+    } else {
+
+        applyDamageEffect(battle.prefix, defenderPrefix, dmg, false);
+
+    }
 
     // رقم شفاء الامتصاص يظهر فوق بطاقة المهاجم نفسه (قيمة خضراء +)
     if(healedAmount > 0){
@@ -2390,7 +3465,25 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
     // الدرع، أم كانت تجميدًا — دون الحاجة لفتح سجل المعركة
     let iAmDefender = (defender === battle.player);
 
-    if(absorbedByShield){
+    if(reflected){
+
+        showBattleEffectBanner(
+            battle.prefix,
+            iAmDefender ? `🔁 درع الانعكاس ردّ الهجوم على الخصم! -${reflectedDmg}` : `🔁 هجومك ارتدّ عليك بدرع انعكاس الخصم! -${reflectedDmg}`,
+            "reflect"
+        );
+
+    } else if(absorbedByAbsorb){
+
+        let statWord = (absorbModeForMsg === "atk") ? "قوة" : "صحة";
+
+        showBattleEffectBanner(
+            battle.prefix,
+            iAmDefender ? `🧲 امتصصتَ الهجوم! +${absorbedAmount} ${statWord}` : `🧲 الخصم امتصّ هجومك! +${absorbedAmount} ${statWord}`,
+            "block"
+        );
+
+    } else if(absorbedByShield){
 
         showBattleEffectBanner(
             battle.prefix,
@@ -2426,7 +3519,17 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
 
     }
 
-    if(absorbedByShield){
+    if(reflected){
+
+        addBattleLog(`${attacker.name} هاجم بـ${skill.name} لكن ${defender.name} عكس الهجوم بدرعه! -${reflectedDmg} على ${attacker.name}`);
+
+    } else if(absorbedByAbsorb){
+
+        let statWord = (absorbModeForMsg === "atk") ? "قوة مؤقتة" : "صحة مؤقتة";
+
+        addBattleLog(`${defender.name} امتصّ ${skill.name} من ${attacker.name}! +${absorbedAmount} ${statWord} (متبقٍ ${defender.absorbHits})`);
+
+    } else if(absorbedByShield){
 
         addBattleLog(`${attacker.name} استخدم ${skill.name}، لكن ${defender.name} امتصّها بدرعه! (متبقٍ ${defender.shieldCharges} من التحمّل)`);
 
@@ -2462,47 +3565,11 @@ function resolveAction(attacker, defender, skill, trackUsed = true){
 
 
 // ========================================
-// الانعكاس: ضربة مضادة فورية تعكس "الهجوم السابق" الذي تلقّاه المستخدم —
-// تُلغي تلك الضربة (استرجاع الصحة) ويرتدّ ضررها × المضاعف على مصدره فورًا،
-// دون انتظار هجوم قادم. يعمل فقط ضد هجوم عادي (قابل للصد) غير مستهلك بعد
+// الانعكاس (النمط الجديد): درع استباقي — عند التفعيل يُثبَّت مضاعف ارتداد
+// على المستخدم، وأول ضربة قابلة للصد تصل إليه لاحقًا ترتد على مهاجمها
+// × المضاعف ثم يُستهلك الدرع (نُفّذ منطق الارتداد داخل resolveAction).
+// مطابق تمامًا لمنطق السيرفر في PvP
 // ========================================
-
-// يُطبّق مفعول الانعكاس المشترك (لللاعب والخصم) ويعيد { الضرر المرتدّ +
-// ما استُرجعت صحته } أو null إن لم يوجد هجوم سابق صالح للعكس (في هذه
-// الحالة لا يُستهلك الدور من قبل المستخدم)
-function applyReflectCounter(user, target, reflectSkill){
-
-    let snapshot = user.lastHitSnapshot;
-
-    if(!snapshot || snapshot.consumed || !snapshot.reflectable){
-
-        return null;
-
-    }
-
-    let reflectMult = Math.max(1, Number(reflectSkill.damage) || 1);
-
-    let reflectedDmg = Math.floor(snapshot.dmgDealt * reflectMult);
-
-    user.hp = snapshot.hpBefore;
-
-    snapshot.consumed = true;
-
-    // لو كان الهجوم المُعكس من نوع امتصاص، يُسترجع الشفاء الذي كسبه مصدر
-    // الهجوم (الخصم) منه — لا يصح أن يبقى على صحته الجديدة من ضربة أُلغيت
-    // بالانعكاس
-    if(snapshot.attackerLifestealHeal > 0){
-
-        target.hp = Math.max(0, target.hp - snapshot.attackerLifestealHeal);
-
-    }
-
-    target.hp = Math.max(0, target.hp - reflectedDmg);
-
-    return { reflectedDmg: reflectedDmg, restored: snapshot.dmgDealt };
-
-}
-
 
 function playerUseReflect(reflectSkill){
 
@@ -2518,27 +3585,11 @@ function playerUseReflect(reflectSkill){
 
     }
 
-    let result = applyReflectCounter(battle.player, battle.enemy, reflectSkill);
-
-    if(!result){
-
-        addBattleLog("لا يوجد هجوم سابق عادي لتعكسه");
-
-        return;
-
-    }
-
-    // اللاعب صدّ هجوم الخصم بالانعكاس، فاكتمل التبادل وانتهى: نُنهي أي
-    // أثر معلّق لهجوم اللاعب السابق على الخصم (آخر ضربة في انتظار الرد)
-    // حتى لا يبطلها الخصم بدفاعه بعد ذلك فيُنقص من صحة اللاعب شفاءً من
-    // ضربة قديمة — اللاعب صدّ الهجوم فلا ينزل من صحته شيء بسبب هذه الصفقة
-    if(battle.enemy.lastHitSnapshot && !battle.enemy.lastHitSnapshot.consumed){
-
-        battle.enemy.lastHitSnapshot.consumed = true;
-
-    }
-
     clearTurnTimer();
+
+    let reflectMult = Math.max(1, skillParamAmount(reflectSkill, "reflect_mult", reflectSkill.damage));
+
+    battle.player.reflectMult = reflectMult;
 
     battle.player.turnsTaken++;
 
@@ -2555,21 +3606,11 @@ function playerUseReflect(reflectSkill){
 
     updateBattleScreen();
 
-    playHitEffect(battle.prefix);
+    addBattleLog(`${battle.player.name} جهّز درع الانعكاس! (×${reflectMult}) — أول ضربة قابلة للصد سترتد على الخصم`);
 
-    showDamagePopup(battle.prefix + "-player", result.restored, true);
+    showBattleEffectBanner(battle.prefix, `🔁 جهّزتَ درع الانعكاس! (×${reflectMult})`, "reflect");
 
-    showDamagePopup(battle.prefix + "-enemy", result.reflectedDmg, false);
-
-    addBattleLog(`${battle.player.name} عكس الهجوم السابق على ${battle.enemy.name}! -${result.reflectedDmg} على الخصم`);
-
-    showBattleEffectBanner(battle.prefix, `🔁 عكستَ الهجوم السابق على الخصم! -${result.reflectedDmg}`, "reflect");
-
-    if(checkBattleEnd()) return;
-
-    battle.turnOwner = "enemy";
-
-    setTimeout(processTurn, 900);
+    pveEndTurn("player");
 
 }
 
@@ -2579,26 +3620,9 @@ function enemyUseReflect(reflectSkill){
 
     let enemy = battle.enemy;
 
-    let result = applyReflectCounter(enemy, battle.player, reflectSkill);
+    let reflectMult = Math.max(1, skillParamAmount(reflectSkill, "reflect_mult", reflectSkill.damage));
 
-    if(!result){
-
-        // حالة دفاعية نادرة: اختير الانعكاس لكن لا يوجد هجوم سابق صالح —
-        // يكتفي بهجوم عادي بدلًا منه
-        let fallback =
-        enemy.skills.find(s => s.type === "attack" && !isSkillSealed(enemy, s));
-
-        resolveAction(enemy, battle.player, fallback);
-
-        if(checkBattleEnd()) return;
-
-        battle.turnOwner = "player";
-
-        processTurn();
-
-        return;
-
-    }
+    enemy.reflectMult = reflectMult;
 
     markEnemySkillUsed(reflectSkill);
 
@@ -2606,21 +3630,13 @@ function enemyUseReflect(reflectSkill){
 
     updateBattleScreen();
 
-    playHitEffect(battle.prefix);
+    addBattleLog(`${enemy.name} جهّز درع الانعكاس! (×${reflectMult}) — أول ضربة قابلة للصد سترتد عليك`);
 
-    showDamagePopup(battle.prefix + "-enemy", result.restored, true);
-
-    showDamagePopup(battle.prefix + "-player", result.reflectedDmg, false);
-
-    addBattleLog(`${enemy.name} عكس الهجوم السابق عليك! -${result.reflectedDmg}`);
-
-    showBattleEffectBanner(battle.prefix, `🔁 ${enemy.name} عكس هجومك السابق عليك! -${result.reflectedDmg}`, "reflect");
+    showBattleEffectBanner(battle.prefix, `🔁 ${enemy.name} جهّز درع الانعكاس! (×${reflectMult})`, "reflect");
 
     if(checkBattleEnd()) return;
 
-    battle.turnOwner = "player";
-
-    processTurn();
+    pveEndTurn("enemy");
 
 }
 
@@ -2697,9 +3713,7 @@ function useDefense(defenseSkill){
 
     if(checkBattleEnd()) return;
 
-    battle.turnOwner = "enemy";
-
-    setTimeout(processTurn, 900);
+    pveEndTurn("player");
 
 }
 
@@ -2996,9 +4010,7 @@ function runStolenSkillsQueue(queue, index, consumesPlayerTurn){
         // دوره فلا تُغيّر ملكية الدور الحالية.
         if(consumesPlayerTurn){
 
-            battle.turnOwner = "enemy";
-
-            setTimeout(processTurn, 900);
+            pveEndTurn("player");
 
         } else {
 
@@ -3059,30 +4071,44 @@ function runStolenSkillsQueue(queue, index, consumesPlayerTurn){
 
     if(targetSkill.effect === "reflect"){
 
-        // مهارة انعكاس مسروقة: تُنفَّذ كضربة مضادة فورية تعكس آخر هجوم عادي
-        // تلقّاه اللاعب (نفس سلوك مهارة الانعكاس العادية تمامًا) — تُعيد
-        // صحته لما قبل الضربة ويرتدّ ضررها على الخصم
-        let result = applyReflectCounter(battle.player, battle.enemy, targetSkill);
+        // مهارة انعكاس مسروقة: تُفعَّل كدرع استباقي — يُثبَّت مضاعف الانعكاس
+        // على اللاعب، وأول ضربة قابلة للصد قادمة سترتد على الخصم
+        let reflectMult = Math.max(1, skillParamAmount(targetSkill, "reflect_mult", targetSkill.damage));
 
-        if(result){
+        battle.player.reflectMult = reflectMult;
 
-            updateBattleScreen();
+        updateBattleScreen();
 
-            playHitEffect(battle.prefix);
+        addBattleLog(`${battle.player.name} جهّز درع الانعكاس بمهارة "${targetSkill.name}" المسروقة! (×${reflectMult})`);
 
-            showDamagePopup(battle.prefix + "-player", result.restored, true);
+        showBattleEffectBanner(battle.prefix, `🔁 جهّزتَ درع انعكاس مسروق! (×${reflectMult})`, "reflect");
 
-            showDamagePopup(battle.prefix + "-enemy", result.reflectedDmg, false);
+        runStolenSkillsQueue(queue, index + 1, consumesPlayerTurn);
 
-            addBattleLog(`${battle.player.name} عكس الهجوم السابق بمهارة "${targetSkill.name}" المسروقة! -${result.reflectedDmg} على الخصم`);
+        return;
 
-            showBattleEffectBanner(battle.prefix, `🔁 عكستَ الهجوم السابق بمهارة مسروقة! -${result.reflectedDmg}`, "reflect");
+    }
 
-        } else {
+    if(isNewBuffEffect(targetSkill.effect)){
 
-            addBattleLog(`لا يوجد هجوم سابق عادي لتعكسه بمهارة "${targetSkill.name}" المسروقة`);
+        // مهارة ذاتية مسروقة (تعزيز/امتصاص/أدوار متتالية): تُطبَّق على اللاعب
+        // مباشرة دون اختيار هدف
+        let logLine = applyPveBuff(battle.player, targetSkill);
 
-        }
+        updateBattleScreen();
+
+        if(logLine) addBattleLog(`استخدمتَ "${targetSkill.name}" المسروقة! ` + logLine);
+
+        runStolenSkillsQueue(queue, index + 1, consumesPlayerTurn);
+
+        return;
+
+    }
+
+    if(targetSkill.effect === "delay_cooldown" || targetSkill.effect === "shadow"){
+
+        // مهارات تتطلب قوائم اختيار معقدة: تُتخطّى عند سرقتها/نسخها في PvE
+        addBattleLog(`لا يمكن استخدام "${targetSkill.name}" المسروقة في هذه المعركة، تم تخطّيها`);
 
         runStolenSkillsQueue(queue, index + 1, consumesPlayerTurn);
 
@@ -3346,9 +4372,7 @@ function runCopiedSkillsQueue(queue, index, consumesPlayerTurn){
 
         if(consumesPlayerTurn){
 
-            battle.turnOwner = "enemy";
-
-            setTimeout(processTurn, 900);
+            pveEndTurn("player");
 
         } else {
 
@@ -3409,29 +4433,44 @@ function runCopiedSkillsQueue(queue, index, consumesPlayerTurn){
 
     if(targetSkill.effect === "reflect"){
 
-        // مهارة انعكاس منسوخة: تُنفَّذ كضربة مضادة فورية تعكس آخر هجوم عادي
-        // تلقّاه اللاعب (نفس سلوك مهارة الانعكاس العادية تمامًا)
-        let result = applyReflectCounter(battle.player, battle.enemy, targetSkill);
+        // مهارة انعكاس منسوخة: تُفعَّل كدرع استباقي — يُثبَّت مضاعف الانعكاس
+        // على اللاعب، وأول ضربة قابلة للصد قادمة سترتد على الخصم
+        let reflectMult = Math.max(1, skillParamAmount(targetSkill, "reflect_mult", targetSkill.damage));
 
-        if(result){
+        battle.player.reflectMult = reflectMult;
 
-            updateBattleScreen();
+        updateBattleScreen();
 
-            playHitEffect(battle.prefix);
+        addBattleLog(`${battle.player.name} جهّز درع الانعكاس بمهارة "${targetSkill.name}" المنسوخة! (×${reflectMult})`);
 
-            showDamagePopup(battle.prefix + "-player", result.restored, true);
+        showBattleEffectBanner(battle.prefix, `🔁 جهّزتَ درع انعكاس منسوخ! (×${reflectMult})`, "reflect");
 
-            showDamagePopup(battle.prefix + "-enemy", result.reflectedDmg, false);
+        runCopiedSkillsQueue(queue, index + 1, consumesPlayerTurn);
 
-            addBattleLog(`${battle.player.name} عكس الهجوم السابق بمهارة "${targetSkill.name}" المنسوخة! -${result.reflectedDmg} على الخصم`);
+        return;
 
-            showBattleEffectBanner(battle.prefix, `🔁 عكستَ الهجوم السابق بمهارة منسوخة! -${result.reflectedDmg}`, "reflect");
+    }
 
-        } else {
+    if(isNewBuffEffect(targetSkill.effect)){
 
-            addBattleLog(`لا يوجد هجوم سابق عادي لتعكسه بمهارة "${targetSkill.name}" المنسوخة`);
+        // مهارة ذاتية منسوخة (تعزيز/امتصاص/أدوار متتالية): تُطبَّق على اللاعب
+        // مباشرة دون اختيار هدف
+        let logLine = applyPveBuff(battle.player, targetSkill);
 
-        }
+        updateBattleScreen();
+
+        if(logLine) addBattleLog(`استخدمتَ "${targetSkill.name}" المنسوخة! ` + logLine);
+
+        runCopiedSkillsQueue(queue, index + 1, consumesPlayerTurn);
+
+        return;
+
+    }
+
+    if(targetSkill.effect === "delay_cooldown" || targetSkill.effect === "shadow"){
+
+        // مهارات تتطلب قوائم اختيار معقدة: تُتخطّى عند نسخها في PvE
+        addBattleLog(`لا يمكن استخدام "${targetSkill.name}" المنسوخة في هذه المعركة، تم تخطّيها`);
 
         runCopiedSkillsQueue(queue, index + 1, consumesPlayerTurn);
 
@@ -3731,9 +4770,7 @@ function attemptSealMulti(sealSkill, names){
 
     if(checkBattleEnd()) return;
 
-    battle.turnOwner = "enemy";
-
-    setTimeout(processTurn, 900);
+    pveEndTurn("player");
 
 }
 
@@ -3984,9 +5021,7 @@ function attemptUnsealMulti(unsealSkill, names){
 
     if(checkBattleEnd()) return;
 
-    battle.turnOwner = "enemy";
-
-    setTimeout(processTurn, 900);
+    pveEndTurn("player");
 
 }
 
@@ -4087,6 +5122,14 @@ function endBattle(playerWon){
     battle.phase = "finished";
 
     clearTurnTimer();
+
+    // انتصار اللاعب: يُضاف الوحش المهزوم إلى مخزون الظل ليُستدعى لاحقًا
+    // بمهارة "الظل" في نزالات قادمة
+    if(playerWon && battle.enemy){
+
+        pveAddDefeatedToShadowPool(battle.enemy);
+
+    }
 
     renderSkillButtons(battle.prefix);
 
