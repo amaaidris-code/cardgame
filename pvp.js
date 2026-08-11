@@ -1289,14 +1289,34 @@ function renderPVPSkillButtons(){
                 btn.querySelector(".skill-name").textContent =
                     skill.name + " 🔒";
 
-                btn.onclick = () => pvpOpenSealMenu(skill);
+                btn.disabled = false;
+
+                btn.onclick = () => {
+                    if(!pvpState.mySealedSkillIds.includes(skill.id)){
+                        pvpState.mySealedSkillIds.push(skill.id);
+                        showToast("تم تأمين المهارة");
+                        pvpRefreshState(true);
+                    } else {
+                        showToast("المهارة مختومةalready");
+                    }
+                };
 
             } else if(skill.effect === "unseal"){
 
                 btn.querySelector(".skill-name").textContent =
                     skill.name + " 🔓";
 
-                btn.onclick = () => pvpOpenUnsealMenu(skill);
+                btn.disabled = false;
+
+                btn.onclick = () => {
+                    if(pvpState.mySealedSkillIds && pvpState.mySealedSkillIds.length > 0){
+                        pvpState.mySealedSkillIds.pop();
+                        showToast("تم فك الختم عن إحدى المهارات");
+                        pvpRefreshState(true);
+                    } else {
+                        showToast("لا توجد مهارات مختومة حالياً");
+                    }
+                };
 
             } else if(skill.effect === "delay_cooldown"){
 

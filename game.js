@@ -78,6 +78,15 @@ function showToast(message){
 
     let type = classifyToastType(message);
 
+    if(container.children.length >= 3){
+        let oldest = container.firstChild;
+        if(oldest){
+            oldest.classList.remove("show");
+            oldest.classList.add("hide");
+            setTimeout(() => oldest.remove(), 250);
+        }
+    }
+
     let toast = document.createElement("div");
     toast.className = "app-toast " + type;
 
