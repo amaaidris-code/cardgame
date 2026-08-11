@@ -1333,6 +1333,16 @@ function buildSkillButton(skill){
     btn.innerHTML =
     `<span class="skill-name">${escapeHtml(skill.name)}</span>`;
 
+    // لون اسم المهارة المخصص من لوحة الإدارة (إن وُجد) — يظهر فوق خلفية
+    // الصفحة مباشرة دون صندوق خلفي، مع بقاء ظل النص لضمان الوضوح
+    let skillColor = skill && skill.color;
+
+    if(skillColor && /^#[0-9A-Fa-f]{6}$/.test(skillColor)){
+
+        btn.querySelector(".skill-name").style.color = skillColor;
+
+    }
+
     let ready = isSkillReady(battle.player, skill);
 
     let remaining = cooldownTurnsRemaining(battle.player, skill);

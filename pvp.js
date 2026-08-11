@@ -1146,6 +1146,15 @@ function renderPVPSkillButtons(){
 
             btn.dataset.skillId = skill.id;
 
+            // لون اسم المهارة المخصص من لوحة الإدارة (إن وُجد)
+            let skillColor = skill && skill.color;
+
+            if(skillColor && /^#[0-9A-Fa-f]{6}$/.test(skillColor)){
+
+                btn.querySelector(".skill-name").style.color = skillColor;
+
+            }
+
             if(skill.effect === "steal" || skill.effect === "copy"){
 
                 btn.querySelector(".skill-name").textContent =

@@ -3080,6 +3080,11 @@ async function openEditCharacterModal(characterId){
 
             <textarea id="skill-desc-${s.id}" class="admin-skill-desc-input" placeholder="وصف المهارة (يظهر عند الضغط المطوّل)">${escapeHtml(s.description || '')}</textarea>
 
+            <label class="admin-color-row skill-color-row">
+                🎨 لون اسم المهارة
+                <input type="color" id="skill-color-${s.id}" value="${(s.color && /^#[0-9A-Fa-f]{6}$/.test(s.color)) ? s.color : '#ffffff'}">
+            </label>
+
             <button onclick="saveSkillEdit('${s.id}')">حفظ</button>
 
             <button onclick="removeSkillFromCharacter('${characterId}','${s.id}')">🗑️</button>
@@ -3183,6 +3188,11 @@ async function openEditCharacterModal(characterId){
                 <input id="new-skill-cooldown" type="number" placeholder="التهدئة (بالأدوار)" value="0">
 
                 <textarea id="new-skill-description" placeholder="وصف المهارة (يظهر للاعب عند الضغط المطوّل على الزر)"></textarea>
+
+                <label class="admin-color-row skill-color-row">
+                    🎨 لون اسم المهارة
+                    <input id="new-skill-color" type="color" value="#ffffff">
+                </label>
 
                 <button onclick="addSkillToCharacter('${characterId}')">إضافة المهارة</button>
 
@@ -3444,6 +3454,10 @@ async function addSkillToCharacter(characterId){
 
     let description = document.getElementById("new-skill-description").value.trim();
 
+    let colorInput = document.getElementById("new-skill-color");
+
+    let color = colorInput && colorInput.value ? colorInput.value : null;
+
     if(name === ""){
 
         alert("اكتب اسم المهارة");
@@ -3479,7 +3493,9 @@ async function addSkillToCharacter(characterId){
 
         p_unblockable: unblockable,
 
-        p_description: description
+        p_description: description,
+
+        p_color: color
 
     });
 
@@ -3643,6 +3659,8 @@ async function saveSkillEdit(skillId){
 
     let descInput = document.getElementById("skill-desc-" + skillId);
 
+    let colorInput = document.getElementById("skill-color-" + skillId);
+
     let name = nameInput ? nameInput.value.trim() : "";
 
     let typeChoice = typeSelect ? typeSelect.value : "attack";
@@ -3652,6 +3670,8 @@ async function saveSkillEdit(skillId){
     let cooldown = Number(cooldownInput.value) || 0;
 
     let description = descInput ? descInput.value.trim() : "";
+
+    let color = colorInput && colorInput.value ? colorInput.value : null;
 
     if(name === ""){
 
@@ -3686,7 +3706,9 @@ async function saveSkillEdit(skillId){
 
         p_unblockable: unblockable,
 
-        p_description: description
+        p_description: description,
+
+        p_color: color
 
     });
 

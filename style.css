@@ -1358,18 +1358,16 @@ opacity: 0.6;
 
 
 /* مهارات اللاعب (PvE وPvP معًا):
-   خلفية شفافة قليلًا مع تعتيم بسيط خلف الزر، بحيث تظهر خلفية
-   الصفحة المخصصة من خلف الأزرار مع بقاء اسم المهارة واضحًا */
+   بدون صندوق خلفي — يظهر اسم المهارة مباشرة فوق خلفية الصفحة،
+   مع ظل نص خفيف للحفاظ على الوضوح دون أي خلفية داكنة */
 
 .skills-page button{
 
-background: linear-gradient(160deg, rgba(32,32,42,0.55), rgba(20,20,24,0.45));
+background: transparent;
 
--webkit-backdrop-filter: blur(3px);
+border: none;
 
-backdrop-filter: blur(3px);
-
-border:1px solid rgba(255,255,255,0.1);
+text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6);
 
 transition: all .2s ease;
 
@@ -1427,11 +1425,9 @@ box-shadow: 0 0 6px rgba(0,0,0,0.5);
 
 .skills-page button:active{
 
-border-color: rgba(255,150,80,0.6);
-
-box-shadow: 0 0 15px rgba(255,150,80,0.4);
-
 transform: scale(0.96);
+
+text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 10px rgba(255,150,80,0.5);
 
 }
 
@@ -1442,9 +1438,7 @@ transform: scale(0.96);
 
 filter:grayscale(.5) brightness(.55) !important;
 
-border-color: rgba(255,200,80,0.45);
-
-box-shadow: inset 0 0 0 2px rgba(255,180,60,0.25), 0 0 8px rgba(255,170,50,0.25);
+text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(255,180,60,0.35);
 
 opacity:0.85;
 
