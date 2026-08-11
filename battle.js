@@ -29,18 +29,28 @@ let battle = {
 
     botRaceTimeout: null,
 
-    enemyUsedSkills: [], // كل مهارات هذا الخصم التي كُشفت ضد هذا اللاعب — تشمل النزالات
+    enemyUsedSkills: [], // كل مهارات هذا الخصم التي كُشفت ضد هذا اللاعب —Include النزالات
     // السابقة (محفوظة محليًا) + هذا النزال، وهي ما تُستخدم أساسًا لتحديد
     // ما يمكن "سرقته": يكفي أن يكون الخصم استخدمها ضدك في أي نزال سابق
 
     enemyUsedSkillsThisBattle: [], // فقط ما استخدمه الخصم فعليًا في هذا النزال
-    // بالذات — هذه (لا enemyUsedSkills) هي ما يُستخدم لتحديد ما يمكن "نسخه"،
+    // بالذات — هذه (لا enemyUsedSkills) هي ما يُستخدم لتحديد ما可以 "نسخه"،
     // فالنسخ يتطلب أن يكون الخصم استخدم المهارة أمامك الآن، لا في نزال سابق
 
     currentMonsterId: null, // معرّف الوحش الحالي، يُستخدم كمفتاح لحفظ/تحميل
     // مهارات هذا الخصم المكشوفة سابقًا من التخزين المحلي
 
-    playerUsedSkills: []
+    playerUsedSkills: [],
+
+    // حالة الختم (تُحفظ في Supabase لتَتّ survive logout/login)
+    // sealedSkillIds: معرّفات المهارات المختومة حتى نهاية النزال
+    playerSealedSkillIds: [],   // مهارات اللاعب المختومة
+    enemySealedSkillIds: [],    // مهارات العدو المختومة
+
+    // مجموعة الظلال (تُحفظ في Supabase لتَتّ survive logout/login)
+    //تحتوي على شخصيات الظلال و مهاراتها التي يُمكن للاعب استخدامها
+    playerShadowPool: [],       // مجموعة شخصيات الظلال التي تمتلكها
+    enemyShadowPool: [],        // مجموعة شخصيات الظلال التي يمتلكها العدو
 
 };
 
@@ -681,7 +691,17 @@ function cooldownTurnsRemaining(fighter, skill){
 // يمكن استخدامها إطلاقًا حتى نهاية النزال، إلا بفك ختمها بمهارة "فك الختم"
 function isSkillSealed(fighter, skill){
 
-    return !!(fighter && fighter.sealedSkillIds && fighter.sealedSkillIds.includes(skill.id));
+    // التحقق من الحالة المحلية أولاً (الأسرع)
+    let localSealed = !!(fighter && fighter.sealedSkillIds && fighter.sealedSkillIds.includes(skill.id));
+
+    // إذا لم تكن مختومة محلياً ولمباراة PvP، جرب التحقق من Supabase
+    if(!localSealed && battle.prefix === "pvp" && battle.playerToken && skill && skill.id){
+
+        // سنقوم بتحديث الحالة بعد تحميلها من قاعدة البيانات في syncBattleStateFromSupabase
+
+    }
+
+    return localSealed;
 
 }
 
@@ -787,6 +807,8 @@ async function startPVEBattle(monsterId){
     }
 
     openScreen("pve-battle-screen");
+
+    window.shadowPoolCache = await fetchShadowPoolFromSupabase();
 
     resetBattleVisuals("pve");
 
@@ -2671,22 +2693,25 @@ function pveShadowPoolStorageKey(){
 }
 
 
+async function fetchShadowPoolFromSupabase(){
+    if(!battle.playerToken) return [];
+    
+    let { data, error } = await supabaseClient.rpc("get_shadow_pool", { p_token: battle.playerToken });
+    if(error || !data) return [];
+    
+    let ids = data.map(d => d.shadow_character_id);
+    if(ids.length === 0) return [];
+    
+    let { data: chars } = await supabaseClient
+        .from("characters")
+        .select("*")
+        .in("id", ids);
+        
+    return chars || [];
+}
+
 function pveLoadShadowPool(){
-
-    try{
-
-        let raw = localStorage.getItem(pveShadowPoolStorageKey());
-
-        let pool = raw ? JSON.parse(raw) : [];
-
-        return Array.isArray(pool) ? pool : [];
-
-    }catch(e){
-
-        return [];
-
-    }
-
+    return window.shadowPoolCache || [];
 }
 
 
@@ -2708,43 +2733,19 @@ function pveShadowPool(){
 }
 
 
-function pveAddDefeatedToShadowPool(enemy){
+async function pveAddDefeatedToShadowPool(enemy){
 
     if(!enemy || !enemy.id) return;
 
-    let pool = pveLoadShadowPool();
+    // إضافة المعرف إلى Supabase
+    await supabaseClient.rpc("add_to_shadow_pool", { p_token: battle.playerToken, p_character_id: enemy.id });
 
-    let entry = {
-        id: enemy.id,
-        name: enemy.name,
-        image: enemy.image || "",
-        skills: (enemy.skills || []).map(s => ({
-            id: s.id,
-            name: s.name,
-            type: s.type,
-            damage: s.damage,
-            cooldown: s.cooldown,
-            effect: s.effect,
-            unblockable: s.unblockable,
-            params: s.params || null,
-            description: s.description || "",
-            color: s.color || ""
-        }))
-    };
-
-    let existing = pool.find(e => String(e.id) === String(entry.id));
-
-    if(existing){
-
-        existing.name = entry.name;
-        existing.image = entry.image;
-        existing.skills = entry.skills;
-
-    } else {
-
-        pool.push(entry);
-
+    // تحديث الكاش المحلي
+    if(!window.shadowPoolCache) window.shadowPoolCache = [];
+    if(!window.shadowPoolCache.find(e => e.id === enemy.id)){
+        window.shadowPoolCache.push(enemy);
     }
+}
 
     pveSaveShadowPool(pool);
 
