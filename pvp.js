@@ -186,19 +186,21 @@ async function openPVPLobby(){
     pvpLobby.pollTimer = setInterval(pvpRefreshLobby, 3000);
 }
 
-function closePVPLobby(){
+async function closePVPLobby(){
     pvpLobbyStopPolling();
     pvpCloseChallengeModal();
 
-    if(pvpLobby.mode === "waiting" && pvpLobby.outgoingMatchId){
-        // ألغِ التحدي المرسل إن كنا لا نزال ننتظر ردًا عليه
-        supabaseClient.rpc("pvp_forfeit_match", {
-            p_token: pvpGetToken(),
-            p_match_id: pvpLobby.outgoingMatchId
-        }).catch(() => {});
-    } else {
-        supabaseClient.rpc("pvp_leave_lobby", { p_token: pvpGetToken() }).catch(() => {});
-    }
+    try {
+        if(pvpLobby.mode === "waiting" && pvpLobby.outgoingMatchId){
+            // ألغِ التحدي المرسل إن كنا لا نزال ننتظر ردًا عليه
+            await supabaseClient.rpc("pvp_forfeit_match", {
+                p_token: pvpGetToken(),
+                p_match_id: pvpLobby.outgoingMatchId
+            });
+        } else {
+            await supabaseClient.rpc("pvp_leave_lobby", { p_token: pvpGetToken() });
+        }
+    } catch(e) {}
 
     pvpLobby.mode = "browsing";
     pvpLobby.outgoingMatchId = null;
@@ -317,10 +319,12 @@ async function pvpSendChallenge(targetPlayerId){
 async function pvpCancelOutgoingChallenge(){
     if(!pvpLobby.outgoingMatchId) return;
 
-    await supabaseClient.rpc("pvp_forfeit_match", {
-        p_token: pvpGetToken(),
-        p_match_id: pvpLobby.outgoingMatchId
-    }).catch(() => {});
+    try {
+        await supabaseClient.rpc("pvp_forfeit_match", {
+            p_token: pvpGetToken(),
+            p_match_id: pvpLobby.outgoingMatchId
+        });
+    } catch(e) {}
 
     pvpLobby.mode = "browsing";
     pvpLobby.outgoingMatchId = null;
@@ -2151,7 +2155,9 @@ function pvpLeaveBattleClicked(){
     // على السيرفر يحصل في الخلفية بعد ذلك ولا يوقف عودة اللاعب للقائمة.
     openScreen("solo-battle-screen");
 
-    pvpLeaveMatch().catch(() => {});
+    try {
+        pvpLeaveMatch();
+    } catch(e) {}
 }
 
 function pvpShowResult(iWon){
