@@ -3573,6 +3573,14 @@ function attemptSealMulti(sealSkill, names){
 
     clearTurnTimer();
 
+    // الختم فعل غير انعكاس يستهلك الدور: يُسقط نافذة عكس أي ضربة سابقة
+    // تلقّاها اللاعب (مطابقة لمنطق السيرفر في PvP)
+    if(battle.player.lastHitSnapshot && !battle.player.lastHitSnapshot.consumed){
+
+        battle.player.lastHitSnapshot.consumed = true;
+
+    }
+
     battle.enemy.sealedSkillIds = battle.enemy.sealedSkillIds || [];
 
     resolvedSkills.forEach(s => {
@@ -3819,6 +3827,14 @@ function attemptUnsealMulti(unsealSkill, names){
     closeUnsealMenu();
 
     clearTurnTimer();
+
+    // فك الختم فعل غير انعكاس يستهلك الدور: يُسقط نافذة عكس أي ضربة سابقة
+    // تلقّاها اللاعب (مطابقة لمنطق السيرفر في PvP)
+    if(battle.player.lastHitSnapshot && !battle.player.lastHitSnapshot.consumed){
+
+        battle.player.lastHitSnapshot.consumed = true;
+
+    }
 
     let sealedList = battle.player.sealedSkillIds || [];
 
