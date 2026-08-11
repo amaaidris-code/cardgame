@@ -3024,11 +3024,17 @@ async function clearSkillPageBackground(characterId, pageIndex){
 }
 
 
+// الشخصية المفتوحة حاليًا في نافذة التعديل — نستخدمها لمسح كاش مهاراتها
+// بعد أي تعديل حتى تظهر التغييرات فورًا في ساحة المعركة
+let currentEditCharacterId = null;
+
 async function openEditCharacterModal(characterId){
 
     let character = adminCharactersCache.find(c => c.id === characterId);
 
     if(!character) return;
+
+    currentEditCharacterId = characterId;
 
     closeEditCharacterModal();
 
@@ -3511,6 +3517,8 @@ async function addSkillToCharacter(characterId){
 
     alert("تمت إضافة المهارة");
 
+    GameCache.clear("character_skills_" + characterId);
+
     openEditCharacterModal(characterId);
 
 }
@@ -3524,6 +3532,8 @@ async function removeSkillFromCharacter(characterId, skillId){
 
     let admin_token = localStorage.getItem("admin_token");
 
+    let {error} =
+
     await supabaseClient
     .rpc("admin_remove_character_skill", {
 
@@ -3534,6 +3544,8 @@ async function removeSkillFromCharacter(characterId, skillId){
         p_skill_id: skillId
 
     });
+
+    GameCache.clear("character_skills_" + characterId);
 
     openEditCharacterModal(characterId);
 
@@ -3723,6 +3735,8 @@ async function saveSkillEdit(skillId){
 
 
     alert("تم حفظ المهارة");
+
+    if(currentEditCharacterId) GameCache.clear("character_skills_" + currentEditCharacterId);
 
 }
 // ========================================
