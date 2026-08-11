@@ -2708,6 +2708,43 @@ font-size:13px;
 }
 
 
+/* زر رفع صورة خلفية صفحة مهارات من الجهاز — مربّع يشبه حقل النص تمامًا
+   حتى يظهر كجزء طبيعي من صف الخلفيات في نافذة تعديل الشخصية */
+.admin-page-bg-upload{
+
+flex:1 1 100%;
+
+display:flex;
+
+flex-direction:column;
+
+gap:6px;
+
+font-size:13px;
+
+color:#aaa;
+
+cursor:pointer;
+
+}
+
+.admin-page-bg-upload input[type="file"]{
+
+padding:10px;
+
+border-radius:6px;
+
+border:1px dashed #555;
+
+background:#121212;
+
+color:#ccc;
+
+font-size:13px;
+
+}
+
+
 /* نموذج إضافة مهارة جديدة لشخصية/وحش */
 .admin-add-skill-form{
 

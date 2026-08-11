@@ -2923,6 +2923,36 @@ async function loadSkillPageBackgroundsForAdmin(character_id){
 }
 
 
+// يرفع صورة خلفية صفحة مهارات من جهاز الأدمن إلى Supabase Storage ثم
+// يحفظ الرابط الناتج تلقائيًا — يعيد استخدام نفس آلية رفع صور الشخصيات
+// (نفس الحاوية character-images ونفس فحص رمز جلسة الأدمن على الخادم)
+async function uploadPageBackground(characterId, pageIndex){
+
+    let fileInput = document.getElementById("page-bg-file-" + pageIndex);
+
+    let file = fileInput ? fileInput.files[0] : null;
+
+    if(!file) return;
+
+    // نرفع الصورة ونضع الرابط في حقل النص ثم نحفظه (مثل زر حفظ تمامًا)
+    await uploadCharacterImage(
+        "page-bg-file-" + pageIndex,
+        "page-bg-" + pageIndex,
+        "page-bg-status-" + pageIndex
+    );
+
+    let input = document.getElementById("page-bg-" + pageIndex);
+
+    if(input && input.value.trim()){
+        await saveSkillPageBackground(characterId, pageIndex);
+    }
+
+    // نسمح باختيار نفس الصورة مرة أخرى بعد المحاولة
+    fileInput.value = "";
+
+}
+
+
 // يحفظ/يحدّث خلفية صفحة مهارات عبر دالة السيرفر الآمنة، ويمسح كاش
 // المعارك لهذه الشخصية حتى يظهر التغيير في المباراة التالية مباشرة
 async function saveSkillPageBackground(characterId, pageIndex){
@@ -3007,6 +3037,11 @@ async function openEditCharacterModal(characterId){
             <button onclick="clearSkillPageBackground('${characterId}', ${p})">🗑️</button>
 
             <span id="page-bg-status-${p}" class="upload-status"></span>
+
+            <label class="admin-page-bg-upload">
+                📷 صورة من جهازي
+                <input type="file" id="page-bg-file-${p}" accept="image/*" onchange="uploadPageBackground('${characterId}', ${p})">
+            </label>
 
         </div>
 
