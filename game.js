@@ -2681,6 +2681,22 @@ async function uploadCharacterImage(fileInputId, textInputId, statusId){
 
     if(uploadError){
 
+        // خطأ RLS من سياسة التخزين يعني عادة أن رمز جلسة الأدمن انتهت صلاحيته
+        // (الجلسات صالحة ساعتين فقط). نعرض رسالة واضحة بدل رسالة البوليصة
+        // التقنية التي لا تفيد الأدمن، ونطلب منه إعادة تسجيل الدخول.
+        let message = String(uploadError.message || "");
+
+        let isRls = message.includes("row-level security policy")
+                 || message.includes("row security policy")
+                 || message.includes("Rls")
+                 || (uploadError.code && String(uploadError.code) === "42501");
+
+        if(isRls){
+            if(statusBox) statusBox.textContent = "❌ انتهت صلاحية جلسة الإدارة، سجّل الدخول من جديد ثم أعد الرفع";
+            setTimeout(() => logout(), 2500);
+            return;
+        }
+
         if(statusBox) statusBox.textContent = "❌ فشل الرفع: " + uploadError.message;
 
         return;
