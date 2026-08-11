@@ -1291,15 +1291,7 @@ function renderPVPSkillButtons(){
 
                 btn.disabled = false;
 
-                btn.onclick = () => {
-                    if(!pvpState.mySealedSkillIds.includes(skill.id)){
-                        pvpState.mySealedSkillIds.push(skill.id);
-                        showToast("تم تأمين المهارة");
-                        pvpRefreshState(true);
-                    } else {
-                        showToast("المهارة مختومةalready");
-                    }
-                };
+                btn.onclick = () => pvpOpenSealMenu(skill);
 
             } else if(skill.effect === "unseal"){
 
