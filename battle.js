@@ -2744,13 +2744,17 @@ async function pveAddDefeatedToShadowPool(enemy){
 
     if(!enemy || !enemy.id) return;
 
-    // إضافة المعرف إلى Supabase
-    await supabaseClient.rpc("add_to_shadow_pool", { p_token: battle.playerToken, p_character_id: enemy.id });
+    try {
+        // إضافة المعرف إلى Supabase
+        await supabaseClient.rpc("add_to_shadow_pool", { p_token: battle.playerToken, p_character_id: enemy.id });
 
-    // تحديث الكاش المحلي
-    if(!window.shadowPoolCache) window.shadowPoolCache = [];
-    if(!window.shadowPoolCache.find(e => e.id === enemy.id)){
-        window.shadowPoolCache.push(enemy);
+        // تحديث الكاش المحلي
+        if(!window.shadowPoolCache) window.shadowPoolCache = [];
+        if(!window.shadowPoolCache.find(e => e.id === enemy.id)){
+            window.shadowPoolCache.push(enemy);
+        }
+    } catch (error) {
+        console.error("Failed to add shadow to pool:", error);
     }
 }
 
