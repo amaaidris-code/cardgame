@@ -2165,13 +2165,21 @@ function pvpShowResult(iWon){
     let statusBox = document.getElementById("pvp-status-message");
     if(statusBox){
         statusBox.style.display = "block";
-        statusBox.textContent = iWon ? "🏆 فزت!" : "💔 خسرت";
+        statusBox.textContent = iWon ? "🏆 فزت! وأُضيف الخصم المهزوم إلى ظلك 🌑" : "💔 خسرت";
     }
 
     pvpSetSkillsEnabled(false);
 
+    // عند الفوز: نضيف خصمنا المهزوم إلى مخزون الظل الشخصي
+    if(iWon && pvpState.matchId){
+        supabaseClient.rpc("pvp_add_winner_shadow", {
+            p_token: pvpGetToken(),
+            p_match_id: pvpState.matchId
+        }).catch(() => {});
+    }
+
     setTimeout(() => {
-        alert(iWon ? "فزت في المعركة! 🏆" : "خسرت هذه المرة 💔");
+        alert(iWon ? "فزت في المعركة! 🏆 وأُضيف الخصم المهزوم إلى ظلك" : "خسرت هذه المرة 💔");
         // نعود لشاشة اختيار نوع المواجهة (PvE/PvP)
         openScreen("solo-battle-screen");
     }, 500);
