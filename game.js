@@ -2351,7 +2351,7 @@ async function loadUpgradeScreen(){
 
 
     🔥 نقاط التطوير:
-    ${character.available_points || 0}
+    ${character.admin_only ? "لانهائية (شخصية خاصة)" : (character.available_points || 0)}
 
 
 
@@ -2362,9 +2362,11 @@ async function loadUpgradeScreen(){
     upgradeSplit.atk = 100;
     updateSplitUI();
 
+    // الشخصيات الخاصة (admin_only) نقاط تطويرها غير محدودة دائمًا
     let splitBox = document.getElementById("upgrade-split-box");
     if(splitBox){
-        splitBox.style.display = (character.available_points || 0) > 0 ? "block" : "none";
+        let hasPoints = character.admin_only || (character.available_points || 0) > 0;
+        splitBox.style.display = hasPoints ? "block" : "none";
     }
 
 }
