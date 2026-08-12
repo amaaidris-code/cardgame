@@ -2745,8 +2745,15 @@ async function pveAddDefeatedToShadowPool(enemy){
     if(!enemy || !enemy.id) return;
 
     try {
-        // إضافة المعرف إلى Supabase
-        await supabaseClient.rpc("add_to_shadow_pool", { p_token: battle.playerToken, p_character_id: enemy.id });
+        // استخدام RPC التي تحلّ user_id من السيرفر (SECURITY DEFINER)
+        // لأن هذا العميل لا يستخدم جلسات Supabase Auth، بل نظام player_token
+        // المخصص، فلا يمكن الاعتماد على auth.uid() في سياسات RLS
+        const { error } = await supabaseClient.rpc("add_to_shadow_pool", {
+            p_token: battle.playerToken,
+            p_character_id: enemy.id
+        });
+
+        if (error) throw error;
 
         // تحديث الكاش المحلي
         if(!window.shadowPoolCache) window.shadowPoolCache = [];
