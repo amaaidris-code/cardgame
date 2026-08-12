@@ -1642,10 +1642,13 @@ function buildSkillButton(skill){
 
     // الدفاع أصبح يستهلك الدور تمامًا مثل الهجوم، لذا يُقفل خارج دور اللاعب أيضًا.
     // السرقة والنسخ فقط تبقيان متاحتين في أي وقت. الختم/فك الختم فعلان يستهلكان الدور.
+    // يُستثنى من ذلك حالة "0 HP" حيث يُسمح بالقيام بأي فعل للمحاولة الأخيرة
     let isTurnLocked =
     skill.effect !== "steal"
     && skill.effect !== "copy"
-    && battle.turnOwner !== "player";
+    && skill.effect !== "shadow"
+    && battle.turnOwner !== "player"
+    && battle.player.hp > 0;
 
     // ملاحظة مهمة: لا نستخدم btn.disabled هنا رغم أن المهارة مقفلة فعليًا.
     // العنصر disabled في المتصفح يمنع كل أحداث الإصبع/الفأرة عنه تمامًا
@@ -1873,7 +1876,7 @@ function handleSkillClick(skill){
 
     if(skill.type === "defense"){
 
-        if(battle.turnOwner !== "player") return;
+        if(battle.turnOwner !== "player" && battle.player.hp > 0) return;
 
         if(!isSkillReady(battle.player, skill)){
 
@@ -1955,7 +1958,7 @@ function handleSkillClick(skill){
 
     if(isNewBuffEffect(skill.effect)){
 
-        if(battle.turnOwner !== "player") return;
+        if(battle.turnOwner !== "player" && battle.player.hp > 0) return;
 
         if(!isSkillReady(battle.player, skill)){
 
@@ -5088,12 +5091,21 @@ function runCopiedSkillsQueue(queue, index, consumesPlayerTurn){
 
 function openSealMenu(sealSkill){
 
-    if(battle.turnOwner !== "player"){
+function closeSealMenu(){
+    let modal = document.getElementById("battle-seal-modal");
+    if(modal) modal.remove();
+}
+
+// ========================================
+function openSealMenu(sealSkill){
+
+    if(battle.turnOwner !== "player" && battle.player.hp > 0){
         alert("ليس دورك الآن");
         return;
     }
 
     if(battle.finished) return;
+    // ...
 
     if(isSkillSealed(battle.player, sealSkill)){
 
