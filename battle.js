@@ -2502,9 +2502,15 @@ function applyPveBuff(fighter, skill){
 
     if(skill.effect === "hp_boost"){
 
-        let healed = Math.min(amount, Math.max(0, fighter.maxHp - fighter.hp));
+        // تسمح بالاستشفاء حتى لو كانت الصحة ممتلئة، فتتجاوز الحد الأقصى مؤقتًا
+        let healed = amount;
 
-        fighter.hp = Math.min(fighter.maxHp, fighter.hp + amount);
+        fighter.hp = fighter.hp + amount;
+
+        // إن تجاوزت الصحة الحد الأقصى، نرفع الحد الأقصى ليطابقها
+        if(fighter.hp > fighter.maxHp){
+            fighter.maxHp = fighter.hp;
+        }
 
         return `${fighter.name} استعاد ${healed} صحة!`;
 
