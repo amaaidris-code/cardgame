@@ -3368,7 +3368,11 @@ function resolveAction(attacker, defender, skill, trackUsed = true, isReflectedH
 
         } else {
 
-            defender.hp = Math.min(defender.maxHp, defender.hp + absorbedAmount);
+            defender.hp = defender.hp + absorbedAmount;
+
+            if(defender.hp > defender.maxHp){
+                defender.maxHp = defender.hp;
+            }
 
         }
 
