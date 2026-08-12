@@ -262,9 +262,24 @@ function openScreen(screenId){
 
                 return;
 
-            }
+    }
 
-        }
+}
+
+function applyPageColor(pageIndex){
+    const colorInput = document.getElementById("page-color-" + pageIndex);
+    if(!colorInput) return;
+    const color = colorInput.value;
+    const pageSkills = currentEditSkills.slice(pageIndex * 4, pageIndex * 4 + 4);
+    pageSkills.forEach(skill => {
+        const colorInput = document.getElementById("skill-color-" + skill.id);
+        if(colorInput) colorInput.value = color;
+    });
+}
+
+function savePageColors(pageIndex){
+    alert("تم تعيين ألوان الصفحات، يرجى النقر على زر حفظ لكل مهارة لحفظ التغييرات");
+}
 
 
         if(screenId === "collection-screen"){
@@ -4901,17 +4916,3 @@ function goBack(){
 }
 
 
-function applyPageColor(pageIndex){
-    const colorInput = document.getElementById("page-color-" + pageIndex);
-    if(!colorInput) return;
-    const color = colorInput.value;
-    const pageSkills = currentEditSkills.slice(pageIndex * 4, pageIndex * 4 + 4);
-    pageSkills.forEach(skill => {
-        const colorInput = document.getElementById("skill-color-" + skill.id);
-        if(colorInput) colorInput.value = color;
-    });
-}
-
-function savePageColors(pageIndex){
-    alert(" تم تعيين ألوان الصفحات، يرجى النقر على زر حفظ لكل مهارة لحفظ التغييرات");
-;
