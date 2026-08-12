@@ -3419,6 +3419,15 @@ async function openEditCharacterModal(characterId){
 
     _initShadowListInModal();
 
+    // Ensure damage/cooldown fields are hidden for existing shadow skills on initial render
+    if(currentEditSkills){
+        currentEditSkills.forEach(s => {
+            if(s.effect === "shadow"){
+                updateSkillNumberLabelFor(s.id);
+            }
+        });
+    }
+
     document.getElementById("cancel-character-edit-btn").onclick = closeEditCharacterModal;
 
     document.getElementById("save-character-edit-btn").onclick = () => saveCharacterEdit(characterId);
