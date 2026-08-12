@@ -5905,3 +5905,5 @@ function setTurnIndicatorText(elId, text, cssClass){
     if(cssClass) box.classList.add(cssClass);
 
 }
+
+
