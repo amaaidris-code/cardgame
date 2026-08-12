@@ -230,10 +230,10 @@ async function pvpRefreshLobby(){
     let [{data: players, error: listError}, {data: incoming, error: incomingError}] =
     await Promise.all([
         supabaseClient.rpc("pvp_list_lobby", { p_token: pvpGetToken() }),
-        supabaseClient.rpc("pvp_get_incoming_challenge", { p_token: pvpGetToken() }).single()
+        supabaseClient.rpc("pvp_get_incoming_challenge", { p_token: pvpGetToken() })
     ]);
 
-    let incomingChallenge = (!incomingError && incoming && incoming.match_id) ? incoming : null;
+    let incomingChallenge = (!incomingError && incoming && incoming.length > 0) ? incoming[0] : null;
 
     pvpLobby.incomingShown = incomingChallenge ? incomingChallenge.match_id : null;
 
@@ -949,7 +949,8 @@ async function pvpRefreshState(isFirstLoad){
     pvpRenderUsedSkillsUI();
 
     let myTurn = (data.turn_player_id === (pvpState.isPlayer1 ? data.player1_id : data.player2_id));
-    pvpSetSkillsEnabled(myTurn && data.status === "active");
+    // allow using skills if it is my turn OR my hp is 0 and match is active
+    pvpSetSkillsEnabled((myTurn || myHp <= 0) && data.status === "active");
     pvpApplySealedBadges();
 
     pvpUpdateTurnTimer(data.status === "active" ? data.turn_deadline : null);
@@ -1838,6 +1839,12 @@ async function pvpUseControl(abilitySkillId, targetSkillId){
 // قائمة الختم: نعرض فقط المهارات التي استخدمها الخصم في هذه المباراة
 // وغير المختومة مسبقًا (نفس ما تتحقق منه دالة السيرفر)
 // ========================================
+function pvpCloseSealMenu(){
+    let modal = document.getElementById("pvp-steal-modal");
+    if(modal) modal.remove();
+}
+
+// ========================================
 function pvpOpenSealMenu(abilitySkill){
 
     pvpCloseSealMenu();
@@ -1942,11 +1949,6 @@ function pvpOpenUnsealMenu(abilitySkill){
     });
 
     modal.querySelector("#pvp-steal-cancel-btn").onclick = pvpCloseSealMenu;
-}
-
-function pvpCloseSealMenu(){
-    let modal = document.getElementById("pvp-steal-modal");
-    if(modal) modal.remove();
 }
 
 // ========================================
