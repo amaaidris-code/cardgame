@@ -508,6 +508,8 @@ function buildFighter(pc, skills, isPlayer){
 
         skills: skills,
 
+        atk: isPlayer ? (Number(pc.atk) || 100) : 0,
+
         turnsTaken: 0,
 
         cooldownUsedAt: {},
@@ -571,7 +573,66 @@ function buildFighter(pc, skills, isPlayer){
 // حساب الضرر (ثابت من قاعدة البيانات، بدون علاقة بـ ATK)
 // ========================================
 
-function calcDamage(skill){
+// ========================================
+// توسّع ضرر مهارات الهجوم تلقائيًا مع ارتفاع صفة ATK.
+// القاعدة: كل +50 في ATK تمنح +50 ضررًا لمهارة هجوم واحدة بالترتيب (تدور
+// على المهارات 2..N ثم تعود)، مع تثبيت المهارة الأولى عند ضررها الأساسي.
+// كما يُفرض أن تكون الفجوة بين كل مهارتي هجوم متتاليتين >= 100 على الأقل،
+// مع احتساب المهارات غير القابلة للصد (unblockable) بضعف ضررها (100 منها
+// = 200 عادية). تُطبَّق على اللاعب في PvE وPvP معًا.
+// ========================================
+
+// القيمة "الفعلية" لمهارة هجوم لأغراض الفجوة: غير القابلة للصد تُحسب ضعفها
+function atkGapValue(dmg, unblockable){
+    return unblockable ? dmg * 2 : dmg;
+}
+
+// يفرض فجوة >= 100 بين كل مهارتي هجوم متتاليتين (يرفع التالية عند الحاجة)
+function enforceAttackGaps(damages, skills){
+    const n = skills.length;
+    if(n < 2) return;
+    let changed = true;
+    while(changed){
+        changed = false;
+        for(let i = 0; i < n - 1; i++){
+            const cur = atkGapValue(damages[i], skills[i].unblockable);
+            const nxt = atkGapValue(damages[i + 1], skills[i + 1].unblockable);
+            if(nxt - cur < 100){
+                const deficit = 100 - (nxt - cur);
+                const step = skills[i + 1].unblockable ? 100 : 50;
+                damages[i + 1] += Math.ceil(deficit / step) * 50;
+                changed = true;
+            }
+        }
+    }
+}
+
+// يحسب الضرر الفعلي لكل مهارة هجوم للاعب بالنظر إلى ATK الحالي.
+// يعيد كائن skill_id -> الضرر (مع احتفاظ غير القابلة للصد بقيمتها الأصلية،
+// إذ لا نضاعف الضرر الفعلي هنا — المضاعفة فقط لحساب الفجوة)
+function computeScaledAttackDamages(atk, skills){
+    const BASE_ATK = 100;
+    const result = {};
+    const atkSkills = (skills || []).filter(s =>
+        (s.type === "attack" || s.type === "special")
+        && (s.effect === null || s.effect === undefined || s.effect === "")
+    );
+    if(atkSkills.length === 0) return result;
+
+    const boosts = Math.max(0, Math.floor((atk - BASE_ATK) / 50));
+    const n = atkSkills.length;
+    const damages = atkSkills.map(s => Math.max(0, Number(s.damage) || 0));
+    const cycleCount = Math.max(1, n - 1);
+    for(let i = 0; i < boosts; i++){
+        const idx = (i % cycleCount) + 1;
+        damages[idx] += 50;
+    }
+    enforceAttackGaps(damages, atkSkills);
+    atkSkills.forEach((s, i) => { result[s.id] = damages[i]; });
+    return result;
+}
+
+function calcDamage(skill, attacker){
 
     // مهارة التجميد/الشلل لا تُلحق ضررًا؛ رقمها يمثّل عدد أدوار التجميد بدلاً من ذلك
     if(skill.effect === "freeze") return 0;
@@ -593,8 +654,17 @@ function calcDamage(skill){
 
     if(skill.effect === "shadow") return 0;
 
-    if(skill.type === "attack" || skill.type === "special")
+    if(skill.type === "attack" || skill.type === "special"){
+
+        // توسّع ضرر الهجوم تلقائيًا مع ارتفاع ATK (للمقاتل الذي يملك قائمة
+        // مضاعفة محسوبة مسبقًا من computeScaledAttackDamages)
+        if(attacker && attacker.scaledAttackDamages && attacker.scaledAttackDamages[skill.id] !== undefined){
+            return attacker.scaledAttackDamages[skill.id];
+        }
+
         return Number(skill.damage) || 0;
+
+    }
 
     return 0;
 
@@ -887,6 +957,11 @@ async function startPVEBattle(monsterId){
 
 
     battle.player = buildFighter(pc, skills, true);
+
+    // توسّع ضرر الهجمات تلقائيًا مع ارتفاع ATK للاعب
+    battle.player.scaledAttackDamages = computeScaledAttackDamages(
+        battle.player.atk, battle.player.skills
+    );
 
     battle.enemy = buildMonsterFighter(monsterRow, monsterSkills);
 
@@ -3304,7 +3379,7 @@ function renderUsedSkillsUI(prefix){
 
 function resolveAction(attacker, defender, skill, trackUsed = true, isReflectedHit = false){
 
-    let dmg = calcDamage(skill);
+    let dmg = calcDamage(skill, attacker);
 
     // القوة المؤقتة (atk_boost) تُضاف لضرر الهجمات والمهارات الضررية فقط
     if((skill.type === "attack" || skill.type === "special") && dmg > 0){
