@@ -1023,7 +1023,7 @@ async function pvpRefreshState(isFirstLoad){
                 statusBox.textContent = "🔁 الخصم عكس هجومك السابق عليك!";
                 statusBox.classList.add("frozen-note");
             } else if(myHp <= 0){
-                statusBox.textContent = "⚠️ أنت على وشك السقوط! استخدم الدفاع أو الانعكاس الآن";
+                statusBox.textContent = "⚠️ صحتك أصبحت صفرًا! يمكنك استخدام أي مهارة";
                 statusBox.classList.add("frozen-note");
             } else {
                 statusBox.textContent = myTurn ? "🟢 دورك الآن" : "⏳ دور الخصم...";
@@ -1102,8 +1102,8 @@ async function pvpRefreshState(isFirstLoad){
         } else if(prevMyHp !== undefined && myHp < prevMyHp){
 
             if(myHp <= 0){
-                pvpAddBattleLog("💀 ضربة قاتلة! لكنك نجوت — استخدم الدفاع أو الانعكاس الآن!");
-                showBattleEffectBanner("pvp", "💀 ضربة قاتلة! لكنك نجوت — استخدم الدفاع أو الانعكاس الآن!", "hit");
+                pvpAddBattleLog("💀 ضربة قاتلة! صحتك أصبحت صفرًا، لكن يمكنك الاستمرار بأي مهارة");
+                showBattleEffectBanner("pvp", "💀 ضربة قاتلة! صحتك أصبحت صفرًا", "hit");
             } else {
                 pvpAddBattleLog(`💥 تعرّضتَ لهجوم! -${prevMyHp - myHp}`);
                 showBattleEffectBanner("pvp", `💥 تعرّضتَ لهجوم! -${prevMyHp - myHp}`, "hit");
@@ -1944,6 +1944,11 @@ function pvpOpenUnsealMenu(abilitySkill){
     modal.querySelector("#pvp-steal-cancel-btn").onclick = pvpCloseSealMenu;
 }
 
+function pvpCloseSealMenu(){
+    let modal = document.getElementById("pvp-steal-modal");
+    if(modal) modal.remove();
+}
+
 // ========================================
 // تنفيذ الختم/فك الختم — كل التحقق الفعلي (هل المهارة مملوكة، هل الدور
 // دورنا، هل المهارة قابلة للختم/مختومة...) يحصل على السيرفر
@@ -2089,7 +2094,7 @@ async function pvpOpenShadowMenu(abilitySkill){
 
     let { data, error } =
     await supabaseClient
-    .rpc("pvp_list_shadow_pool", { p_token: pvpGetToken() });
+    .rpc("pvp_list_shadow_pool", { p_token: pvpGetToken(), p_self_character_id: pvpState.myCharacterId || null });
 
     if(error || !data){
         alert(error ? (error.message || "تعذر جلب قائمة الظل") : "قائمة الظل فارغة");
@@ -2189,9 +2194,99 @@ function pvpOpenShadowSkillMenu(abilitySkill, charId, charEntry){
     modal.querySelectorAll(".shadow-skill-option").forEach(btn => {
         btn.onclick = () => {
             let skillId = btn.dataset.id;
-            pvpCloseShadowMenu();
-            pvpUseShadowSkill(abilitySkill.id, charId, skillId);
+            let skill = charEntry.skills.find(s => String(s.id) === String(skillId));
+            let effect = skill && skill.effect;
+            if(effect === "steal" || effect === "copy" || effect === "control"
+               || effect === "seal" || effect === "unseal" || effect === "delay_cooldown"){
+                pvpCloseShadowMenu();
+                pvpOpenShadowTargetMenu(abilitySkill.id, skill);
+            } else {
+                pvpCloseShadowMenu();
+                pvpUseShadowSkill(abilitySkill.id, charId, skillId);
+            }
         };
+    });
+
+    modal.querySelector("#pvp-steal-cancel-btn").onclick = pvpCloseShadowMenu;
+}
+
+// ========================================
+// المهارات الظلية التي تحتاج هدفًا (سرقة/نسخ/تحكم/ختم/فك ختم/تأجيل) تفتح
+// قائمة أهداف مناسبة ثم تستدعي الدالة المختصة على السيرفر (نفس دوال المهارات
+// العادية) — السيرفر يتقبل الآن مهارة من مخزون الظل كمصدر للمهارة
+// ========================================
+function pvpOpenShadowTargetMenu(abilitySkillId, skill){
+    if(!skill) return;
+
+    let effect = skill.effect;
+
+    let candidateIds;
+    if(effect === "unseal"){
+        candidateIds = pvpState.mySealedSkillIds || [];
+    } else if(effect === "copy"){
+        candidateIds = (pvpState.oppUsedSkillIds || [])
+            .filter(id => !["steal","copy","control"].includes(pvpState.skillCache[id] && pvpState.skillCache[id].effect));
+    } else if(effect === "seal"){
+        candidateIds = [...new Set([...(pvpState.oppUsedSkillIds || []), ...(pvpState.oppDefenseSkillIds || [])])];
+    } else if(effect === "delay_cooldown"){
+        candidateIds = [...new Set([...(pvpState.oppUsedSkillIds || []), ...(pvpState.oppDefenseSkillIds || [])])]
+            .filter(id => { let s = pvpState.skillCache[id]; return s && s.cooldown > 0; });
+    } else {
+        // steal / control
+        candidateIds = [...new Set([...(pvpState.oppRevealedSkillIds || []), ...(pvpState.oppUsedSkillIds || [])])]
+            .filter(id => { let s = pvpState.skillCache[id]; return s && !["steal","copy","control","shadow","delay_cooldown"].includes(s.effect); });
+    }
+
+    let candidates = candidateIds
+        .map(id => pvpState.skillCache[id])
+        .filter(s => s && (effect !== "seal" || !(pvpState.oppSealedSkillIds || []).includes(s.id)));
+
+    if(candidates.length === 0){
+        alert("لا توجد مهارة مستهدفة متاحة لهذه المهارة الظلية الآن");
+        return;
+    }
+
+    let verb = effect === "steal" ? "لسرقته" :
+               effect === "copy" ? "لنسخه" :
+               effect === "control" ? "للسيطرة عليه" :
+               effect === "seal" ? "لختمه" :
+               effect === "unseal" ? "لفك ختمه" :
+               "لتأجيله";
+
+    let modal = document.createElement("div");
+    modal.id = "pvp-steal-modal";
+    modal.className = "steal-modal";
+    modal.dataset.modalFor = "shadow";
+    modal.innerHTML = `
+        <div class="steal-modal-box">
+            <h3>🌑 مهارة الظل "${escapeHtml(skill.name)}" — اختر المهارة ${verb}</h3>
+            <div class="steal-options-list" id="pvp-shadow-target-list"></div>
+            <div class="steal-modal-buttons">
+                <button id="pvp-steal-cancel-btn">إلغاء</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    let list = modal.querySelector("#pvp-shadow-target-list");
+    candidates.forEach(s => {
+        let btn = document.createElement("button");
+        btn.className = "steal-option";
+        btn.textContent = s.name;
+        btn.onclick = () => {
+            pvpCloseShadowMenu();
+            if(effect === "steal" || effect === "copy"){
+                pvpUseStealOrCopy(abilitySkillId, s.id);
+            } else if(effect === "control"){
+                pvpUseControl(abilitySkillId, s.id);
+            } else if(effect === "seal" || effect === "unseal"){
+                pvpUseSealOrUnseal(abilitySkillId, s.id);
+            } else if(effect === "delay_cooldown"){
+                pvpUseDelaySkill(abilitySkillId, s.id);
+            }
+        };
+        list.appendChild(btn);
     });
 
     modal.querySelector("#pvp-steal-cancel-btn").onclick = pvpCloseShadowMenu;
