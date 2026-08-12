@@ -322,10 +322,6 @@ function applyPageColor(pageIndex){
     });
 }
 
-function savePageColors(pageIndex){
-    alert("تم تعيين ألوان الصفحات، يرجى النقر على زر حفظ لكل مهارة لحفظ التغييرات");
-}
-
 
 // ========================================
 // تحديث بيانات اللاعب
@@ -1631,7 +1627,7 @@ function logout(){
 
         supabaseClient.rpc("player_logout_session", {
             p_token: playerToken
-        });
+        }).catch(() => {});
 
     }
 
@@ -1668,7 +1664,7 @@ function logout(){
 
         supabaseClient.rpc("admin_logout_session", {
             p_token: adminToken
-        });
+        }).catch(() => {});
 
     }
 
@@ -2325,14 +2321,14 @@ async function loadUpgradeScreen(){
 
 
     // نقرأ الشخصية النشطة عبر RPC آمنة واحدة بدل قراءتين مباشرتين
-    let {data:character}=
+    let {data:character, error: charError}=
 
     await supabaseClient
     .rpc("get_my_active_character", { p_token: localStorage.getItem("player_token") })
     .single();
 
 
-    if(!character){
+    if(charError || !character){
 
 
         box.innerHTML =
@@ -4351,124 +4347,78 @@ async function addCharacter(){
 
 
 
-    let name =
-    document
-    .getElementById(
-        "admin-character-name"
-    )
-    .value
-    .trim();
+    let nameEl =
+    document.getElementById("admin-character-name");
+    let name = nameEl ? nameEl.value.trim() : "";
 
 
 
 
-    let anime =
-    document
-    .getElementById(
-        "admin-character-anime"
-    )
-    .value
-    .trim();
+    let animeEl =
+    document.getElementById("admin-character-anime");
+    let anime = animeEl ? animeEl.value.trim() : "";
 
 
 
 
-    let image =
-    document
-    .getElementById(
-        "admin-character-image"
-    )
-    .value
-    .trim();
+    let imageEl =
+    document.getElementById("admin-character-image");
+    let image = imageEl ? imageEl.value.trim() : "";
 
 
 
 
-    let hp =
-    Number(
-    document
-    .getElementById(
-        "admin-character-hp"
-    )
-    .value
-    );
+    let hpEl =
+    document.getElementById("admin-character-hp");
+    let hp = hpEl ? Number(hpEl.value) : 0;
 
 
 
 
-    let atk =
-    Number(
-    document
-    .getElementById(
-        "admin-character-atk"
-    )
-    .value
-    );
+    let atkEl =
+    document.getElementById("admin-character-atk");
+    let atk = atkEl ? Number(atkEl.value) : 0;
 
 
 
 
-    let power =
-    document
-    .getElementById(
-        "admin-power-name"
-    )
-    .value
-    .trim();
+    let powerEl =
+    document.getElementById("admin-power-name");
+    let power = powerEl ? powerEl.value.trim() : "";
 
 
 
 
-    let description =
-    document
-    .getElementById(
-        "admin-power-description"
-    )
-    .value
-    .trim();
+    let descEl =
+    document.getElementById("admin-power-description");
+    let description = descEl ? descEl.value.trim() : "";
 
 
 
 
-    let quote =
-    document
-    .getElementById(
-        "admin-character-quote"
-    )
-    .value
-    .trim();
+    let quoteEl =
+    document.getElementById("admin-character-quote");
+    let quote = quoteEl ? quoteEl.value.trim() : "";
 
 
-    let isMonster =
-    document
-    .getElementById(
-        "admin-character-is-monster"
-    )
-    .checked;
+    let monsterEl =
+    document.getElementById("admin-character-is-monster");
+    let isMonster = monsterEl ? monsterEl.checked : false;
 
 
-    let isAdminOnly =
-    document
-    .getElementById(
-        "admin-character-admin-only"
-    )
-    .checked;
+    let adminOnlyEl =
+    document.getElementById("admin-character-admin-only");
+    let isAdminOnly = adminOnlyEl ? adminOnlyEl.checked : false;
 
 
-    let glowColor =
-    document
-    .getElementById(
-        "admin-character-glow-color"
-    )
-    .value;
+    let glowEl =
+    document.getElementById("admin-character-glow-color");
+    let glowColor = glowEl ? glowEl.value : "#3b82ff";
 
 
-    let glowLocked =
-    document
-    .getElementById(
-        "admin-character-glow-locked"
-    )
-    .checked;
+    let glowLockedEl =
+    document.getElementById("admin-character-glow-locked");
+    let glowLocked = glowLockedEl ? glowLockedEl.checked : false;
 
 
 
@@ -4694,7 +4644,7 @@ function openAdminPanel(){
 // تحديث بيانات اللاعب بعد أي تغيير
 // ========================================
 
-async function refreshGame(){
+function refreshGame(){
 
 
     updatePlayerInfo();

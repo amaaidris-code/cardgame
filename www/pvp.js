@@ -2369,7 +2369,7 @@ function pvpLeaveBattleClicked(){
     openScreen("solo-battle-screen");
 
     try {
-        pvpLeaveMatch();
+        pvpLeaveMatch().catch(() => {});
     } catch(e) {}
 }
 
@@ -2392,8 +2392,7 @@ function pvpShowResult(iWon){
     }
 
     setTimeout(() => {
-        alert(iWon ? "فزت في المعركة! 🏆 وأُضيف الخصم المهزوم إلى ظلك" : "خسرت هذه المرة 💔");
         // نعود لشاشة اختيار نوع المواجهة (PvE/PvP)
         openScreen("solo-battle-screen");
-    }, 500);
+    }, 1500);
 }
