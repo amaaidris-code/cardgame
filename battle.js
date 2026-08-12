@@ -2715,7 +2715,14 @@ async function fetchShadowPoolFromSupabase(){
         .select("*")
         .in("id", ids);
         
-    return chars || [];
+    chars = chars || [];
+
+    // جلب مهارات كل شخصية ظل (المهارات في جدول منفصل character_skills)
+    await Promise.all(chars.map(async (ch) => {
+        ch.skills = await loadCharacterSkills(ch.id);
+    }));
+
+    return chars;
 }
 
 function pveLoadShadowPool(){
