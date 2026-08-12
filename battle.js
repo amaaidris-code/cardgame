@@ -2701,9 +2701,10 @@ function pveShadowPoolStorageKey(){
 
 
 async function fetchShadowPoolFromSupabase(){
-    if(!battle.playerToken) return [];
+    let token = localStorage.getItem("player_token");
+    if(!token) return [];
     
-    let { data, error } = await supabaseClient.rpc("get_shadow_pool", { p_token: battle.playerToken });
+    let { data, error } = await supabaseClient.rpc("get_shadow_pool", { p_token: token });
     if(error || !data) return [];
     
     let ids = data.map(d => d.shadow_character_id);
@@ -2749,7 +2750,7 @@ async function pveAddDefeatedToShadowPool(enemy){
         // لأن هذا العميل لا يستخدم جلسات Supabase Auth، بل نظام player_token
         // المخصص، فلا يمكن الاعتماد على auth.uid() في سياسات RLS
         const { error } = await supabaseClient.rpc("add_to_shadow_pool", {
-            p_token: battle.playerToken,
+            p_token: localStorage.getItem("player_token"),
             p_character_id: enemy.id
         });
 
