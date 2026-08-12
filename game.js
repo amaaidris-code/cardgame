@@ -3209,7 +3209,7 @@ async function openEditCharacterModal(characterId){
     let skillsHtml = skills.length > 0
     ? skills.map(s => {
         let scaledDmg = (scaledDamageMap[s.id] !== undefined) ? scaledDamageMap[s.id] : null;
-        let effectiveField = (scaledDmg !== null)
+        let effectiveField = (scaledDmg !== null && s.effect !== "shadow")
             ? ` <input type="number" id="skill-effective-${s.id}" class="admin-skill-effective-input" value="${scaledDmg}" placeholder="الفعلي" onchange="syncEffectiveToBase('${s.id}')" title="الضرر الفعلي بعد التطوير (قابل للتعديل)">`
             : "";
         return `
@@ -3222,11 +3222,11 @@ async function openEditCharacterModal(characterId){
                 ${skillTypeOptionsHtml(skillFieldsToTypeChoice(s))}
             </select>
 
-            <input type="number" id="skill-damage-${s.id}" value="${s.damage || 0}" placeholder="${skillNumberFieldLabel(s)}" onchange="syncBaseToEffective('${s.id}')">
+            <input type="number" id="skill-damage-${s.id}" value="${s.damage || 0}" placeholder="${skillNumberFieldLabel(s)}" onchange="syncBaseToEffective('${s.id}')" style="${s.effect === 'shadow' ? 'display:none;' : ''}">
 
             ${effectiveField}
 
-            <input type="number" id="skill-cooldown-${s.id}" value="${s.cooldown || 0}" placeholder="التهدئة">
+            <input type="number" id="skill-cooldown-${s.id}" value="${s.cooldown || 0}" placeholder="التهدئة" style="${s.effect === 'shadow' ? 'display:none;' : ''}">
 
             <input type="number" id="skill-poison-turns-${s.id}" value="${(s.params && s.params.poison_turns) || 2}" placeholder="عدد أدوار السُم" style="${s.effect === 'poison' ? '' : 'display:none;'}">
 
@@ -3753,19 +3753,27 @@ function updateNewSkillNumberLabel(){
 
     let input = document.getElementById("new-skill-damage");
 
+    let cooldownInput = document.getElementById("new-skill-cooldown");
+
     let poisonTurnsInput = document.getElementById("new-skill-poison-turns");
 
     let shadowSection = document.getElementById("new-skill-shadow-list-section");
 
     if(!select || !input) return;
 
+    let isShadow = select.value === "shadow";
+
     input.placeholder = newSkillNumberFieldLabel(select.value);
+
+    input.style.display = isShadow ? "none" : "";
+
+    if(cooldownInput) cooldownInput.style.display = isShadow ? "none" : "";
 
     if(poisonTurnsInput) poisonTurnsInput.style.display = select.value === "poison" ? "" : "none";
 
-    if(shadowSection) shadowSection.style.display = select.value === "shadow" ? "" : "none";
+    if(shadowSection) shadowSection.style.display = isShadow ? "" : "none";
 
-    if(select.value === "shadow" && shadowSection){
+    if(isShadow && shadowSection){
         populateShadowListDropdown("new", false);
     }
 
@@ -3779,19 +3787,27 @@ function updateSkillNumberLabelFor(skillId){
 
     let input = document.getElementById("skill-damage-" + skillId);
 
+    let cooldownInput = document.getElementById("skill-cooldown-" + skillId);
+
     let poisonTurnsInput = document.getElementById("skill-poison-turns-" + skillId);
 
     let shadowSection = document.getElementById("skill-shadow-list-section-" + skillId);
 
     if(!select || !input) return;
 
+    let isShadow = select.value === "shadow";
+
     input.placeholder = newSkillNumberFieldLabel(select.value);
+
+    input.style.display = isShadow ? "none" : "";
+
+    if(cooldownInput) cooldownInput.style.display = isShadow ? "none" : "";
 
     if(poisonTurnsInput) poisonTurnsInput.style.display = select.value === "poison" ? "" : "none";
 
-    if(shadowSection) shadowSection.style.display = select.value === "shadow" ? "block" : "none";
+    if(shadowSection) shadowSection.style.display = isShadow ? "block" : "none";
 
-    if(select.value === "shadow" && shadowSection){
+    if(isShadow && shadowSection){
         populateShadowListDropdown(skillId, true);
     }
 
