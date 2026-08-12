@@ -317,8 +317,8 @@ function applyPageColor(pageIndex){
     const color = colorInput.value;
     const pageSkills = currentEditSkills.slice(pageIndex * 4, pageIndex * 4 + 4);
     pageSkills.forEach(skill => {
-        const colorInput = document.getElementById("skill-color-" + skill.id);
-        if(colorInput) colorInput.value = color;
+        const skillColorInput = document.getElementById("skill-color-" + skill.id);
+        if(skillColorInput) skillColorInput.value = color;
     });
 }
 
@@ -1505,6 +1505,14 @@ async function chooseCharacter(character_id){
 // ========================================
 // إرسال طلب شخصية
 // ========================================
+
+function showCharacterRequest(){
+    openScreen("character-request-screen");
+}
+
+function submitCharacterRequest(){
+    sendCharacterRequest();
+}
 
 async function sendCharacterRequest(){
 
@@ -4634,44 +4642,6 @@ function(event){
 
 
 
-
-
-
-// ========================================
-// حماية تحميل الصفحة
-// ========================================
-
-window.addEventListener(
-"load",
-function(){
-
-
-    let player_id =
-    localStorage.getItem(
-        "player_id"
-    );
-
-
-
-    if(player_id){
-
-
-        checkPlayer();
-
-
-    }else{
-
-
-        openScreen(
-            "login-screen"
-        );
-
-
-    }
-
-
-
-});
 
 
 
