@@ -575,11 +575,16 @@ function buildFighter(pc, skills, isPlayer){
 
 // ========================================
 // توسّع ضرر مهارات الهجوم تلقائيًا مع ارتفاع صفة ATK.
-// القاعدة: كل +50 في ATK تمنح +50 ضررًا لمهارة هجوم واحدة بالترتيب (تدور
-// على المهارات 2..N ثم تعود)، مع تثبيت المهارة الأولى عند ضررها الأساسي.
-// كما يُفرض أن تكون الفجوة بين كل مهارتي هجوم متتاليتين >= 100 على الأقل،
-// مع احتساب المهارات غير القابلة للصد (unblockable) بضعف ضررها (100 منها
-// = 200 عادية). تُطبَّق على اللاعب في PvE وPvP معًا.
+// القاعدة:
+//   - المهارة الأولى (هجوم عادي) أساسها 100 وليست مثبّتة، بل تنمو أيضًا.
+//   - كل مهارة هجوم يجب أن تتفوق على التي قبلها بـ 150 إذا كانت عادية،
+//     أو بـ 200 (بالمكافئ العادي) إذا كانت غير قابلة للصد (unblockable تُحسب
+//     ضعف ضررها فقط لغرض الفجوة، والضرر الفعلي لا يُضاعف).
+//   - عند كل +50 في ATK: أصلح أول فجوة ناقصة (ارفع المهارة اللاحقة) حتى
+//     تستقر، وعند اكتمال كل الفجوات ارفع المهارة الأولى بمقدار +50. هذا
+//     يجعل التوزيع يتناوب أول/ثاني ثم أخيرًا غير القابلة للصد (أول, ثاني,
+//     أول, ثاني, ثم غير القابلة للصد...).
+// تُطبَّق على اللاعب في PvE وPvP معًا (المكافئ في SQL: pvp_scaled_attack_damage).
 // ========================================
 
 // القيمة "الفعلية" لمهارة هجوم لأغراض الفجوة: غير القابلة للصد تُحسب ضعفها
@@ -587,24 +592,9 @@ function atkGapValue(dmg, unblockable){
     return unblockable ? dmg * 2 : dmg;
 }
 
-// يفرض فجوة >= 100 بين كل مهارتي هجوم متتاليتين (يرفع التالية عند الحاجة)
-function enforceAttackGaps(damages, skills){
-    const n = skills.length;
-    if(n < 2) return;
-    let changed = true;
-    while(changed){
-        changed = false;
-        for(let i = 0; i < n - 1; i++){
-            const cur = atkGapValue(damages[i], skills[i].unblockable);
-            const nxt = atkGapValue(damages[i + 1], skills[i + 1].unblockable);
-            if(nxt - cur < 100){
-                const deficit = 100 - (nxt - cur);
-                const step = skills[i + 1].unblockable ? 100 : 50;
-                damages[i + 1] += Math.ceil(deficit / step) * 50;
-                changed = true;
-            }
-        }
-    }
+// هدف الفجوة بين المهارة السابقة وهذه: 150 عادية أو 200 إن كانت غير قابلة للصد
+function atkGapTarget(skill){
+    return skill.unblockable ? 200 : 150;
 }
 
 // يحسب الضرر الفعلي لكل مهارة هجوم للاعب بالنظر إلى ATK الحالي.
@@ -620,14 +610,26 @@ function computeScaledAttackDamages(atk, skills){
     if(atkSkills.length === 0) return result;
 
     const boosts = Math.max(0, Math.floor((atk - BASE_ATK) / 50));
-    const n = atkSkills.length;
     const damages = atkSkills.map(s => Math.max(0, Number(s.damage) || 0));
-    const cycleCount = Math.max(1, n - 1);
-    for(let i = 0; i < boosts; i++){
-        const idx = (i % cycleCount) + 1;
-        damages[idx] += 50;
+
+    for(let b = 0; b < boosts; b++){
+        // أصلح أول فجوة ناقصة بين مهارتي هجوم متتاليتين
+        let fixed = false;
+        for(let i = 1; i < atkSkills.length; i++){
+            const gap = atkGapValue(damages[i], atkSkills[i].unblockable)
+                      - atkGapValue(damages[i - 1], atkSkills[i - 1].unblockable);
+            if(gap < atkGapTarget(atkSkills[i])){
+                damages[i] += 50;
+                fixed = true;
+                break;
+            }
+        }
+        // كل الفجوات سليمة: ارفع المهارة الأولى (فتنمو هي أيضًا)
+        if(!fixed){
+            damages[0] += 50;
+        }
     }
-    enforceAttackGaps(damages, atkSkills);
+
     atkSkills.forEach((s, i) => { result[s.id] = damages[i]; });
     return result;
 }
