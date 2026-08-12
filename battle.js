@@ -614,10 +614,11 @@ function computeScaledAttackDamages(atk, skills){
     const boosts = Math.max(0, Math.floor((atk - BASE_ATK) / 50));
     const totalPoints = boosts * 50;
 
-    // ترتيب المهارات: عادية أولًا (حسب الأساس)، ثم غير القابلة للصد في النهاية
+    // ترتيب المهارات حسب الخانة (slot) — مطابق تمامًا لترتيب السيرفر في
+    // PvP (pvp_scaled_attack_damage) حتى تتطابق النتيجة في PvE وPvP ولوحة
+    // الإدارة لكل الشخصيات (بما فيها القادمة لاحقًا)
     const sorted = [...atkSkills].sort((a, b) =>
-        ((a.unblockable ? 1 : 0) - (b.unblockable ? 1 : 0))
-        || (Number(a.damage || 0) - Number(b.damage || 0))
+        (Number(a.slot) || 0) - (Number(b.slot) || 0)
     );
     const n = sorted.length;
     const f = sorted.map(s => s.unblockable ? 2 : 1);
@@ -630,17 +631,19 @@ function computeScaledAttackDamages(atk, skills){
     }
 
     // حل نظام خطي لإيجاد الزيادة (بالضرر الفعلي) لكل مهارة بحيث:
-    //   f[i] * (base[i] + d[i]) = (base[0] + d[0]) + cum[i]
+    //   f[i] * (base[i] + d[i]) = f[0] * (base[0] + d[0]) + cum[i]
     //   ومجموع الزيادات = totalPoints
-    let coef = 1, cnst = 0;
+    const f0 = f[0];
+    const A = f0 * base[0];
+    let S = 0, T = 0;
     for(let i = 1; i < n; i++){
-        coef += 1 / f[i];
-        cnst += (base[0] + cum[i]) / f[i] - base[i];
+        S += 1 / f[i];
+        T += (A + cum[i]) / f[i] - base[i];
     }
-    let d0 = (totalPoints - cnst) / coef;
+    const d0 = (totalPoints - T) / (1 + f0 * S);
     const d = [d0];
     for(let i = 1; i < n; i++){
-        d[i] = (base[0] + d0 + cum[i]) / f[i] - base[i];
+        d[i] = (A + f0 * d0 + cum[i]) / f[i] - base[i];
     }
 
     // لا يمكن إنقاص الضرر: أي توزيع سالب يُقص ويُعوَّض من المهارة الأولى
