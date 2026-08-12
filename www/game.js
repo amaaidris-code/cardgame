@@ -3226,7 +3226,7 @@ async function openEditCharacterModal(characterId){
 
             ${effectiveField}
 
-            <input type="number" id="skill-cooldown-${s.id}" value="${s.cooldown || 0}" placeholder="التهدئة" style="${s.effect === 'shadow' ? 'display:none;' : ''}">
+            <input type="number" id="skill-cooldown-${s.id}" value="${s.cooldown || 0}" placeholder="التهدئة">
 
             <input type="number" id="skill-poison-turns-${s.id}" value="${(s.params && s.params.poison_turns) || 2}" placeholder="عدد أدوار السُم" style="${s.effect === 'poison' ? '' : 'display:none;'}">
 
@@ -3762,8 +3762,6 @@ function updateNewSkillNumberLabel(){
 
     let input = document.getElementById("new-skill-damage");
 
-    let cooldownInput = document.getElementById("new-skill-cooldown");
-
     let poisonTurnsInput = document.getElementById("new-skill-poison-turns");
 
     let shadowSection = document.getElementById("new-skill-shadow-list-section");
@@ -3775,8 +3773,6 @@ function updateNewSkillNumberLabel(){
     input.placeholder = newSkillNumberFieldLabel(select.value);
 
     input.style.display = isShadow ? "none" : "";
-
-    if(cooldownInput) cooldownInput.style.display = isShadow ? "none" : "";
 
     if(poisonTurnsInput) poisonTurnsInput.style.display = select.value === "poison" ? "" : "none";
 
@@ -3796,8 +3792,6 @@ function updateSkillNumberLabelFor(skillId){
 
     let input = document.getElementById("skill-damage-" + skillId);
 
-    let cooldownInput = document.getElementById("skill-cooldown-" + skillId);
-
     let poisonTurnsInput = document.getElementById("skill-poison-turns-" + skillId);
 
     let shadowSection = document.getElementById("skill-shadow-list-section-" + skillId);
@@ -3809,8 +3803,6 @@ function updateSkillNumberLabelFor(skillId){
     input.placeholder = newSkillNumberFieldLabel(select.value);
 
     input.style.display = isShadow ? "none" : "";
-
-    if(cooldownInput) cooldownInput.style.display = isShadow ? "none" : "";
 
     if(poisonTurnsInput) poisonTurnsInput.style.display = select.value === "poison" ? "" : "none";
 
