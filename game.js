@@ -3970,12 +3970,25 @@ function _initShadowListInModal(){
     if(!currentEditSkills) return;
     currentEditSkills.forEach(s => {
         if(s.effect === "shadow" && s.params && Array.isArray(s.params.shadow_list) && s.params.shadow_list.length > 0){
-            let tagsContainer = document.getElementById("shadow-list-tags-" + s.id);
-            if(!tagsContainer) return;
-            s.params.shadow_list.forEach(charId => {
-                addCharToShadowList(s.id, charId, true);
-            });
+            _renderShadowListTags(s.id, s.params.shadow_list);
+            populateShadowListDropdown(s.id, true);
+            _syncShadowListToParamsField(s.id);
         }
+    });
+}
+
+function _renderShadowListTags(skillId, charIds){
+    let tagsId = "shadow-list-tags-" + skillId;
+    let tagsContainer = document.getElementById(tagsId);
+    if(!tagsContainer) return;
+    tagsContainer.innerHTML = "";
+    charIds.forEach(charId => {
+        let tag = document.createElement("span");
+        tag.className = "admin-shadow-tag";
+        tag.dataset.charId = charId;
+        tag.style.cssText = "display:inline-flex;align-items:center;gap:4px;background:#334155;color:#e2e8f0;padding:3px 8px;border-radius:12px;font-size:13px;";
+        tag.innerHTML = `${escapeHtml(charId)} <button type="button" onclick="removeCharFromShadowList('${skillId}','${charId}',true)" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:14px;line-height:1;">&times;</button>`;
+        tagsContainer.appendChild(tag);
     });
 }
 
@@ -4173,6 +4186,13 @@ async function saveCharacterEdit(characterId){
     }
 
 
+    // حفظ كل المهارات (الألوان، المعاملات، قوائم الظل) قبل حفظ الشخصية
+    _silentlySavingSkills = true;
+    await saveAllSkillEdits(characterId);
+    _silentlySavingSkills = false;
+    GameCache.clear("character_skills_" + characterId);
+    currentEditSkills = await loadCharacterSkillsForAdmin(characterId);
+
     let admin_token = localStorage.getItem("admin_token");
 
     // دالة admin_save_character الآمنة تحدّث الشخصية (بما فيها رابط الصورة identity_image)
@@ -4233,6 +4253,18 @@ async function saveCharacterEdit(characterId){
 }
 
 
+let _silentlySavingSkills = false;
+
+async function saveAllSkillEdits(characterId){
+    if(!currentEditSkills) return;
+    for(let s of currentEditSkills){
+        _silentlySavingSkills = true;
+        await saveSkillEdit(s.id);
+        _silentlySavingSkills = false;
+    }
+}
+
+
 // كمّ النقاط (+50 لكل boost) الممنوح لمهارة هجوم معيّنة (بنفس منطق
 // computeScaledAttackDamages) — يُستخدم لربط الضرر الفعلي بالضرر الأساسي
 function scaledBoostForSkill(skillId){
@@ -4285,6 +4317,11 @@ async function saveSkillEdit(skillId){
     let strokeColorInput = document.getElementById("skill-stroke-color-" + skillId);
 
     let strokeWidthInput = document.getElementById("skill-stroke-width-" + skillId);
+
+    // For shadow skills, sync shadow list tags to params before parsing
+    if(typeSelect && typeSelect.value === "shadow"){
+        _syncShadowListToParamsField(skillId);
+    }
 
     let params = parseSkillParams(document.getElementById("skill-params-" + skillId));
 
@@ -4387,7 +4424,7 @@ async function saveSkillEdit(skillId){
     }
 
 
-    alert("تم حفظ المهارة");
+    if(!_silentlySavingSkills) alert("تم حفظ المهارة");
 
     if(currentEditCharacterId) GameCache.clear("character_skills_" + currentEditCharacterId);
 
