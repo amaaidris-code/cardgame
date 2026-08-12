@@ -612,25 +612,20 @@ function computeScaledAttackDamages(atk, skills){
     const boosts = Math.max(0, Math.floor((atk - BASE_ATK) / 50));
     const damages = atkSkills.map(s => Math.max(0, Number(s.damage) || 0));
 
+    // ترتيب المهارات لضمان الترتيب: عادي ثم غير القابل للصد في النهاية
+    // (حسب منطق الفجوات المطلوب)
+    const sortedSkills = [...atkSkills].sort((a, b) => (a.unblockable ? 1 : 0) - (b.unblockable ? 1 : 0));
+    const sortedDamages = sortedSkills.map(s => Math.max(0, Number(s.damage) || 0));
+
     for(let b = 0; b < boosts; b++){
-        // أصلح أول فجوة ناقصة بين مهارتي هجوم متتاليتين
-        let fixed = false;
-        for(let i = 1; i < atkSkills.length; i++){
-            const gap = atkGapValue(damages[i], atkSkills[i].unblockable)
-                      - atkGapValue(damages[i - 1], atkSkills[i - 1].unblockable);
-            if(gap < atkGapTarget(atkSkills[i])){
-                damages[i] += 50;
-                fixed = true;
-                break;
-            }
-        }
-        // كل الفجوات سليمة: ارفع المهارة الأولى (فتنمو هي أيضًا)
-        if(!fixed){
-            damages[0] += 50;
-        }
+        // الدورة: المهارة 1، 2، ...، N، ثم غير القابل للصد (آخر واحدة)
+        // b % (N) يمر على كل المهارات
+        let targetIndex = b % sortedSkills.length;
+        sortedDamages[targetIndex] += 50;
     }
 
-    atkSkills.forEach((s, i) => { result[s.id] = damages[i]; });
+    // إرجاع الضرر حسب الـ ID الأصلي
+    sortedSkills.forEach((s, i) => { result[s.id] = sortedDamages[i]; });
     return result;
 }
 
@@ -3094,7 +3089,7 @@ function openShadowMenu(shadowSkill){
 
     closeShadowMenu();
 
-    let pool = pveShadowPool();
+    let pool = pveShadowPool().filter(e => String(e.id) !== String(battle.player.characterId));
 
     let listHtml = pool.length > 0
     ? pool
