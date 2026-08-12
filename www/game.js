@@ -313,12 +313,20 @@ function openScreen(screenId){
 
 function applyPageColor(pageIndex){
     const colorInput = document.getElementById("page-color-" + pageIndex);
+    const strokeColorInput = document.getElementById("page-stroke-color-" + pageIndex);
+    const strokeWidthInput = document.getElementById("page-stroke-width-" + pageIndex);
     if(!colorInput) return;
     const color = colorInput.value;
+    const strokeColor = strokeColorInput ? strokeColorInput.value : '#000000';
+    const strokeWidth = strokeWidthInput ? Number(strokeWidthInput.value) || 0 : 0;
     const pageSkills = currentEditSkills.slice(pageIndex * 4, pageIndex * 4 + 4);
     pageSkills.forEach(skill => {
         const skillColorInput = document.getElementById("skill-color-" + skill.id);
         if(skillColorInput) skillColorInput.value = color;
+        const skillStrokeColorInput = document.getElementById("skill-stroke-color-" + skill.id);
+        if(skillStrokeColorInput) skillStrokeColorInput.value = strokeColor;
+        const skillStrokeWidthInput = document.getElementById("skill-stroke-width-" + skill.id);
+        if(skillStrokeWidthInput) skillStrokeWidthInput.value = strokeWidth;
     });
 }
 
@@ -3167,7 +3175,17 @@ async function openEditCharacterModal(characterId){
                 <input type="color" id="page-color-${p}" value="${firstSkillColor}">
             </label>
 
-            <button onclick="applyPageColor(${p})" class="admin-page-color-apply-btn">تطبيق على جميع المهارات</button>
+            <label class="admin-color-row skill-page-color-row">
+                ✏️ لون حد مهارات الصفحة
+                <input type="color" id="page-stroke-color-${p}" value="${(pageSkills.length > 0 && pageSkills[0].stroke_color && /^#[0-9A-Fa-f]{6}$/.test(pageSkills[0].stroke_color)) ? pageSkills[0].stroke_color : '#000000'}">
+            </label>
+
+            <label class="admin-color-row skill-page-color-row">
+                📏 سماكة حد مهارات الصفحة
+                <input type="number" id="page-stroke-width-${p}" value="${(pageSkills.length > 0) ? (pageSkills[0].stroke_width || 0) : 0}" min="0" max="10" step="1" style="width:60px;">
+            </label>
+
+            <button onclick="applyPageColor(${p})" class="admin-page-color-apply-btn">تطبيق اللون والحد على جميع المهارات</button>
 
             <label class="admin-page-bg-upload">
                 📷 صورة من جهازي
@@ -3217,6 +3235,16 @@ async function openEditCharacterModal(characterId){
             <label class="admin-color-row skill-color-row">
                 🎨 لون اسم المهارة
                 <input type="color" id="skill-color-${s.id}" value="${(s.color && /^#[0-9A-Fa-f]{6}$/.test(s.color)) ? s.color : '#ffffff'}">
+            </label>
+
+            <label class="admin-color-row skill-color-row">
+                ✏️ لون الحد للمهارة
+                <input type="color" id="skill-stroke-color-${s.id}" value="${(s.stroke_color && /^#[0-9A-Fa-f]{6}$/.test(s.stroke_color)) ? s.stroke_color : '#000000'}">
+            </label>
+
+            <label class="admin-color-row skill-color-row">
+                📏 سماكة الحد
+                <input type="number" id="skill-stroke-width-${s.id}" value="${s.stroke_width || 0}" min="0" max="10" step="1" style="width:60px;">
             </label>
 
             <button onclick="saveSkillEdit('${s.id}')">حفظ</button>
@@ -3329,6 +3357,16 @@ async function openEditCharacterModal(characterId){
                 <label class="admin-color-row skill-color-row">
                     🎨 لون اسم المهارة
                     <input id="new-skill-color" type="color" value="#ffffff">
+                </label>
+
+                <label class="admin-color-row skill-color-row">
+                    ✏️ لون الحد
+                    <input id="new-skill-stroke-color" type="color" value="#000000">
+                </label>
+
+                <label class="admin-color-row skill-color-row">
+                    📏 سماكة الحد
+                    <input id="new-skill-stroke-width" type="number" value="0" min="0" max="10" step="1" style="width:60px;">
                 </label>
 
                 <button onclick="addSkillToCharacter('${characterId}')">إضافة المهارة</button>
@@ -3744,6 +3782,14 @@ async function addSkillToCharacter(characterId){
 
     let color = colorInput && colorInput.value ? colorInput.value : null;
 
+    let strokeColorInput = document.getElementById("new-skill-stroke-color");
+
+    let strokeColor = strokeColorInput && strokeColorInput.value ? strokeColorInput.value : null;
+
+    let strokeWidthInput = document.getElementById("new-skill-stroke-width");
+
+    let strokeWidth = strokeWidthInput ? Number(strokeWidthInput.value) || 0 : 0;
+
     let params = parseSkillParams(document.getElementById("new-skill-params"));
 
     if(name === ""){
@@ -3785,7 +3831,11 @@ async function addSkillToCharacter(characterId){
 
         p_color: color,
 
-        p_params: params
+        p_params: params,
+
+        p_stroke_color: strokeColor,
+
+        p_stroke_width: strokeWidth
 
     });
 
@@ -3992,6 +4042,10 @@ async function saveSkillEdit(skillId){
 
     let colorInput = document.getElementById("skill-color-" + skillId);
 
+    let strokeColorInput = document.getElementById("skill-stroke-color-" + skillId);
+
+    let strokeWidthInput = document.getElementById("skill-stroke-width-" + skillId);
+
     let params = parseSkillParams(document.getElementById("skill-params-" + skillId));
 
     let name = nameInput ? nameInput.value.trim() : "";
@@ -4013,6 +4067,10 @@ async function saveSkillEdit(skillId){
     let description = descInput ? descInput.value.trim() : "";
 
     let color = colorInput && colorInput.value ? colorInput.value : null;
+
+    let strokeColor = strokeColorInput && strokeColorInput.value ? strokeColorInput.value : null;
+
+    let strokeWidth = strokeWidthInput ? Number(strokeWidthInput.value) || 0 : 0;
 
     if(name === ""){
 
@@ -4051,7 +4109,11 @@ async function saveSkillEdit(skillId){
 
         p_color: color,
 
-        p_params: params
+        p_params: params,
+
+        p_stroke_color: strokeColor,
+
+        p_stroke_width: strokeWidth
 
     });
 

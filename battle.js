@@ -1664,6 +1664,19 @@ function buildSkillButton(skill){
 
     }
 
+    // الحد (stroke) المخصص لاسم المهارة من لوحة الإدارة
+    let strokeColor = skill && skill.stroke_color;
+    let strokeWidth = skill && skill.stroke_width;
+
+    if(strokeWidth && strokeWidth > 0){
+
+        let strokePx = Number(strokeWidth) || 0;
+        let sColor = (strokeColor && /^#[0-9A-Fa-f]{6}$/.test(strokeColor)) ? strokeColor : '#000000';
+        btn.querySelector(".skill-name").style.webkitTextStroke = strokePx + "px " + sColor;
+        btn.querySelector(".skill-name").style.paintOrder = "stroke fill";
+
+    }
+
     let ready = isSkillReady(battle.player, skill);
 
     let remaining = cooldownTurnsRemaining(battle.player, skill);
