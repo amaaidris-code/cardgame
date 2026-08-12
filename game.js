@@ -3099,6 +3099,11 @@ async function clearSkillPageBackground(characterId, pageIndex){
 // بعد أي تعديل حتى تظهر التغييرات فورًا في ساحة المعركة
 let currentEditCharacterId = null;
 
+// مهارات وATK الشخصية المفتوحة حاليًا — تُستخدم لربط الضرر "الفعلي" القابل
+// للتعديل بالضرر الأساسي (القاعدة) عند حفظ مهارات الهجوم
+let currentEditSkills = [];
+let currentEditAtk = 100;
+
 async function openEditCharacterModal(characterId){
 
     let character = adminCharactersCache.find(c => c.id === characterId);
@@ -3110,6 +3115,9 @@ async function openEditCharacterModal(characterId){
     closeEditCharacterModal();
 
     let skills = await loadCharacterSkillsForAdmin(characterId);
+
+    currentEditSkills = skills || [];
+    currentEditAtk = Number(character.atk) || 100;
 
     // خلفيات صفحات المهارات الحالية (كل 4 مهارات = صفحة) ليُعرض كل رابط
     // في صندوقه، ويُحدَّث فورًا عند تغييره (بدون انتظار كاش المعارك)
@@ -3152,8 +3160,8 @@ async function openEditCharacterModal(characterId){
     let skillsHtml = skills.length > 0
     ? skills.map(s => {
         let scaledDmg = (scaledDamageMap[s.id] !== undefined) ? scaledDamageMap[s.id] : null;
-        let scaledNote = (scaledDmg !== null && Number(scaledDmg) !== Number(s.damage))
-            ? ` <span class="admin-skill-scaled-label">⚔️ الفعلي ${scaledDmg}</span>`
+        let effectiveField = (scaledDmg !== null)
+            ? ` <input type="number" id="skill-effective-${s.id}" class="admin-skill-effective-input" value="${scaledDmg}" placeholder="الفعلي" onchange="syncEffectiveToBase('${s.id}')" title="الضرر الفعلي بعد التطوير (قابل للتعديل)">`
             : "";
         return `
 
@@ -3165,9 +3173,9 @@ async function openEditCharacterModal(characterId){
                 ${skillTypeOptionsHtml(skillFieldsToTypeChoice(s))}
             </select>
 
-            <input type="number" id="skill-damage-${s.id}" value="${s.damage || 0}" placeholder="${skillNumberFieldLabel(s)}">
+            <input type="number" id="skill-damage-${s.id}" value="${s.damage || 0}" placeholder="${skillNumberFieldLabel(s)}" onchange="syncBaseToEffective('${s.id}')">
 
-            ${scaledNote}
+            ${effectiveField}
 
             <input type="number" id="skill-cooldown-${s.id}" value="${s.cooldown || 0}" placeholder="التهدئة">
 
@@ -3901,6 +3909,45 @@ async function saveCharacterEdit(characterId){
 
     loadAdminPanel();
 
+}
+
+
+// كمّ +50 الذي تمنحه نقاط التطوير لمهارة هجوم معيّنة (بنفس منطق الدورة في
+// computeScaledAttackDamages) — يُستخدم لربط الضرر الفعلي بالضرر الأساسي
+function scaledBoostForSkill(skillId){
+    const BASE_ATK = 100;
+    const atk = Number(currentEditAtk) || 100;
+    const boosts = Math.max(0, Math.floor((atk - BASE_ATK) / 50));
+    const atkSkills = (currentEditSkills || []).filter(s =>
+        (s.type === "attack" || s.type === "special")
+        && (s.effect === null || s.effect === undefined || s.effect === "")
+    );
+    if(!boosts || atkSkills.length === 0) return 0;
+    const sorted = [...atkSkills].sort((a, b) => (a.unblockable ? 1 : 0) - (b.unblockable ? 1 : 0));
+    const idx = sorted.findIndex(s => s.id === skillId);
+    if(idx < 0) return 0;
+    let count = 0;
+    for(let b = 0; b < boosts; b++){ if(b % sorted.length === idx) count++; }
+    return count * 50;
+}
+
+// عند تعديل الضرر الأساسي: يُحدَّث الضرر الفعلي تلقائيًا
+function syncBaseToEffective(skillId){
+    const baseInp = document.getElementById("skill-damage-" + skillId);
+    const effInp = document.getElementById("skill-effective-" + skillId);
+    if(!baseInp || !effInp) return;
+    const base = Number(baseInp.value) || 0;
+    effInp.value = base + scaledBoostForSkill(skillId);
+}
+
+// عند تعديل الضرر الفعلي: يُحسب الضرر الأساسي اللازم ليُلحق ذلك القدر الفعلي
+function syncEffectiveToBase(skillId){
+    const baseInp = document.getElementById("skill-damage-" + skillId);
+    const effInp = document.getElementById("skill-effective-" + skillId);
+    if(!baseInp || !effInp) return;
+    const eff = Number(effInp.value) || 0;
+    const boost = scaledBoostForSkill(skillId);
+    baseInp.value = Math.max(0, eff - boost);
 }
 
 

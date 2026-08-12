@@ -2687,15 +2687,21 @@ color:#fff;
 }
 
 
-.admin-skill-scaled-label{
+.admin-skill-effective-input{
 
 flex-shrink:0;
 
+width:70px;
+
+padding:8px;
+
+border-radius:6px;
+
+border:1px solid #f5a623;
+
+background:#1a1206;
+
 color:#f5a623;
-
-font-size:12px;
-
-white-space:nowrap;
 
 }
 
