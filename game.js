@@ -3912,23 +3912,19 @@ async function saveCharacterEdit(characterId){
 }
 
 
-// كمّ +50 الذي تمنحه نقاط التطوير لمهارة هجوم معيّنة (بنفس منطق الدورة في
+// كمّ النقاط (+50 لكل boost) الممنوح لمهارة هجوم معيّنة (بنفس منطق
 // computeScaledAttackDamages) — يُستخدم لربط الضرر الفعلي بالضرر الأساسي
 function scaledBoostForSkill(skillId){
-    const BASE_ATK = 100;
-    const atk = Number(currentEditAtk) || 100;
-    const boosts = Math.max(0, Math.floor((atk - BASE_ATK) / 50));
-    const atkSkills = (currentEditSkills || []).filter(s =>
-        (s.type === "attack" || s.type === "special")
-        && (s.effect === null || s.effect === undefined || s.effect === "")
-    );
-    if(!boosts || atkSkills.length === 0) return 0;
-    const sorted = [...atkSkills].sort((a, b) => (a.unblockable ? 1 : 0) - (b.unblockable ? 1 : 0));
-    const idx = sorted.findIndex(s => s.id === skillId);
-    if(idx < 0) return 0;
-    let count = 0;
-    for(let b = 0; b < boosts; b++){ if(b % sorted.length === idx) count++; }
-    return count * 50;
+    try{
+        if(typeof computeScaledAttackDamages !== "function") return 0;
+        const map = computeScaledAttackDamages(currentEditAtk, currentEditSkills);
+        const s = (currentEditSkills || []).find(x => x.id === skillId);
+        const base = s ? (Number(s.damage) || 0) : 0;
+        if(map[skillId] === undefined) return 0;
+        return Math.max(0, map[skillId] - base);
+    }catch(e){
+        return 0;
+    }
 }
 
 // عند تعديل الضرر الأساسي: يُحدَّث الضرر الفعلي تلقائيًا

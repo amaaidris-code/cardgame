@@ -598,8 +598,10 @@ function atkGapTarget(skill){
 }
 
 // يحسب الضرر الفعلي لكل مهارة هجوم للاعب بالنظر إلى ATK الحالي.
-// يعيد كائن skill_id -> الضرر (مع احتفاظ غير القابلة للصد بقيمتها الأصلية،
-// إذ لا نضاعف الضرر الفعلي هنا — المضاعفة فقط لحساب الفجوة)
+// القاعدة: غير القابلة للصد تُحسب ضعفها فقط لأغراض الفجوة (الضرر الفعلي لا
+// يُضاعف). تُوزَّع النقاط (+50 لكل boost من ATK) بحيث تبقى الفجوة بين المهارة
+// السابقة والمهارة التالية بمكافئها العادي: 150 بين مهارتين عاديتين، و200 بين
+// عادية وغير قابلة للصد (2 × الضرر − السابقة = 200). يعيد كائن skill_id -> الضرر.
 function computeScaledAttackDamages(atk, skills){
     const BASE_ATK = 100;
     const result = {};
@@ -610,22 +612,53 @@ function computeScaledAttackDamages(atk, skills){
     if(atkSkills.length === 0) return result;
 
     const boosts = Math.max(0, Math.floor((atk - BASE_ATK) / 50));
-    const damages = atkSkills.map(s => Math.max(0, Number(s.damage) || 0));
+    const totalPoints = boosts * 50;
 
-    // ترتيب المهارات لضمان الترتيب: عادي ثم غير القابل للصد في النهاية
-    // (حسب منطق الفجوات المطلوب)
-    const sortedSkills = [...atkSkills].sort((a, b) => (a.unblockable ? 1 : 0) - (b.unblockable ? 1 : 0));
-    const sortedDamages = sortedSkills.map(s => Math.max(0, Number(s.damage) || 0));
+    // ترتيب المهارات: عادية أولًا (حسب الأساس)، ثم غير القابلة للصد في النهاية
+    const sorted = [...atkSkills].sort((a, b) =>
+        ((a.unblockable ? 1 : 0) - (b.unblockable ? 1 : 0))
+        || (Number(a.damage || 0) - Number(b.damage || 0))
+    );
+    const n = sorted.length;
+    const f = sorted.map(s => s.unblockable ? 2 : 1);
+    const base = sorted.map(s => Math.max(0, Number(s.damage) || 0));
 
-    for(let b = 0; b < boosts; b++){
-        // الدورة: المهارة 1، 2، ...، N، ثم غير القابل للصد (آخر واحدة)
-        // b % (N) يمر على كل المهارات
-        let targetIndex = b % sortedSkills.length;
-        sortedDamages[targetIndex] += 50;
+    // هدف الفجوة التراكمية لكل مهارة (بالمكافئ العادي)
+    const cum = [0];
+    for(let i = 1; i < n; i++){
+        cum[i] = cum[i - 1] + (sorted[i].unblockable ? 200 : 150);
     }
 
-    // إرجاع الضرر حسب الـ ID الأصلي
-    sortedSkills.forEach((s, i) => { result[s.id] = sortedDamages[i]; });
+    // حل نظام خطي لإيجاد الزيادة (بالضرر الفعلي) لكل مهارة بحيث:
+    //   f[i] * (base[i] + d[i]) = (base[0] + d[0]) + cum[i]
+    //   ومجموع الزيادات = totalPoints
+    let coef = 1, cnst = 0;
+    for(let i = 1; i < n; i++){
+        coef += 1 / f[i];
+        cnst += (base[0] + cum[i]) / f[i] - base[i];
+    }
+    let d0 = (totalPoints - cnst) / coef;
+    const d = [d0];
+    for(let i = 1; i < n; i++){
+        d[i] = (base[0] + d0 + cum[i]) / f[i] - base[i];
+    }
+
+    // لا يمكن إنقاص الضرر: أي توزيع سالب يُقص ويُعوَّض من المهارة الأولى
+    for(let i = 0; i < n; i++){
+        if(d[i] < 0){ const sh = -d[i]; d[i] = 0; d[0] -= sh; }
+    }
+    if(d[0] < 0){ const need = -d[0]; d[0] = 0; d[n - 1] += need; }
+
+    // التقريب إلى مضاعفات 50 مع الحفاظ على المجموع الكلي
+    const r = d.map(x => Math.round(x / 50) * 50);
+    let diff = totalPoints - r.reduce((a, b) => a + b, 0), idx = 0;
+    while(diff !== 0 && idx < n * 1000){
+        if(diff > 0){ r[idx % n] += 50; diff -= 50; }
+        else if(r[idx % n] >= 50){ r[idx % n] -= 50; diff += 50; }
+        idx++;
+    }
+
+    sorted.forEach((s, i) => { result[s.id] = base[i] + r[i]; });
     return result;
 }
 
