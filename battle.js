@@ -2134,10 +2134,20 @@ function showSkillDetails(skill){
 
     modal.className = "steal-modal";
 
-    let dmgLine =
-    (skill.damage && Number(skill.damage) > 0)
-    ? `<p class="skill-detail-line"><strong>الضرر:</strong> ${skill.damage}</p>`
-    : "";
+    let rawDmg = (skill.damage && Number(skill.damage) > 0) ? skill.damage : null;
+
+    let scaledDmg =
+    (battle.player
+     && battle.player.scaledAttackDamages
+     && battle.player.scaledAttackDamages[skill.id] !== undefined)
+    ? battle.player.scaledAttackDamages[skill.id]
+    : null;
+
+    let dmgLine = (scaledDmg !== null)
+    ? `<p class="skill-detail-line"><strong>الضرر:</strong> ${scaledDmg}${(rawDmg !== null && Number(rawDmg) !== Number(scaledDmg)) ? ` <span class="skill-detail-scaled-note">(الأساسي ${rawDmg})</span>` : ""}</p>`
+    : (rawDmg !== null
+        ? `<p class="skill-detail-line"><strong>الضرر:</strong> ${rawDmg}</p>`
+        : "");
 
     let cdLine =
     `<p class="skill-detail-line"><strong>التهدئة:</strong> ${

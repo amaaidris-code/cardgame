@@ -1852,6 +1852,17 @@ color:#fff;
 }
 
 
+.skill-detail-scaled-note{
+
+color:#f5a623;
+
+font-size:12px;
+
+font-weight:normal;
+
+}
+
+
 #skill-details-close-btn{
 
 background:linear-gradient(160deg,#333,#1a1a1a);
@@ -2672,6 +2683,19 @@ border:1px solid #444;
 background:#121212;
 
 color:#fff;
+
+}
+
+
+.admin-skill-scaled-label{
+
+flex-shrink:0;
+
+color:#f5a623;
+
+font-size:12px;
+
+white-space:nowrap;
 
 }
 

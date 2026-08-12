@@ -3140,8 +3140,22 @@ async function openEditCharacterModal(characterId){
 
     `).join("");
 
+    // الضرر الفعلي (بعد تطبيق نظام التوسّع مع ATK الحالي) لكل مهارة هجوم،
+    // ليظهر في لوحة الإدارة نفس الضرر الذي سيُلحق في المعارك فعلًا
+    let scaledDamageMap = {};
+    try{
+        if(typeof computeScaledAttackDamages === "function" && character.atk){
+            scaledDamageMap = computeScaledAttackDamages(character.atk, skills) || {};
+        }
+    }catch(e){}
+
     let skillsHtml = skills.length > 0
-    ? skills.map(s => `
+    ? skills.map(s => {
+        let scaledDmg = (scaledDamageMap[s.id] !== undefined) ? scaledDamageMap[s.id] : null;
+        let scaledNote = (scaledDmg !== null && Number(scaledDmg) !== Number(s.damage))
+            ? ` <span class="admin-skill-scaled-label">⚔️ الفعلي ${scaledDmg}</span>`
+            : "";
+        return `
 
         <div class="admin-skill-edit-row">
 
@@ -3152,6 +3166,8 @@ async function openEditCharacterModal(characterId){
             </select>
 
             <input type="number" id="skill-damage-${s.id}" value="${s.damage || 0}" placeholder="${skillNumberFieldLabel(s)}">
+
+            ${scaledNote}
 
             <input type="number" id="skill-cooldown-${s.id}" value="${s.cooldown || 0}" placeholder="التهدئة">
 
@@ -3170,7 +3186,8 @@ async function openEditCharacterModal(characterId){
 
         </div>
 
-    `).join("")
+        `;
+    }).join("")
     : "<p>لا توجد مهارات مرتبطة بهذه الشخصية</p>";
 
 
