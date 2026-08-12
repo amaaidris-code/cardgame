@@ -3672,6 +3672,14 @@ async function addSkillToCharacter(characterId){
 
     let damage = Number(document.getElementById("new-skill-damage").value) || 0;
 
+    if((typeChoice === "attack" || typeChoice === "unblockable") && damage % 50 !== 0){
+
+        alert("ضرر مهارات الهجوم يجب أن يكون مضاعفًا للعدد 50 (مثل: 100, 150, 200...)");
+
+        return;
+
+    }
+
     let cooldown = Number(document.getElementById("new-skill-cooldown").value) || 0;
 
     let description = document.getElementById("new-skill-description").value.trim();
@@ -3900,6 +3908,14 @@ async function saveSkillEdit(skillId){
     let typeChoice = typeSelect ? typeSelect.value : "attack";
 
     let damage = Number(damageInput.value) || 0;
+
+    if((typeChoice === "attack" || typeChoice === "unblockable") && damage % 50 !== 0){
+
+        alert("ضرر مهارات الهجوم يجب أن يكون مضاعفًا للعدد 50 (مثل: 100, 150, 200...)");
+
+        return;
+
+    }
 
     let cooldown = Number(cooldownInput.value) || 0;
 
