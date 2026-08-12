@@ -3228,9 +3228,23 @@ async function openEditCharacterModal(characterId){
 
             <input type="number" id="skill-cooldown-${s.id}" value="${s.cooldown || 0}" placeholder="التهدئة">
 
+            <input type="number" id="skill-poison-turns-${s.id}" value="${(s.params && s.params.poison_turns) || 2}" placeholder="عدد أدوار السُم" style="${s.effect === 'poison' ? '' : 'display:none;'}">
+
             <textarea id="skill-desc-${s.id}" class="admin-skill-desc-input" placeholder="وصف المهارة (يظهر عند الضغط المطوّل)">${escapeHtml(s.description || '')}</textarea>
 
             <input type="text" id="skill-params-${s.id}" class="admin-skill-params-input" value="${escapeHtml(JSON.stringify(s.params || {}))}" placeholder="معاملات JSON — مثل {&quot;amount&quot;:50}">
+
+            <div id="skill-shadow-list-section-${s.id}" style="display:${s.effect === 'shadow' ? 'block' : 'none'};">
+                <label style="font-weight:bold; margin-top:8px; display:block;">🌑 قائمة شخصيات الظل</label>
+                <p class="admin-hint">شخصيات تظهر في قائمة الاستدعاء (تُدمج مع المهزومة)</p>
+                <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
+                    <select id="shadow-list-dropdown-${s.id}" style="flex:1;">
+                        <option value="">— اختر شخصية —</option>
+                    </select>
+                    <button type="button" onclick="addCharToShadowList('${s.id}', null, true)">إضافة</button>
+                </div>
+                <div id="shadow-list-tags-${s.id}" style="display:flex; flex-wrap:wrap; gap:4px;"></div>
+            </div>
 
             <label class="admin-color-row skill-color-row">
                 🎨 لون اسم المهارة
@@ -3350,9 +3364,23 @@ async function openEditCharacterModal(characterId){
 
                 <input id="new-skill-cooldown" type="number" placeholder="التهدئة (بالأدوار)" value="0">
 
+                <input id="new-skill-poison-turns" type="number" placeholder="عدد أدوار السُم" value="2" style="display:none;">
+
                 <textarea id="new-skill-description" placeholder="وصف المهارة (يظهر للاعب عند الضغط المطوّل على الزر)"></textarea>
 
                 <input id="new-skill-params" type="text" placeholder="معاملات إضافية بصيغة JSON — مثل {&quot;amount&quot;:50} (اختياري)">
+
+                <div id="new-skill-shadow-list-section" style="display:none;">
+                    <label style="font-weight:bold; margin-top:8px; display:block;">🌑 قائمة شخصيات الظل</label>
+                    <p class="admin-hint">اختر شخصياتًا تظهر في قائمة استدعاء الظل لهذه المهارة (تُدمج مع الشخصيات المهزومة)</p>
+                    <div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">
+                        <select id="new-skill-shadow-list-dropdown" style="flex:1;">
+                            <option value="">— اختر شخصية —</option>
+                        </select>
+                        <button type="button" onclick="addCharToShadowList('new', null, false)">إضافة</button>
+                    </div>
+                    <div id="new-skill-shadow-list-tags" style="display:flex; flex-wrap:wrap; gap:4px;"></div>
+                </div>
 
                 <label class="admin-color-row skill-color-row">
                     🎨 لون اسم المهارة
@@ -3388,6 +3416,8 @@ async function openEditCharacterModal(characterId){
     document.body.appendChild(modal);
 
     updateNewSkillNumberLabel();
+
+    _initShadowListInModal();
 
     document.getElementById("cancel-character-edit-btn").onclick = closeEditCharacterModal;
 
@@ -3488,6 +3518,12 @@ function skillTypeChoiceToFields(typeChoice){
 
         effect = "atk_boost";
 
+    } else if(typeChoice === "poison"){
+
+        type = "special";
+
+        effect = "poison";
+
     } else if(typeChoice === "delay_cooldown"){
 
         type = "special";
@@ -3539,6 +3575,8 @@ function skillFieldsToTypeChoice(skill){
 
     if(skill.effect === "atk_boost") return "atk_boost";
 
+    if(skill.effect === "poison") return "poison";
+
     if(skill.effect === "delay_cooldown") return "delay_cooldown";
 
     if(skill.effect === "shadow") return "shadow";
@@ -3570,6 +3608,7 @@ function skillTypeOptionsHtml(selected){
         ["absorb_hp", "🩵 امتصاص → شفاء (تحويل الضربات القادمة إلى صحة مسترجعة)"],
         ["hp_boost", "❤️ استرجاع الصحة (شفاء فوري دون تغيير الحد الأقصى)"],
         ["atk_boost", "⚔️ رفع القوة (قوة هجوم مؤقتة تُضاف لضرر كل ضربة)"],
+        ["poison", "☠️ سُم (ضرر فوري + ضرر مستمر للأدوار التالية)"],
         ["delay_cooldown", "⏳ تأجيل التهدئة (تأخير تهدئة مهارة يملكها الخصم)"],
         ["shadow", "🌑 الظل (استدعاء مهارة شخصية من قائمة الظل المؤهلة)"]
     ];
@@ -3610,6 +3649,8 @@ function skillTypeLabel(skill){
     if(skill.effect === "hp_boost") return "استرجاع الصحة";
 
     if(skill.effect === "atk_boost") return "رفع القوة";
+
+    if(skill.effect === "poison") return "سُم";
 
     if(skill.effect === "delay_cooldown") return "تأجيل التهدئة";
 
@@ -3654,6 +3695,8 @@ function skillNumberFieldLabel(skill){
 
     if(skill.effect === "atk_boost") return "قيمة رفع القوة (أو عيّن amount في المعاملات)";
 
+    if(skill.effect === "poison") return "الضرر (ضرر السُم لكل دور)";
+
     if(skill.effect === "delay_cooldown") return "عدد أدوار التأجيل (أو عيّن delay في المعاملات)";
 
     if(skill.effect === "shadow") return "لا يُستخدم (تُدار عبر قائمة الظل)";
@@ -3693,6 +3736,8 @@ function newSkillNumberFieldLabel(typeChoice){
 
     if(typeChoice === "atk_boost") return "قيمة رفع القوة (أو عيّن amount في المعاملات)";
 
+    if(typeChoice === "poison") return "الضرر (ضرر السُم لكل دور)";
+
     if(typeChoice === "delay_cooldown") return "عدد أدوار التأجيل (أو عيّن delay في المعاملات)";
 
     if(typeChoice === "shadow") return "لا يُستخدم (تُدار عبر قائمة الظل)";
@@ -3708,9 +3753,21 @@ function updateNewSkillNumberLabel(){
 
     let input = document.getElementById("new-skill-damage");
 
+    let poisonTurnsInput = document.getElementById("new-skill-poison-turns");
+
+    let shadowSection = document.getElementById("new-skill-shadow-list-section");
+
     if(!select || !input) return;
 
     input.placeholder = newSkillNumberFieldLabel(select.value);
+
+    if(poisonTurnsInput) poisonTurnsInput.style.display = select.value === "poison" ? "" : "none";
+
+    if(shadowSection) shadowSection.style.display = select.value === "shadow" ? "" : "none";
+
+    if(select.value === "shadow" && shadowSection){
+        populateShadowListDropdown("new", false);
+    }
 
 }
 
@@ -3722,9 +3779,21 @@ function updateSkillNumberLabelFor(skillId){
 
     let input = document.getElementById("skill-damage-" + skillId);
 
+    let poisonTurnsInput = document.getElementById("skill-poison-turns-" + skillId);
+
+    let shadowSection = document.getElementById("skill-shadow-list-section-" + skillId);
+
     if(!select || !input) return;
 
     input.placeholder = newSkillNumberFieldLabel(select.value);
+
+    if(poisonTurnsInput) poisonTurnsInput.style.display = select.value === "poison" ? "" : "none";
+
+    if(shadowSection) shadowSection.style.display = select.value === "shadow" ? "block" : "none";
+
+    if(select.value === "shadow" && shadowSection){
+        populateShadowListDropdown(skillId, true);
+    }
 
 }
 
@@ -3755,6 +3824,134 @@ function parseSkillParams(input){
 
     }
 
+}
+
+
+// ── Shadow list helpers ──
+let _shadowCharsCache = null;
+
+async function loadAllCharactersForShadow(){
+    if(_shadowCharsCache) return _shadowCharsCache;
+    let {data, error} = await supabaseClient
+        .from("characters")
+        .select("id, name, identity_image")
+        .order("name");
+    if(error || !data) return [];
+    _shadowCharsCache = data;
+    return data;
+}
+
+function _getShadowList(skillId, isEdit){
+    if(isEdit){
+        let skill = (currentEditSkills || []).find(s => String(s.id) === String(skillId));
+        return (skill && skill.params && Array.isArray(skill.params.shadow_list)) ? skill.params.shadow_list : [];
+    }
+    let tagsContainer = document.getElementById("new-skill-shadow-list-tags");
+    if(!tagsContainer) return [];
+    return Array.from(tagsContainer.querySelectorAll("[data-char-id]")).map(el => el.dataset.charId);
+}
+
+function _saveShadowListToParams(skillId, charIds, isEdit){
+    if(isEdit){
+        let skill = (currentEditSkills || []).find(s => String(s.id) === String(skillId));
+        if(skill){
+            if(!skill.params) skill.params = {};
+            skill.params.shadow_list = charIds;
+        }
+    }
+}
+
+async function populateShadowListDropdown(skillId, isEdit){
+    let dropdownId = isEdit ? ("shadow-list-dropdown-" + skillId) : "new-skill-shadow-list-dropdown";
+    let dropdown = document.getElementById(dropdownId);
+    if(!dropdown) return;
+
+    let chars = await loadAllCharactersForShadow();
+    let currentList = _getShadowList(skillId, isEdit);
+    let selfId = null;
+    try { selfId = window.adminCharactersCache && currentEditCharacterId ? currentEditCharacterId : null; } catch(e){}
+
+    dropdown.innerHTML = '<option value="">— اختر شخصية —</option>';
+    chars.forEach(c => {
+        if(selfId && String(c.id) === String(selfId)) return;
+        if(currentList.includes(String(c.id))) return;
+        let opt = document.createElement("option");
+        opt.value = c.id;
+        opt.textContent = (c.identity_image ? "🖼️ " : "") + (c.name || c.id);
+        dropdown.appendChild(opt);
+    });
+}
+
+async function addCharToShadowList(skillId, charId, isEdit){
+    let dropdownId = isEdit ? ("shadow-list-dropdown-" + skillId) : "new-skill-shadow-list-dropdown";
+    let dropdown = document.getElementById(dropdownId);
+    let selectedId = charId || (dropdown ? dropdown.value : "");
+    if(!selectedId) return;
+
+    let chars = await loadAllCharactersForShadow();
+    let char = chars.find(c => String(c.id) === String(selectedId));
+    let charName = char ? char.name : selectedId;
+
+    let tagsId = isEdit ? ("shadow-list-tags-" + skillId) : "new-skill-shadow-list-tags";
+    let tagsContainer = document.getElementById(tagsId);
+    if(!tagsContainer) return;
+
+    // Prevent duplicates
+    if(tagsContainer.querySelector(`[data-char-id="${selectedId}"]`)) return;
+
+    let tag = document.createElement("span");
+    tag.className = "admin-shadow-tag";
+    tag.dataset.charId = selectedId;
+    tag.style.cssText = "display:inline-flex;align-items:center;gap:4px;background:#334155;color:#e2e8f0;padding:3px 8px;border-radius:12px;font-size:13px;";
+    tag.innerHTML = `${escapeHtml(charName)} <button type="button" onclick="removeCharFromShadowList('${skillId}','${selectedId}',${isEdit})" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:14px;line-height:1;">&times;</button>`;
+    tagsContainer.appendChild(tag);
+
+    if(dropdown) dropdown.value = "";
+    await populateShadowListDropdown(skillId, isEdit);
+
+    // Update hidden params field if edit mode
+    if(isEdit) _syncShadowListToParamsField(skillId);
+}
+
+function removeCharFromShadowList(skillId, charId, isEdit){
+    let tagsId = isEdit ? ("shadow-list-tags-" + skillId) : "new-skill-shadow-list-tags";
+    let tagsContainer = document.getElementById(tagsId);
+    if(!tagsContainer) return;
+    let tag = tagsContainer.querySelector(`[data-char-id="${charId}"]`);
+    if(tag) tag.remove();
+
+    populateShadowListDropdown(skillId, isEdit);
+    if(isEdit) _syncShadowListToParamsField(skillId);
+}
+
+function _syncShadowListToParamsField(skillId){
+    let tagsId = "shadow-list-tags-" + skillId;
+    let tagsContainer = document.getElementById(tagsId);
+    if(!tagsContainer) return;
+    let ids = Array.from(tagsContainer.querySelectorAll("[data-char-id]")).map(el => el.dataset.charId);
+    let paramsInput = document.getElementById("skill-params-" + skillId);
+    if(!paramsInput) return;
+    let params = {};
+    try { params = JSON.parse(paramsInput.value || "{}"); } catch(e){ params = {}; }
+    if(ids.length > 0){
+        params.shadow_list = ids;
+    } else {
+        delete params.shadow_list;
+    }
+    paramsInput.value = JSON.stringify(params);
+}
+
+function _initShadowListInModal(){
+    if(!currentEditSkills) return;
+    currentEditSkills.forEach(s => {
+        if(s.effect === "shadow" && s.params && Array.isArray(s.params.shadow_list) && s.params.shadow_list.length > 0){
+            let tagsContainer = document.getElementById("shadow-list-tags-" + s.id);
+            if(!tagsContainer) return;
+            s.params.shadow_list.forEach(charId => {
+                addCharToShadowList(s.id, charId, true);
+            });
+        }
+    });
 }
 
 
@@ -3791,6 +3988,24 @@ async function addSkillToCharacter(characterId){
     let strokeWidth = strokeWidthInput ? Number(strokeWidthInput.value) || 0 : 0;
 
     let params = parseSkillParams(document.getElementById("new-skill-params"));
+
+    if(typeChoice === "poison"){
+
+        let poisonTurnsInput = document.getElementById("new-skill-poison-turns");
+
+        let poisonTurns = Number(poisonTurnsInput ? poisonTurnsInput.value : 2) || 2;
+
+        params = Object.assign({}, params, {poison_turns: poisonTurns});
+
+    }
+
+    if(typeChoice === "shadow"){
+        let shadowTags = document.querySelectorAll("#new-skill-shadow-list-tags [data-char-id]");
+        let shadowIds = Array.from(shadowTags).map(el => el.dataset.charId);
+        if(shadowIds.length > 0){
+            params = Object.assign({}, params, {shadow_list: shadowIds});
+        }
+    }
 
     if(name === ""){
 
@@ -4051,6 +4266,26 @@ async function saveSkillEdit(skillId){
     let name = nameInput ? nameInput.value.trim() : "";
 
     let typeChoice = typeSelect ? typeSelect.value : "attack";
+
+    if(typeChoice === "poison"){
+
+        let poisonTurnsInput = document.getElementById("skill-poison-turns-" + skillId);
+
+        let poisonTurns = Number(poisonTurnsInput ? poisonTurnsInput.value : 2) || 2;
+
+        params = Object.assign({}, params, {poison_turns: poisonTurns});
+
+    }
+
+    if(typeChoice === "shadow"){
+        let shadowTags = document.querySelectorAll("#shadow-list-tags-" + skillId + " [data-char-id]");
+        let shadowIds = Array.from(shadowTags).map(el => el.dataset.charId);
+        if(shadowIds.length > 0){
+            params = Object.assign({}, params, {shadow_list: shadowIds});
+        } else {
+            delete params.shadow_list;
+        }
+    }
 
     let damage = Number(damageInput.value) || 0;
 

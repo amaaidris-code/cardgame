@@ -538,6 +538,10 @@ function buildFighter(pc, skills, isPlayer){
         // أدوار إضافية (consecutive_turns): بعد استهلاك الدور يُستمر به
         extraTurns: 0,
 
+        // سُم: poisonDamage = ضرر السُم لكل دور، poisonTurns = الأدوار المتبقية
+        poisonDamage: 0,
+        poisonTurns: 0,
+
         // درع امتصاص: absorbMode = "atk" (يحوّل الضربة لقوة مؤقتة) أو
         // "hp" (يحوّلها لصحة مؤقتة)، وعدد الضربات المتبقية في absorbHits
         absorbMode: null,
@@ -875,6 +879,9 @@ function buildMonsterFighter(character, skills){
         tempHp: 0,
 
         extraTurns: 0,
+
+        poisonDamage: 0,
+        poisonTurns: 0,
 
         absorbMode: null,
         absorbHits: 0,
@@ -1534,6 +1541,23 @@ function processTurn(){
     let currentFighter =
     (battle.turnOwner === "enemy") ? battle.enemy : battle.player;
 
+    // تطبيق سُم في بداية الدور: يتلقى المسموم ضررًا قبل كل دور له
+    let poisonedFighter = (currentFighter === battle.player) ? battle.enemy : battle.player;
+    if(poisonedFighter.poisonTurns > 0 && poisonedFighter.poisonDamage > 0 && poisonedFighter.hp > 0){
+        let poisonDmg = poisonedFighter.poisonDamage;
+        poisonedFighter.hp = Math.max(0, poisonedFighter.hp - poisonDmg);
+        poisonedFighter.poisonTurns--;
+        addBattleLog(`☠️ ${poisonedFighter.name} يتلقى ${poisonDmg} ضرر سُم! (متبقي ${poisonedFighter.poisonTurns} ${poisonedFighter.poisonTurns === 1 ? "دور" : "أدوار"})`);
+        updateBattleScreen();
+        if(poisonedFighter.hp <= 0){
+            battle.finished = true;
+            let winner = (poisonedFighter === battle.player) ? "enemy" : "player";
+            battle.winner = winner;
+            endBattle(winner);
+            return;
+        }
+    }
+
     // فحص التجميد/الشلل: صاحب الدور المجمّد يخسر دوره بالكامل بدون أي
     // فعل (حتى الدفاع أو السرقة)، والدور ينتقل مباشرة للطرف الآخر
     if(currentFighter.frozenTurns && currentFighter.frozenTurns > 0){
@@ -2018,6 +2042,24 @@ function handleSkillClick(skill){
 
     }
 
+    if(skill.effect === "poison"){
+
+        if(battle.turnOwner !== "player") return;
+
+        if(!isSkillReady(battle.player, skill)){
+
+            alert("هذه المهارة ما زالت في التهدئة");
+
+            return;
+
+        }
+
+        playerUsePoisonSkill(skill);
+
+        return;
+
+    }
+
     // هجوم عادي أو مهارة مميزة ضررية = فعل يستهلك الدور
     if(battle.turnOwner !== "player") return;
 
@@ -2288,6 +2330,60 @@ function playerConsumeTurn(skill, target){
 
 }
 
+// مهارة السُم للاعب: تُلحق ضررًا فوريًا (كالهجوم العادي) ثم تُفعّل
+// أثر السُم المتواصل. الجولة الأولى من السُم تُحتسب من هذه الاستخدام،
+//remainingTurns = poisonTurns - 1. لو poisonTurns = 1 فهي هجوم عادي فقط.
+function playerUsePoisonSkill(skill){
+
+    clearTurnTimer();
+
+    let defender = battle.enemy;
+
+    if(battle.player.lastHitSnapshot && !battle.player.lastHitSnapshot.consumed){
+
+        battle.player.lastHitSnapshot.consumed = true;
+
+    }
+
+    battle.player.turnsTaken++;
+
+    if(skill.cooldown > 0)
+        battle.player.cooldownUsedAt[skill.id] = battle.player.turnsTaken;
+
+    resolveAction(battle.player, defender, skill);
+
+    if(checkBattleEnd()) return;
+
+    let poisonDmg = Math.max(1, skillParamAmount(skill, "poison_damage", skill.damage));
+
+    let poisonTurns = Math.max(1, skillParamAmount(skill, "poison_turns", skill.damage));
+
+    let remainingTurns = Math.max(0, poisonTurns - 1);
+
+    if(remainingTurns > 0 && defender.hp > 0){
+
+        defender.poisonDamage = poisonDmg;
+
+        defender.poisonTurns = remainingTurns;
+
+        addBattleLog(`☠️ ${defender.name} مسموم! سيتلقى ${poisonDmg} ضرر سُم إضافي لمدة ${remainingTurns} ${remainingTurns === 1 ? "دور" : "أدوار"}`);
+
+        showBattleEffectBanner(battle.prefix, `☠️ ${defender.name} مسموم!`, "info");
+
+    } else if(defender.hp > 0){
+
+        addBattleLog(`☠️ ${defender.name} تلقى ضررًا مباشرًا!`);
+
+    }
+
+    updateBattleScreen();
+
+    if(checkBattleEnd()) return;
+
+    pveEndTurn("player");
+
+}
+
 
 
 async function enemyAct(){
@@ -2518,7 +2614,45 @@ async function enemyAct(){
     // تُنفَّذ عبر معالج الخصم الخاص (الدور والتهدئة سُجّلا أعلاه)
     if(isNewBuffEffect(chosen.effect) || chosen.effect === "delay_cooldown" || chosen.effect === "shadow"){
 
-        enemyUseNewEffect(chosen);
+        await enemyUseNewEffect(chosen);
+
+        return;
+
+    }
+
+    if(chosen.effect === "poison"){
+
+        resolveAction(enemy, battle.player, chosen);
+
+        if(checkBattleEnd()) return;
+
+        let poisonDmg = Math.max(1, skillParamAmount(chosen, "poison_damage", chosen.damage));
+
+        let poisonTurns = Math.max(1, skillParamAmount(chosen, "poison_turns", chosen.damage));
+
+        let remainingTurns = Math.max(0, poisonTurns - 1);
+
+        if(remainingTurns > 0 && battle.player.hp > 0){
+
+            battle.player.poisonDamage = poisonDmg;
+
+            battle.player.poisonTurns = remainingTurns;
+
+            addBattleLog(`☠️ ${battle.player.name} مسموم! سيتلقى ${poisonDmg} ضرر سُم إضافي لمدة ${remainingTurns} ${remainingTurns === 1 ? "دور" : "أدوار"}`);
+
+            showBattleEffectBanner(battle.prefix, `☠️ ${battle.player.name} مسموم!`, "info");
+
+        } else if(battle.player.hp > 0){
+
+            addBattleLog(`☠️ ${battle.player.name} تلقى ضررًا مباشرًا!`);
+
+        }
+
+        updateBattleScreen();
+
+        if(checkBattleEnd()) return;
+
+        pveEndTurn("enemy");
 
         return;
 
@@ -2686,6 +2820,20 @@ function applyPveBuff(fighter, skill){
 
     }
 
+    if(skill.effect === "poison"){
+
+        let poisonDmg = Math.max(1, skillParamAmount(skill, "poison_damage", skill.damage));
+        let poisonTurns = Math.max(1, skillParamAmount(skill, "poison_turns", skill.damage));
+
+        let target = (fighter === battle.player) ? battle.enemy : battle.player;
+
+        target.poisonDamage = poisonDmg;
+        target.poisonTurns = poisonTurns;
+
+        return `${target.name} مسموم! سيتلقى ${poisonDmg} ضرر لمدة ${poisonTurns} ${poisonTurns === 1 ? "دور" : "أدوار"}`;
+
+    }
+
     return "";
 
 }
@@ -2693,7 +2841,7 @@ function applyPveBuff(fighter, skill){
 
 // يُنفّذ مهارة الأنواع الجديدة من جانب الخصم (الدور والتهدئة سُجّلا في
 // enemyAct قبل الوصول إلى هنا)
-function enemyUseNewEffect(skill){
+async function enemyUseNewEffect(skill){
 
     let enemy = battle.enemy;
 
@@ -2726,6 +2874,15 @@ function enemyUseNewEffect(skill){
     } else if(skill.effect === "shadow"){
 
         let pool = pveShadowPool();
+
+        // دمج القائمة المخصصة مع المهزومة للعدو أيضًا
+        let customIds = (skill.params && Array.isArray(skill.params.shadow_list)) ? skill.params.shadow_list : [];
+        if(customIds.length > 0){
+            let customChars = await fetchCustomShadowCharacters(customIds, enemy.id);
+            let customIdsSet = new Set(customChars.map(c => String(c.id)));
+            let defeatedOnly = pool.filter(e => !customIdsSet.has(String(e.id)));
+            pool = [...customChars, ...defeatedOnly];
+        }
 
         let entry = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : null;
 
@@ -2938,6 +3095,55 @@ async function pveAddDefeatedToShadowPool(enemy){
 }
 
 
+async function fetchCustomShadowCharacters(charIds, selfCharacterId){
+    if(!charIds || charIds.length === 0) return [];
+    let filtered = charIds.filter(id => String(id) !== String(selfCharacterId));
+    if(filtered.length === 0) return [];
+
+    try {
+        let {data: chars, error: charsErr} = await supabaseClient
+            .from("characters")
+            .select("id, name, identity_image")
+            .in("id", filtered);
+        if(charsErr || !chars) return [];
+
+        let {data: skills, error: skillsErr} = await supabaseClient
+            .from("character_skills")
+            .select("character_id, skill_id, name, type, damage, cooldown, effect, unblockable, color, description, params")
+            .in("character_id", filtered);
+        if(skillsErr) skills = [];
+
+        let skillMap = {};
+        (skills || []).forEach(s => {
+            if(!skillMap[s.character_id]) skillMap[s.character_id] = [];
+            skillMap[s.character_id].push({
+                id: s.skill_id,
+                name: s.name,
+                type: s.type,
+                damage: s.damage,
+                cooldown: s.cooldown,
+                effect: s.effect,
+                unblockable: s.unblockable,
+                color: s.color,
+                description: s.description,
+                params: s.params
+            });
+        });
+
+        return chars.map(c => ({
+            id: c.id,
+            name: c.name || "ظل",
+            image: c.identity_image || "",
+            skills: skillMap[c.id] || [],
+            isCustomShadow: true
+        }));
+    } catch(e){
+        console.error("fetchCustomShadowCharacters failed", e);
+        return [];
+    }
+}
+
+
 // ========================================
 // معالجات اللاعب لمهارات الأنواع الجديدة
 // ========================================
@@ -3140,7 +3346,7 @@ function pveUseDelaySkill(delaySkill, targetName){
 
 
 // الظل (اللاعب): قائمة أولية بالوحوش المهزومة، ثم قائمة مهارات الوحش المختار
-function openShadowMenu(shadowSkill){
+async function openShadowMenu(shadowSkill){
 
     if(battle.turnOwner !== "player") return;
 
@@ -3166,11 +3372,24 @@ function openShadowMenu(shadowSkill){
 
     let pool = pveShadowPool().filter(e => String(e.id) !== String(battle.player.characterId));
 
+    // دمج قائمة الظل المخصصة مع المهزومة
+    let customIds = (shadowSkill.params && Array.isArray(shadowSkill.params.shadow_list)) ? shadowSkill.params.shadow_list : [];
+    if(customIds.length > 0){
+        let customChars = await fetchCustomShadowCharacters(customIds, battle.player.characterId);
+        // إزالة التكرار: الشخصية المخصصة تأخذ الأولوية
+        let customIdsSet = new Set(customChars.map(c => String(c.id)));
+        let defeatedOnly = pool.filter(e => !customIdsSet.has(String(e.id)));
+        pool = [...customChars, ...defeatedOnly];
+    }
+
+    // حفظ القائمة المدمجة مؤقتًا لاستخدامها في openShadowSkillMenu / pveUseShadowSkill
+    battle.shadowMergedPool = pool;
+
     let listHtml = pool.length > 0
     ? pool
         .map(e => `<button class="steal-option shadow-char-option" data-id="${escapeHtml(String(e.id))}">🌑 ${escapeHtml(e.name || "وحش")}</button>`)
         .join("")
-    : "<p>لا توجد وحوش مهزومة بعد في مخزون الظل — اهزم الوحوش لتستدعي مهاراتهم</p>";
+    : "<p>لا توجد شخصيات مؤهلة في قائمة الظل</p>";
 
     let modal = document.createElement("div");
 
@@ -3182,7 +3401,7 @@ function openShadowMenu(shadowSkill){
 
         <div class="steal-modal-box">
 
-            <h3>🌑 استدعِ ظل وحش مهزوم واستخدم إحدى مهاراته</h3>
+            <h3>🌑 استدعِ ظل شخصية واستخدم إحدى مهاراته</h3>
 
             <div class="steal-options-list">
                 ${listHtml}
@@ -3221,7 +3440,7 @@ function openShadowSkillMenu(shadowSkill, charId){
 
     if(battle.finished) return;
 
-    let entry = pveShadowPool().find(e => String(e.id) === String(charId));
+    let entry = (battle.shadowMergedPool || pveShadowPool()).find(e => String(e.id) === String(charId));
 
     if(!entry) return;
 
@@ -3303,7 +3522,7 @@ function pveUseShadowSkill(shadowSkill, charId, skillName){
 
     if(battle.finished) return;
 
-    let entry = pveShadowPool().find(e => String(e.id) === String(charId));
+    let entry = (battle.shadowMergedPool || pveShadowPool()).find(e => String(e.id) === String(charId));
 
     let targetSkill = entry ? (entry.skills || []).find(s => s.name === skillName) : null;
 

@@ -1379,6 +1379,11 @@ function renderPVPSkillButtons(){
                     btn.querySelector(".skill-name").textContent =
                         skill.name + " ✨";
 
+                } else if(skill.effect === "poison"){
+
+                    btn.querySelector(".skill-name").textContent =
+                        skill.name + " ☠️";
+
                 }
 
                 btn.onclick = () => pvpUseSkill(skill.id);
@@ -2103,6 +2108,55 @@ async function pvpUseDelaySkill(abilitySkillId, targetSkillId){
     pvpRefreshState(false);
 }
 
+async function pvpFetchCustomShadowCharacters(charIds){
+    if(!charIds || charIds.length === 0) return [];
+    let selfId = pvpState.myCharacterId || null;
+    let filtered = charIds.filter(id => String(id) !== String(selfId));
+    if(filtered.length === 0) return [];
+
+    try {
+        let {data: chars, error: charsErr} = await supabaseClient
+            .from("characters")
+            .select("id, name, identity_image")
+            .in("id", filtered);
+        if(charsErr || !chars) return [];
+
+        let {data: skills, error: skillsErr} = await supabaseClient
+            .from("character_skills")
+            .select("character_id, skill_id, name, type, damage, cooldown, effect, unblockable, color, description, params")
+            .in("character_id", filtered);
+        if(skillsErr) skills = [];
+
+        let skillMap = {};
+        (skills || []).forEach(s => {
+            if(!skillMap[s.character_id]) skillMap[s.character_id] = [];
+            skillMap[s.character_id].push({
+                id: s.skill_id,
+                name: s.name,
+                type: s.type,
+                damage: s.damage,
+                cooldown: s.cooldown,
+                effect: s.effect,
+                unblockable: s.unblockable,
+                color: s.color,
+                description: s.description,
+                params: s.params
+            });
+        });
+
+        return chars.map(c => ({
+            id: c.id,
+            name: c.name || "ظل",
+            image: c.identity_image || "",
+            skills: skillMap[c.id] || [],
+            isCustomShadow: true
+        }));
+    } catch(e){
+        console.error("pvpFetchCustomShadowCharacters failed", e);
+        return [];
+    }
+}
+
 // ========================================
 // قائمة الظل (PvP): نعرض الشخصيات المؤهلة من shadow_eligible_characters
 // (عبر pvp_list_shadow_pool) ثم مهارات الشخصية المختارة
@@ -2148,6 +2202,16 @@ async function pvpOpenShadowMenu(abilitySkill){
     });
 
     let charList = Object.values(chars);
+
+    // دمج القائمة المخصصة مع المهزومة
+    let customIds = (abilitySkill.params && Array.isArray(abilitySkill.params.shadow_list)) ? abilitySkill.params.shadow_list : [];
+    if(customIds.length > 0){
+        let customChars = await pvpFetchCustomShadowCharacters(customIds);
+        customChars.forEach(c => { chars[String(c.id)] = c; });
+        let customIdsSet = new Set(customChars.map(c => String(c.id)));
+        let defeatedOnly = charList.filter(c => !customIdsSet.has(String(c.id)));
+        charList = [...customChars, ...defeatedOnly];
+    }
 
     let listHtml = charList.length > 0
     ? charList
