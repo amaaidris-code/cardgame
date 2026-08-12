@@ -235,7 +235,7 @@ async function pvpRefreshLobby(){
 
     let incomingChallenge = (!incomingError && incoming && incoming.length > 0) ? incoming[0] : null;
 
-    pvpLobby.incomingShown = incomingChallenge ? incomingChallenge.match_id : null;
+    pvpLobby.incomingShown = incomingChallenge ? incomingChallenge.id : null;
 
     if(!listError){
         pvpRenderLobbyList(players || [], incomingChallenge);
@@ -267,8 +267,8 @@ function pvpRenderLobbyList(players, incomingChallenge){
             <button class="pvp-decline-btn">❌ رفض</button>
         </div>
         `;
-        card.querySelector(".pvp-accept-btn").onclick = () => pvpRespondChallenge(incomingChallenge.match_id, true);
-        card.querySelector(".pvp-decline-btn").onclick = () => pvpRespondChallenge(incomingChallenge.match_id, false);
+        card.querySelector(".pvp-accept-btn").onclick = () => pvpRespondChallenge(incomingChallenge.id, true);
+        card.querySelector(".pvp-decline-btn").onclick = () => pvpRespondChallenge(incomingChallenge.id, false);
         box.appendChild(card);
     }
 
