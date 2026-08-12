@@ -2793,25 +2793,41 @@ async function fetchShadowPoolFromSupabase(){
     let token = localStorage.getItem("player_token");
     if(!token) return [];
     
-    let { data, error } = await supabaseClient.rpc("get_shadow_pool", { p_token: token });
+    // استخدام RPC الموحد (الذي يجمع البيانات مع مهاراتها في طلب واحد)
+    let { data, error } = await supabaseClient.rpc("pvp_list_shadow_pool", { 
+        p_token: token,
+        p_self_character_id: battle.player ? battle.player.characterId : null
+    });
     if(error || !data) return [];
     
-    let ids = data.map(d => d.shadow_character_id);
-    if(ids.length === 0) return [];
-    
-    let { data: chars } = await supabaseClient
-        .from("characters")
-        .select("*")
-        .in("id", ids);
-        
-    chars = chars || [];
+    // إعادة تجميع الصفوف المسطحة إلى كائنات شخصيات
+    let chars = {};
+    data.forEach(row => {
+        if(!chars[row.character_id]){
+            chars[row.character_id] = {
+                id: row.character_id,
+                name: row.character_name || "وحش",
+                image: row.identity_image || "",
+                skills: []
+            };
+        }
+        if(row.skill_id){
+            chars[row.character_id].skills.push({
+                id: row.skill_id,
+                name: row.skill_name,
+                type: row.skill_type,
+                damage: row.skill_damage,
+                cooldown: row.skill_cooldown,
+                effect: row.skill_effect,
+                unblockable: row.skill_unblockable,
+                color: row.skill_color,
+                description: row.skill_description,
+                params: row.skill_params
+            });
+        }
+    });
 
-    // جلب مهارات كل شخصية ظل (المهارات في جدول منفصل character_skills)
-    await Promise.all(chars.map(async (ch) => {
-        ch.skills = await loadCharacterSkills(ch.id);
-    }));
-
-    return chars;
+    return Object.values(chars);
 }
 
 function pveLoadShadowPool(){
