@@ -1,0 +1,10 @@
+node_modules/
+*.backup
+*.temp
+temp.*
+game_temp.*
+test.txt
+android/.gradle/
+android/app/build/
+android/build/
+android/capacitor-cordova-android-plugins/build/
