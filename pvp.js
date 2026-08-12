@@ -16,6 +16,8 @@ let pvpState = {
     myUsedSkillIds: [],
     oppUsedSkillIds: [],
     skillCache: {}, // skill_id -> سجل المهارة الكامل (اسم/نوع/effect/damage/cooldown...)
+    // مهارات كشفها الخصم لك في أي نزال سابق (cross-battle) — مصدر السرقة/السيطرة
+    oppRevealedSkillIds: [],
     stealMenuOpen: false,
 
     // مهارات دفاع الخصم (type = "defense"): تُبقى دائمًا خيارًا للختم حتى لو
@@ -458,6 +460,16 @@ async function pvpEnterReadyPhase(matchId, _unused){
     }
 
     pvpState.isPlayer1 = (data.player1_id === (await pvpGetMyPlayerId()));
+
+    // تحميل مهارات الخصم التي كشفها لك في أي نزال سابق (cross-battle) —
+    // مصدر قوائم السرقة والتحكم
+    pvpState.oppRevealedSkillIds = [];
+    let revealedRes = await supabaseClient
+        .rpc("pvp_list_revealed_skills", { p_token: token, p_match_id: matchId });
+    if(!revealedRes.error && revealedRes.data){
+        pvpState.oppRevealedSkillIds = revealedRes.data.map(r => r.skill_id);
+    }
+    await pvpEnsureSkillsCached(pvpState.oppRevealedSkillIds);
 
     openScreen("pvp-battle-screen");
 
@@ -944,6 +956,7 @@ async function pvpRefreshState(isFirstLoad){
 
     if(!(myTurn && data.status === "active")){
         pvpCloseStealMenu();
+        pvpCloseControlMenu();
         pvpCloseDelayMenu();
         pvpCloseShadowMenu();
     }
@@ -1281,12 +1294,25 @@ function renderPVPSkillButtons(){
 
             }
 
-            if(skill.effect === "steal" || skill.effect === "copy"){
+            if(skill.effect === "steal" || skill.effect === "copy" || skill.effect === "control"){
 
-                btn.querySelector(".skill-name").textContent =
-                    skill.name + (skill.effect === "steal" ? " 🕵️" : " 📋");
+                let emoji = skill.effect === "steal" ? " 🕵️" : (skill.effect === "copy" ? " 📋" : " 🎛️");
 
-                btn.onclick = () => pvpOpenStealMenu(skill);
+                btn.querySelector(".skill-name").textContent = skill.name + emoji;
+
+                if(skill.effect === "copy"){
+
+                    btn.onclick = () => pvpOpenStealMenu(skill, "copy");
+
+                } else if(skill.effect === "steal"){
+
+                    btn.onclick = () => pvpOpenStealMenu(skill, "steal");
+
+                } else {
+
+                    btn.onclick = () => pvpOpenControlMenu(skill);
+
+                }
 
             } else if(skill.effect === "seal"){
 
@@ -1638,33 +1664,39 @@ function pvpAddBattleLog(text){
 // قائمة السرقة/النسخ: نعرض فقط المهارات التي استخدمها الخصم بالفعل
 // في هذه المباراة (نفس ما تتحقق منه دالة السيرفر pvp_steal_or_copy_skill)
 // ========================================
-function pvpOpenStealMenu(abilitySkill){
+function pvpOpenStealMenu(abilitySkill, mode){
 
     pvpCloseStealMenu();
 
-    // السرقة والنسخ يتطلبان معًا أن يكون الخصم استخدم المهارة في هذه
-    // المباراة بالذات (نفس ما تتحقق منه دالة السيرفر pvp_steal_or_copy_skill)
-    let sourceIds = pvpState.oppUsedSkillIds;
+    mode = mode || abilitySkill.effect;
+
+    // السرقة تعرض أي مهارة كشفها الخصم في نزال سابق (cross-battle) أو هذه
+    // المباراة؛ النسخ يعرض فقط مهارات استخدمها الخصم في هذه المباراة بالذات
+    let sourceIds = (mode === "steal")
+        ? [...new Set([...pvpState.oppRevealedSkillIds, ...pvpState.oppUsedSkillIds])]
+        : pvpState.oppUsedSkillIds;
 
     let candidates = sourceIds
     .map(id => pvpState.skillCache[id])
-    .filter(s => s && s.effect !== "steal" && s.effect !== "copy");
+    .filter(s => s && s.effect !== "steal" && s.effect !== "copy" && s.effect !== "control");
 
     if(candidates.length === 0){
-        alert("لم يستخدم الخصم أي مهارة قابلة للسرقة/النسخ بعد في هذه المباراة");
+        alert(mode === "steal"
+            ? "لم يكشف الخصم أي مهارة قابلة للسرقة بعد في أي نزال"
+            : "لم يستخدم الخصم أي مهارة قابلة للنسخ بعد في هذه المباراة");
         return;
     }
 
     pvpState.stealMenuOpen = true;
 
-    let verb = abilitySkill.effect === "steal" ? "سرقة" : "نسخ";
+    let verb = mode === "steal" ? "سرقة" : "نسخ";
 
     let modal = document.createElement("div");
     modal.id = "pvp-steal-modal";
     modal.className = "steal-modal";
     modal.innerHTML = `
         <div class="steal-modal-box">
-            <h3>${abilitySkill.effect === "steal" ? "🕵️" : "📋"} اختر مهارة الخصم لتُ${verb === "سرقة" ? "سرق" : "نسخ"}ها</h3>
+            <h3>${mode === "steal" ? "🕵️" : "📋"} اختر مهارة الخصم لتُ${verb === "سرقة" ? "سرق" : "نسخ"}ها</h3>
             <div class="steal-options-list" id="pvp-steal-options-list"></div>
             <div class="steal-modal-buttons">
                 <button id="pvp-steal-cancel-btn">إلغاء</button>
@@ -1706,6 +1738,86 @@ async function pvpUseStealOrCopy(abilitySkillId, targetSkillId){
     let { data, error } =
     await supabaseClient
     .rpc("pvp_steal_or_copy_skill", {
+        p_token: pvpGetToken(),
+        p_match_id: pvpState.matchId,
+        p_ability_skill_id: abilitySkillId,
+        p_target_skill_id: targetSkillId
+    })
+    .single();
+
+    if(error){
+        alert(error.message || "تعذر تنفيذ الحركة");
+        pvpRefreshState(false);
+        return;
+    }
+
+    pvpRefreshState(false);
+}
+
+// ========================================
+// قائمة التحكم (السيطرة): تشبه السرقة لكن المهارة المُسيطر عليها تدخل في
+// تهدئة عند اللاعب بعد استخدامها (فرق جوهري). تُعرض مهارات كشفها الخصم
+// في أي نزال سابق (cross-battle) أو هذه المباراة. الحساب الفعلي على السيرفر
+// عبر pvp_control_skill.
+// ========================================
+function pvpOpenControlMenu(abilitySkill){
+
+    pvpCloseControlMenu();
+
+    let sourceIds = [...new Set([...pvpState.oppRevealedSkillIds, ...pvpState.oppUsedSkillIds])];
+
+    let candidates = sourceIds
+    .map(id => pvpState.skillCache[id])
+    .filter(s => s && s.effect !== "steal" && s.effect !== "copy" && s.effect !== "control");
+
+    if(candidates.length === 0){
+        alert("لم يكشف الخصم أي مهارة قابلة للتحكم بعد في أي نزال");
+        return;
+    }
+
+    let modal = document.createElement("div");
+    modal.id = "pvp-control-modal";
+    modal.className = "steal-modal";
+    modal.innerHTML = `
+        <div class="steal-modal-box">
+            <h3>🎛️ اختر مهارة الخصم لتسيطر عليها وتستخدمها (ستدخل في التهدئة)</h3>
+            <div class="steal-options-list" id="pvp-control-options-list"></div>
+            <div class="steal-modal-buttons">
+                <button id="pvp-control-cancel-btn">إلغاء</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+
+    let list = modal.querySelector("#pvp-control-options-list");
+    candidates.forEach(skill => {
+        let btn = document.createElement("button");
+        btn.className = "steal-option";
+        btn.textContent = skill.name;
+        btn.onclick = () => {
+            pvpCloseControlMenu();
+            pvpUseControl(abilitySkill.id, skill.id);
+        };
+        list.appendChild(btn);
+    });
+
+    modal.querySelector("#pvp-control-cancel-btn").onclick = pvpCloseControlMenu;
+}
+
+function pvpCloseControlMenu(){
+    let modal = document.getElementById("pvp-control-modal");
+    if(modal) modal.remove();
+}
+
+// تنفيذ التحكم — كل الحساب الحاسم على السيرفر عبر pvp_control_skill
+async function pvpUseControl(abilitySkillId, targetSkillId){
+
+    pvpSetSkillsEnabled(false);
+
+    let { data, error } =
+    await supabaseClient
+    .rpc("pvp_control_skill", {
         p_token: pvpGetToken(),
         p_match_id: pvpState.matchId,
         p_ability_skill_id: abilitySkillId,

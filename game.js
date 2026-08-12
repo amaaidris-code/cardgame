@@ -3361,6 +3361,8 @@ function skillFieldsToTypeChoice(skill){
 
     if(skill.effect === "copy") return "copy";
 
+    if(skill.effect === "control") return "control";
+
     if(skill.effect === "freeze") return "freeze";
 
     if(skill.effect === "lifesteal") return "lifesteal";
@@ -3400,6 +3402,7 @@ function skillTypeOptionsHtml(selected){
         ["defense", "🛡️ دفاع"],
         ["steal", "🗡️ مفترس (سرقة مهارة)"],
         ["copy", "📋 نسخ (نسخ مهارة الخصم واستخدامها)"],
+        ["control", "🎛️ سيطرة (استخدام مهارة الخصم وتدخل في التهدئة)"],
         ["unblockable", "💥 ضربة لا تُصد"],
         ["freeze", "🧊 تجميد (شلل دور كامل)"],
         ["lifesteal", "🩸 امتصاص (شفاء بقدر الضرر)"],
@@ -3429,6 +3432,8 @@ function skillTypeLabel(skill){
     if(skill.effect === "steal") return "مفترس";
 
     if(skill.effect === "copy") return "نسخ";
+
+    if(skill.effect === "control") return "سيطرة";
 
     if(skill.effect === "freeze") return "تجميد";
 
@@ -3468,6 +3473,8 @@ function skillNumberFieldLabel(skill){
     if(skill.effect === "steal") return "عدد المهارات القابلة للسرقة والاستخدام الفوري";
 
     if(skill.effect === "copy") return "عدد المهارات القابلة للنسخ والاستخدام الفوري";
+
+    if(skill.effect === "control") return "عدد المهارات القابلة للسيطرة والاستخدام الفوري";
 
     if(skill.type === "defense") return "عدد الضربات الممكن تحمّلها";
 

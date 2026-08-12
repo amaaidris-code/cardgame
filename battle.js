@@ -1828,6 +1828,14 @@ function handleSkillClick(skill){
 
     }
 
+    if(skill.effect === "control"){
+
+        openControlMenu(skill);
+
+        return;
+
+    }
+
     if(skill.effect === "seal"){
 
         openSealMenu(skill);
@@ -3965,6 +3973,449 @@ function closeStealMenu(){
 }
 
 
+// ========================================
+// مهارة "السيطرة": تشبه السرقة تمامًا (تسمح باستخدام مهارات الخصم فورًا)
+// لكن مع فرق جوهري واحد: المهارة التي تُسيطر عليها تدخل في تهدئة عندك
+// بعد استخدامها، فلا يمكنك إعادة السيطرة عليها واستخدامها مجددًا قبل انتهاء
+// مدة تهدئتها. وكذلك مهارة السيطرة نفسها لها تهدئتها الخاصة تمامًا كالسرقة.
+// تظهر المهارات الظاهرة من الخصم في أي نزال سابق (قائمة الكشف العامة)، مثل
+// السرقة تمامًا (بعكس النسخ الذي يقتصر على مهارات هذا النزال فقط).
+// رقم المهارة (damage) يمثّل "عدد المهارات القابلة للسيطرة والاستخدام الفوري".
+// ========================================
+
+function openControlMenu(controlSkill){
+
+    if(!isSkillReady(battle.player, controlSkill)){
+
+        alert("مهارة السيطرة ما زالت في التهدئة");
+
+        return;
+
+    }
+
+    closeControlMenu();
+
+    let maxControl = Math.max(1, Number(controlSkill.damage) || 1);
+
+    let selectedNames = [];
+
+    let modal = document.createElement("div");
+
+    modal.id = "control-modal";
+
+    modal.className = "steal-modal";
+
+
+    // تظهر كل المهارات التي كشفها الخصم في أي نزال سابق (قائمة السرقة
+    // العامة)، وتُعلَّم باستخدام مهارة السيطرة الخاصة باللاعب — أي المهارة
+    // التي سبق السيطرة عليها واستخدامها عندك تدخل تهدئة ولا يمكن الاختيار
+    // منها مجددًا حتى تنتهي تهدئتها
+    let controllableSkills = battle.enemyUsedSkills;
+
+    let usedListHtml = controllableSkills.length > 0
+    ? controllableSkills
+        .map(s => {
+
+            let ready = isSkillReady(battle.player, s);
+
+            let remaining = cooldownTurnsRemaining(battle.player, s);
+
+            let cooldownBadge =
+            (!ready && remaining > 0)
+            ? `<span class="cooldown-badge">${remaining}</span>`
+            : "";
+
+            let disabledAttr = ready ? "" : "disabled";
+
+            let onCooldownClass = ready ? "" : "on-cooldown";
+
+            return `<button class="steal-option ${onCooldownClass}" data-name="${escapeHtml(s.name)}" ${disabledAttr}>${escapeHtml(s.name)}${cooldownBadge}</button>`;
+
+        })
+        .join("")
+    : "<p>لم تكشف أي مهارة من الخصم بعد (أو كلها في تهدئة)</p>";
+
+
+    modal.innerHTML = `
+
+        <div class="steal-modal-box">
+
+            <h3>🎛️ اختر حتى ${maxControl} ${maxControl === 1 ? "مهارة" : "مهارات"} للسيطرة عليها واستخدامها فورًا</h3>
+
+            <div class="steal-options-list">
+                ${usedListHtml}
+            </div>
+
+            <p class="steal-or">— أو اكتب اسم المهارة بالضبط وأضفها للاختيار —</p>
+
+            <input id="control-name-input" type="text" placeholder="اسم المهارة">
+
+            <div class="steal-modal-buttons">
+
+                <button id="control-add-name-btn">إضافة للاختيار</button>
+
+            </div>
+
+            <p class="steal-or" id="control-selected-label">لم تُختر أي مهارة بعد (0/${maxControl})</p>
+
+            <div class="steal-modal-buttons">
+
+                <button id="control-confirm-btn">سيطرة واستخدام</button>
+
+                <button id="control-cancel-btn">إلغاء</button>
+
+            </div>
+
+        </div>
+
+    `;
+
+
+    document.body.appendChild(modal);
+
+
+    function refreshSelectedLabel(){
+
+        let label = document.getElementById("control-selected-label");
+
+        if(!label) return;
+
+        label.textContent =
+        selectedNames.length > 0
+        ? `المختارة: ${selectedNames.join("، ")} (${selectedNames.length}/${maxControl})`
+        : `لم تُختر أي مهارة بعد (0/${maxControl})`;
+
+    }
+
+    function toggleSelect(name, btn){
+
+        let idx = selectedNames.indexOf(name);
+
+        if(idx >= 0){
+
+            selectedNames.splice(idx, 1);
+
+            if(btn) btn.classList.remove("steal-selected");
+
+        } else {
+
+            if(selectedNames.length >= maxControl){
+
+                alert(`لا يمكن اختيار أكثر من ${maxControl} ${maxControl === 1 ? "مهارة" : "مهارات"} في نفس السيطرة`);
+
+                return;
+
+            }
+
+            selectedNames.push(name);
+
+            if(btn) btn.classList.add("steal-selected");
+
+        }
+
+        refreshSelectedLabel();
+
+    }
+
+
+    modal.querySelectorAll(".steal-option").forEach(btn => {
+
+        btn.onclick = () => {
+
+            toggleSelect(btn.dataset.name, btn);
+
+        };
+
+    });
+
+
+    modal.querySelector("#control-add-name-btn").onclick = () => {
+
+        let input = document.getElementById("control-name-input");
+
+        let typedName = input.value.trim();
+
+        if(!typedName){
+
+            alert("اكتب اسم المهارة أولاً");
+
+            return;
+
+        }
+
+        toggleSelect(typedName, null);
+
+        input.value = "";
+
+    };
+
+
+    modal.querySelector("#control-cancel-btn").onclick = closeControlMenu;
+
+    modal.querySelector("#control-confirm-btn").onclick = () => {
+
+        if(selectedNames.length === 0){
+
+            alert("اختر مهارة واحدة على الأقل");
+
+            return;
+
+        }
+
+        attemptControlMulti(controlSkill, selectedNames);
+
+    };
+
+}
+
+
+function closeControlMenu(){
+
+    let modal = document.getElementById("control-modal");
+
+    if(modal) modal.remove();
+
+}
+
+
+// يتحقق من كل الأسماء المختارة، ثم يستهلك دور/تهدئة مهارة السيطرة مرة واحدة
+// فقط لهذه الدفعة بالكامل، ثم ينفّذ كل مهارة مُسيطر عليها فورًا واحدة تلو
+// الأخرى، مع وضع كل مهارة مُسيطر عليها في تهدئة عند اللاعب (هذا هو الفرق
+// الجوهري عن السرقة)
+function attemptControlMulti(controlSkill, names){
+
+    let uniqueNames = [...new Set(names.map(n => n.trim()).filter(Boolean))];
+
+    let resolvedSkills = [];
+
+    for(let name of uniqueNames){
+
+        // السيطرة بالاسم المكتوب تعمل حتى لو لم تُستخدم المهارة في هذا
+        // النزال — يكفي أنها فعلًا إحدى مهارات الخصم الحقيقية (مثل السرقة)
+        let targetSkill =
+        battle.enemy.skills.find(s => s.name.trim() === name);
+
+        if(!targetSkill){
+
+            alert(`لا توجد مهارة بهذا الاسم ظهرت من الخصم: "${name}"`);
+
+            return;
+
+        }
+
+        // مهارات السيطرة/السرقة/النسخ/الظل/تأجيل التهدئة لا يمكن السيطرة عليها
+        if(["control", "steal", "copy", "shadow", "delay_cooldown"].includes(targetSkill.effect)){
+
+            alert(`لا يمكن السيطرة على مهارة "${name}" (من نوع لا يقبل السيطرة)`);
+
+            return;
+
+        }
+
+        // لا يمكن السيطرة على مهارة الخصم وهي حاليًا في فترة تهدئة عنده
+        if(!isSkillReady(battle.enemy, targetSkill)){
+
+            alert(`مهارة "${name}" في تهدئة عند الخصم حاليًا، لا يمكن السيطرة عليها الآن`);
+
+            return;
+
+        }
+
+        // لا يمكن السيطرة على مهارة سبق السيطرة عليها وهي بتهدئة عند اللاعب
+        if(!isSkillReady(battle.player, targetSkill)){
+
+            alert(`مهارة "${name}" في تهدئة عندك حاليًا، انتظر انتهاء تهدئتها لإعادة السيطرة عليها`);
+
+            return;
+
+        }
+
+        resolvedSkills.push(targetSkill);
+
+    }
+
+    closeControlMenu();
+
+    clearTurnTimer();
+
+    // نفس منطق السرقة: إما تستهلك نافذة الدفاع (إن لم تتضمن الدفعة أي دفاع/
+    // انعكاس) أو تُترك الضربة ليتولى الدفاع التعامل معها داخل الطابور أدناه
+    let consumesPlayerTurn = (battle.turnOwner === "player");
+
+    let batchHandlesDefense =
+    resolvedSkills.some(s => s.type === "defense" || s.effect === "reflect");
+
+    if(consumesPlayerTurn
+    && !batchHandlesDefense
+    && battle.player.lastHitSnapshot
+    && !battle.player.lastHitSnapshot.consumed){
+
+        battle.player.lastHitSnapshot.consumed = true;
+
+    }
+
+    battle.player.turnsTaken++;
+
+    if(controlSkill.cooldown > 0)
+        battle.player.cooldownUsedAt[controlSkill.id] = battle.player.turnsTaken;
+
+    if(!battle.playerUsedSkills.find(s => s.id === controlSkill.id)){
+
+        battle.playerUsedSkills.push(controlSkill);
+
+    }
+
+    renderUsedSkillsUI(battle.prefix);
+
+    runControlledSkillsQueue(resolvedSkills, 0, consumesPlayerTurn);
+
+}
+
+
+// ينفّذ المهارات المُسيطر عليها المختارة واحدة تلو الأخرى (فوريًا)، ثم
+// يُسلِّم الدور للخصم (أو يُحدّث الأزرار) مرة واحدة فقط بعد انتهاء الدفعة
+// بالكامل. كل مهارة مُسيطر عليها تُستخدم تُسجَّل فورًا في تهدئة اللاعب.
+function runControlledSkillsQueue(queue, index, consumesPlayerTurn){
+
+    if(index >= queue.length){
+
+        if(checkBattleEnd()) return;
+
+        if(consumesPlayerTurn){
+
+            pveEndTurn("player");
+
+        } else {
+
+            renderSkillButtons(battle.prefix);
+
+        }
+
+        return;
+
+    }
+
+    let targetSkill = queue[index];
+
+    // تسجيل المهارة المُسيطر عليها فورًا في تهدئة اللاعب، بحيث لا يمكن
+    // إعادة السيطرة عليها واستخدامها حتى تنتهي تهدئتها
+    battle.player.cooldownUsedAt[targetSkill.id] = battle.player.turnsTaken;
+
+    if(!battle.playerUsedSkills.find(s => s.id === targetSkill.id)){
+
+        battle.playerUsedSkills.push(targetSkill);
+
+    }
+
+    renderUsedSkillsUI(battle.prefix);
+
+    if(targetSkill.type === "defense"){
+
+        // مهارة دفاع مُسيطر عليها: تُستخدم فورًا على نفسك فقط (لا هدف يُختار)
+        let snapshot = battle.player.lastHitSnapshot;
+
+        if(snapshot && !snapshot.consumed){
+
+            battle.player.hp = snapshot.hpBefore;
+
+            snapshot.consumed = true;
+
+            if(snapshot.attackerLifestealHeal > 0){
+
+                battle.enemy.hp = Math.max(0, battle.enemy.hp - snapshot.attackerLifestealHeal);
+
+            }
+
+            let enduranceHits = Math.max(1, Number(targetSkill.damage) || 1);
+
+            battle.player.shieldCharges = (battle.player.shieldCharges || 0) + (enduranceHits - 1);
+
+            updateBattleScreen();
+
+            addBattleLog(
+            enduranceHits > 1
+            ? `${battle.player.name} سيطر على "${targetSkill.name}" وألغى الضربة! (يتحمّل ${enduranceHits - 1} ضربات إضافية تلقائيًا)`
+            : `${battle.player.name} سيطر على "${targetSkill.name}" وألغى الضربة!`
+            );
+
+        } else {
+
+            alert(`مهارة "${targetSkill.name}" المُسيطر عليها دفاعية: لا تُلغي إلا ضررًا موجودًا حاليًا عليك، ولا يوجد ضرر لصده الآن`);
+
+            addBattleLog(`لا يوجد ضرر حالي لصده بمهارة "${targetSkill.name}" المُسيطر عليها`);
+
+        }
+
+        runControlledSkillsQueue(queue, index + 1, consumesPlayerTurn);
+
+        return;
+
+    }
+
+    if(targetSkill.effect === "reflect"){
+
+        let reflectMult = Math.max(1, skillParamAmount(targetSkill, "reflect_mult", targetSkill.damage));
+
+        battle.player.reflectMult = reflectMult;
+
+        updateBattleScreen();
+
+        addBattleLog(`${battle.player.name} جهّز درع الانعكاس بالسيطرة على "${targetSkill.name}"! (×${reflectMult})`);
+
+        showBattleEffectBanner(battle.prefix, `🔁 جهّزتَ درع انعكاس بالسيطرة عليها! (×${reflectMult})`, "reflect");
+
+        runControlledSkillsQueue(queue, index + 1, consumesPlayerTurn);
+
+        return;
+
+    }
+
+    if(isNewBuffEffect(targetSkill.effect)){
+
+        let logLine = applyPveBuff(battle.player, targetSkill);
+
+        updateBattleScreen();
+
+        if(logLine) addBattleLog(`سيطرتَ على "${targetSkill.name}"! ` + logLine);
+
+        runControlledSkillsQueue(queue, index + 1, consumesPlayerTurn);
+
+        return;
+
+    }
+
+    if(targetSkill.effect === "delay_cooldown" || targetSkill.effect === "shadow"){
+
+        addBattleLog(`لا يمكن استخدام "${targetSkill.name}" المُسيطر عليها في هذه المعركة، تم تخطّيها`);
+
+        runControlledSkillsQueue(queue, index + 1, consumesPlayerTurn);
+
+        return;
+
+    }
+
+    // السيطرة تُستخدم فورًا: اللاعب يختار الهدف في نفس اللحظة
+    openStealTargetMenu(targetSkill, (target) => {
+
+        let defender = (target === "self") ? battle.player : battle.enemy;
+
+        resolveAction(battle.player, defender, targetSkill, false);
+
+        addBattleLog(`${battle.player.name} سيطر على مهارة "${targetSkill.name}" واستخدمها!`);
+
+        runControlledSkillsQueue(queue, index + 1, consumesPlayerTurn);
+
+    }, () => {
+
+        addBattleLog(`تم تخطّي استخدام "${targetSkill.name}" المُسيطر عليها`);
+
+        runControlledSkillsQueue(queue, index + 1, consumesPlayerTurn);
+
+    }, "المُسيطر عليها");
+
+}
+
+
 // يتحقق من كل الأسماء المختارة، ثم يستهلك دور/تهدئة مهارة السرقة مرة واحدة
 // فقط لهذه الدفعة بالكامل، ثم ينفّذ كل مهارة مسروقة فورًا واحدة تلو الأخرى
 function attemptStealMulti(stealSkill, names){
@@ -4152,7 +4603,8 @@ function runStolenSkillsQueue(queue, index, consumesPlayerTurn){
 
     }
 
-    if(targetSkill.effect === "delay_cooldown" || targetSkill.effect === "shadow"){
+    if(targetSkill.effect === "delay_cooldown" || targetSkill.effect === "shadow"
+    || targetSkill.effect === "control"){
 
         // مهارات تتطلب قوائم اختيار معقدة: تُتخطّى عند سرقتها/نسخها في PvE
         addBattleLog(`لا يمكن استخدام "${targetSkill.name}" المسروقة في هذه المعركة، تم تخطّيها`);
@@ -4514,7 +4966,8 @@ function runCopiedSkillsQueue(queue, index, consumesPlayerTurn){
 
     }
 
-    if(targetSkill.effect === "delay_cooldown" || targetSkill.effect === "shadow"){
+    if(targetSkill.effect === "delay_cooldown" || targetSkill.effect === "shadow"
+    || targetSkill.effect === "control"){
 
         // مهارات تتطلب قوائم اختيار معقدة: تُتخطّى عند نسخها في PvE
         addBattleLog(`لا يمكن استخدام "${targetSkill.name}" المنسوخة في هذه المعركة، تم تخطّيها`);
