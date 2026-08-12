@@ -539,6 +539,27 @@ lang="ar">
     </div>
 
 
+    <div id="upgrade-split-box" class="empty-card" style="display:none;">
+
+        <p>🎁 ستكسب 200 نقطة — وزّعها بين HP وATK (بدفعات 50 فقط)</p>
+
+        <p>
+            ❤️ HP: <span id="split-hp-gain">100</span>
+            <button onclick="splitAdjustHp(-50)">−</button>
+            <button onclick="splitAdjustHp(50)">+</button>
+        </p>
+
+        <p>
+            ⚔️ ATK: <span id="split-atk-gain">100</span>
+            <button onclick="splitAdjustAtk(-50)">−</button>
+            <button onclick="splitAdjustAtk(50)">+</button>
+        </p>
+
+        <p id="split-total-label">المجموع: 200 / 200</p>
+
+    </div>
+
+
     <button onclick="upgradeCharacter()">
         ⬆️ تطوير
     </button>

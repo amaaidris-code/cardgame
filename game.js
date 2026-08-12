@@ -2357,7 +2357,15 @@ async function loadUpgradeScreen(){
 
     `;
 
+    // توزيع الـ200 نقطة: يُعاد للافتراضي 100/100 عند فتح الشاشة
+    upgradeSplit.hp = 100;
+    upgradeSplit.atk = 100;
+    updateSplitUI();
 
+    let splitBox = document.getElementById("upgrade-split-box");
+    if(splitBox){
+        splitBox.style.display = (character.available_points || 0) > 0 ? "block" : "none";
+    }
 
 }
 
@@ -2369,6 +2377,40 @@ async function loadUpgradeScreen(){
 // ========================================
 // تطوير الشخصية
 // ========================================
+
+// توزيع الـ200 نقطة بين HP وATK عند كل تطوير (بدفعات 50، ولا تقل صفة عن 50)
+let upgradeSplit = { hp: 100, atk: 100 };
+
+// يحدّث العرض الرقمي وعلامة المجموع في شاشة التطوير
+function updateSplitUI(){
+    let hpEl = document.getElementById("split-hp-gain");
+    let atkEl = document.getElementById("split-atk-gain");
+    let totalEl = document.getElementById("split-total-label");
+    if(hpEl) hpEl.textContent = upgradeSplit.hp;
+    if(atkEl) atkEl.textContent = upgradeSplit.atk;
+    if(totalEl) totalEl.textContent = "المجموع: " + (upgradeSplit.hp + upgradeSplit.atk) + " / 200";
+}
+
+// تعديل نصيب HP (الزيادة تُخصم من ATK والعكس) ضمن الحدود المسموحة
+function splitAdjustHp(delta){
+    let newHp = upgradeSplit.hp + delta;
+    // كل صفة بين 50 و150 بخطوات 50، والمجموع ثابت 200
+    if(newHp < 50) newHp = 50;
+    if(newHp > 150) newHp = 150;
+    upgradeSplit.hp = newHp;
+    upgradeSplit.atk = 200 - newHp;
+    updateSplitUI();
+}
+
+// تعديل نصيب ATK (الزيادة تُخصم من HP والعكس) ضمن الحدود المسموحة
+function splitAdjustAtk(delta){
+    let newAtk = upgradeSplit.atk + delta;
+    if(newAtk < 50) newAtk = 50;
+    if(newAtk > 150) newAtk = 150;
+    upgradeSplit.atk = newAtk;
+    upgradeSplit.hp = 200 - newAtk;
+    updateSplitUI();
+}
 
 async function upgradeCharacter(){
 
@@ -2385,12 +2427,30 @@ async function upgradeCharacter(){
         return;
     }
 
+    let hpGain = Number(upgradeSplit.hp || 100);
+    let atkGain = Number(upgradeSplit.atk || 100);
+
+    if(hpGain + atkGain !== 200){
+        alert("يجب أن يكون مجموع النقاط 200 تمامًا");
+        return;
+    }
+    if(hpGain < 50 || atkGain < 50){
+        alert("يجب رفع كل من HP وATK بما لا يقل عن 50");
+        return;
+    }
+    if(hpGain % 50 !== 0 || atkGain % 50 !== 0){
+        alert("يجب أن تكون الزيادات مضاعفات 50");
+        return;
+    }
+
     let {error:upgradeError} =
 
     await supabaseClient
     .rpc("upgrade_player_character", {
 
-        p_token: upgrade_token
+        p_token: upgrade_token,
+        p_hp_gain: hpGain,
+        p_atk_gain: atkGain
 
     });
 
