@@ -5102,14 +5102,6 @@ function runCopiedSkillsQueue(queue, index, consumesPlayerTurn){
 
 function openSealMenu(sealSkill){
 
-function closeSealMenu(){
-    let modal = document.getElementById("battle-seal-modal");
-    if(modal) modal.remove();
-}
-
-// ========================================
-function openSealMenu(sealSkill){
-
     if(battle.turnOwner !== "player" && battle.player.hp > 0){
         alert("ليس دورك الآن");
         return;
