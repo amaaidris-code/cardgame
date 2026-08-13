@@ -1205,26 +1205,38 @@ function pvpRenderStatusBadges(data){
             tempAtk: data.player1_temp_atk || 0,
             extraTurns: data.player1_extra_turns || 0,
             reflectMult: data.player1_reflect_multiplier || 0,
-            absorbHits: data.player1_absorb_hits || 0
+            absorbHits: data.player1_absorb_hits || 0,
+            shieldCharges: data.player1_shield_charges || 0,
+            poisonDamage: data.player1_poison_damage || 0,
+            poisonTurns: data.player1_poison_turns || 0
         };
         opp = {
             tempAtk: data.player2_temp_atk || 0,
             extraTurns: data.player2_extra_turns || 0,
             reflectMult: data.player2_reflect_multiplier || 0,
-            absorbHits: data.player2_absorb_hits || 0
+            absorbHits: data.player2_absorb_hits || 0,
+            shieldCharges: data.player2_shield_charges || 0,
+            poisonDamage: data.player2_poison_damage || 0,
+            poisonTurns: data.player2_poison_turns || 0
         };
     } else {
         my = {
             tempAtk: data.player2_temp_atk || 0,
             extraTurns: data.player2_extra_turns || 0,
             reflectMult: data.player2_reflect_multiplier || 0,
-            absorbHits: data.player2_absorb_hits || 0
+            absorbHits: data.player2_absorb_hits || 0,
+            shieldCharges: data.player2_shield_charges || 0,
+            poisonDamage: data.player2_poison_damage || 0,
+            poisonTurns: data.player2_poison_turns || 0
         };
         opp = {
             tempAtk: data.player1_temp_atk || 0,
             extraTurns: data.player1_extra_turns || 0,
             reflectMult: data.player1_reflect_multiplier || 0,
-            absorbHits: data.player1_absorb_hits || 0
+            absorbHits: data.player1_absorb_hits || 0,
+            shieldCharges: data.player1_shield_charges || 0,
+            poisonDamage: data.player1_poison_damage || 0,
+            poisonTurns: data.player1_poison_turns || 0
         };
     }
     pvpRenderFighterStatusBadge("pvp-player", my);
@@ -1240,6 +1252,9 @@ function pvpRenderFighterStatusBadge(idPrefix, fighter){
     if((fighter.extraTurns || 0) > 0) badges.push("⚡×" + fighter.extraTurns);
     if((fighter.reflectMult || 0) > 0) badges.push("🔁×" + fighter.reflectMult);
     if((fighter.absorbHits || 0) > 0) badges.push("🧲×" + fighter.absorbHits);
+    if((fighter.shieldCharges || 0) > 0) badges.push("🛡️×" + fighter.shieldCharges);
+    if((fighter.poisonDamage || 0) > 0 && (fighter.poisonTurns || 0) > 0)
+        badges.push("☠️" + fighter.poisonDamage + "×" + fighter.poisonTurns);
 
     let key = badges.join("|");
     if(el.dataset.renderedKey === key) return;
@@ -1371,15 +1386,9 @@ function renderPVPSkillButtons(){
 
                 btn.disabled = false;
 
-                btn.onclick = () => {
-                    if(pvpState.mySealedSkillIds && pvpState.mySealedSkillIds.length > 0){
-                        pvpState.mySealedSkillIds.pop();
-                        showToast("تم فك الختم عن إحدى المهارات");
-                        pvpRefreshState(true);
-                    } else {
-                        showToast("لا توجد مهارات مختومة حالياً");
-                    }
-                };
+                // يُرسل فعليًا إلى السيرفر عبر pvp_seal_or_unseal_skill
+                // (فك الختم الحقيقي للمهارة المختومة) — القائمة تظهر مهاراتي المختومة
+                btn.onclick = () => pvpOpenUnsealMenu(skill);
 
             } else if(skill.effect === "delay_cooldown"){
 
