@@ -3496,11 +3496,15 @@ async function uploadPageBackground(characterId, pageIndex){
     if(!file) return;
 
     // نرفع الصورة ونضع الرابط في حقل النص ثم نحفظه (مثل زر حفظ تمامًا)
+    // نسبة الاقتصاص 1:1 (مربع) لتطابق حاوية العرض في شاشة المعركة التي
+    // هي مربعة أيضًا (aspect-ratio: 1/1). لو اقتصصناها 16:9 (أعرض من الأطول)
+    // فإن background-size: cover في الحاوية المربعة يكبّر الصورة بحيث تملأ
+    // العرض ويقصّ الأعلى والأسفل، فلا تظهر إلا قطعة صغيرة من منتصف الصورة.
     await uploadCharacterImage(
         "page-bg-file-" + pageIndex,
         "page-bg-" + pageIndex,
         "page-bg-status-" + pageIndex,
-        { aspectRatio: 1.78, crop: true }
+        { aspectRatio: 1, crop: true }
     );
 
     let input = document.getElementById("page-bg-" + pageIndex);

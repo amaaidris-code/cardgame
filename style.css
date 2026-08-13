@@ -801,6 +801,16 @@ position:relative;
 
     margin: 0 auto;
 
+    /* المفتاح: اجعل الصفّين يتقاسمان المربع بالتساوي (بدل ارتفاع تلقائي يُحدده
+       محتوى الأزرار). لو تُركا auto، فإن أزرار المهارات تدفع ارتفاع الحاوية
+       ليتجاوز عرضها فيصبح الصندوق عموديًا (أطول من عرضه) لا مربعًا، وعندها
+       background-size: cover على صورة مربعة يكبّر الصورة لتملأ العرض ويقصّ
+       أعلاها وأسفلها فلا تظهر إلا قطعة صغيرة من منتصف الصورة. */
+    grid-template-rows: 1fr 1fr;
+
+    /* حتى لا يمدّد محتوى الأزرار صندوق الخلفية خارج المربع */
+    overflow: hidden;
+
 }
 
 
@@ -822,7 +832,12 @@ position:relative;
 
     border: none;
 
-    background: transparent;
+    /* ملاحظة: يجب ألا نستخدم اختصار background هنا، لأنه shorthand يُصفّر
+       كل خصائص الخلفية (size/position/repeat/image) فتلغي background-size:cover
+       وbackground-position:center المُحدّدة أعلاه، وترجع الصورة لحجمها الطبيعي
+       مثبّتة في الزاوية العلوية اليسرى (0% 0%) فتظهر قطعة صغيرة فقط منها.
+       نستخدم background-color فقط كي يبقى cover/center ساريين. */
+    background-color: transparent;
 
 }
 
