@@ -5856,8 +5856,14 @@ function showUpdatePrompt(manifest, installedVersion, latestVersion, isRequired)
 
     document.getElementById("update-download-btn")
         .addEventListener("click", function(){
-            // فتح رابط التحميل في المتصفح الخارجي لتنزيل ملف APK
-            window.open(manifest.downloadUrl, "_system", "location=yes");
+            // داخل تطبيق Capacitor: افتح الرابط في متصفح النظام لتنزيل ملف APK.
+            // window.open(url, "_system", ...) هو أسلوب Cordova ولا يعمل في Capacitor.
+            var url = manifest.downloadUrl;
+            if(window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser){
+                window.Capacitor.Plugins.Browser.open({ url: url });
+            }else{
+                window.open(url, "_blank", "noopener");
+            }
         });
 
     let laterBtn = document.getElementById("update-later-btn");
