@@ -4060,3 +4060,290 @@ box-shadow: 0 6px 24px rgba(0,0,0,0.5), 0 0 18px rgba(255,120,0,0.4);
 
 }
 
+
+/* ========================================
+   تنسيق موحّد للشاشات الصغيرة (الجوال/APK): كل العناصر تُصغَّر
+   بنفس النسبة حتى لا نحتاج للتمرير لأعلى وأسفل، وبدون تكبير أي
+   عنصر بشكل مختلف عن غيره
+   ======================================== */
+
+@media (max-width: 480px){
+
+    #main-content{
+
+        padding: 8px 8px;
+
+    }
+
+    .top-bar{
+
+        min-height: 46px;
+
+        padding: 8px 12px;
+
+    }
+
+    .top-bar .game-title{
+
+        font-size: 15px;
+
+    }
+
+    .top-bar .player-info{
+
+        font-size: 11px;
+
+        gap: 8px;
+
+    }
+
+    h1{
+
+        font-size: 20px;
+
+        margin-top: 12px;
+
+    }
+
+    h2{
+
+        font-size: 17px;
+
+        margin-bottom: 8px;
+
+    }
+
+    h3{
+
+        font-size: 15px;
+
+        margin-bottom: 8px;
+
+    }
+
+    .subtitle{
+
+        font-size: 12px;
+
+        margin: 6px 0 12px;
+
+    }
+
+    /* أزرار عامة أصغر */
+
+    button{
+
+        padding: 9px 12px;
+
+        font-size: 14px;
+
+        border-radius: 8px;
+
+    }
+
+    .menu{
+
+        gap: 8px;
+
+        margin-top: 12px;
+
+    }
+
+    /* بطاقات الشخصيات أصغر */
+
+    .character-card{
+
+        padding: 8px;
+
+        gap: 10px;
+
+    }
+
+    .character-image{
+
+        width: 64px;
+
+        height: 80px;
+
+    }
+
+    .character-name{
+
+        font-size: 15px;
+
+        margin-bottom: 4px;
+
+    }
+
+    .character-stats{
+
+        font-size: 12px;
+
+        line-height: 1.5;
+
+    }
+
+    .empty-card{
+
+        padding: 18px 10px;
+
+        margin-bottom: 10px;
+
+        font-size: 13px;
+
+    }
+
+    /* النماذج */
+
+    .form-box{
+
+        gap: 8px;
+
+        margin-top: 10px;
+
+    }
+
+    .form-box input,
+    .form-box textarea{
+
+        padding: 9px;
+
+        font-size: 14px;
+
+    }
+
+    .form-box textarea{
+
+        min-height: 70px;
+
+    }
+
+    .request-character-box{
+
+        margin-top: 14px;
+
+        margin-bottom: 10px;
+
+        padding: 12px;
+
+    }
+
+    /* عناصر عامة أخرى */
+
+    #character-list{
+
+        gap: 8px;
+
+        margin-top: 12px;
+
+    }
+
+    .glow-picker-row{
+
+        font-size: 11px;
+
+    }
+
+    .glow-picker-row input[type="color"]{
+
+        width: 28px;
+
+        height: 20px;
+
+    }
+
+    /* شاشة المعركة نفسها: تخطيط مدمج مضبوط للشاشات الصغيرة */
+
+    #pve-battle-screen.active,
+    #pvp-battle-screen.active{
+
+        padding: 4px 6px;
+
+    }
+
+    #pve-battle-screen .battle-arena,
+    #pvp-battle-screen .battle-arena{
+
+        gap: 6px;
+
+        padding: 6px 4px;
+
+    }
+
+    #pve-battle-screen .battle-image,
+    #pvp-battle-screen .battle-image{
+
+        width: 44px;
+
+        height: 44px;
+
+    }
+
+    #pve-battle-screen .battle-card,
+    #pvp-battle-screen .battle-card{
+
+        padding: 5px 8px;
+
+    }
+
+    #pve-battle-screen .used-skill-chip,
+    #pvp-battle-screen .used-skill-chip{
+
+        padding: 2px 5px;
+
+        font-size: 10px;
+
+    }
+
+    #pve-battle-screen .skills-page button,
+    #pvp-battle-screen .skills-page button{
+
+        font-size: 11px;
+
+        padding: 3px 4px;
+
+    }
+
+    #pve-battle-screen #pve-attack-button,
+    #pvp-battle-screen #pvp-attack-button{
+
+        width: 44px;
+
+        height: 44px;
+
+        font-size: 18px;
+
+    }
+
+    /* صندوق/نوافذ السرقة والنسخ وغيرها أصغر */
+
+    .steal-modal-box{
+
+        padding: 12px;
+
+    }
+
+    .steal-option{
+
+        padding: 7px;
+
+        font-size: 13px;
+
+    }
+
+    .steal-modal-box input{
+
+        padding: 8px;
+
+        font-size: 13px;
+
+    }
+
+    .skill-desc-text{
+
+        font-size: 12px;
+
+    }
+
+}
+
