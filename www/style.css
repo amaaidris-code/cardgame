@@ -93,6 +93,45 @@ body {
 }
 
 
+.reload-btn {
+
+    background: none;
+
+    border: none;
+
+    color: #ffffff;
+
+    font-size: 22px;
+
+    cursor: pointer;
+
+    padding: 4px 8px;
+
+    line-height: 1;
+
+    border-radius: 6px;
+
+    transition: transform 0.15s ease, background 0.15s ease;
+
+}
+
+
+.reload-btn:hover {
+
+    background: #333333;
+
+    transform: rotate(180deg);
+
+}
+
+
+.reload-btn:active {
+
+    transform: rotate(180deg) scale(0.9);
+
+}
+
+
 /* ========================================
    المحتوى
 ======================================== */
