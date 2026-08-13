@@ -1383,9 +1383,8 @@ opacity: 0.6;
 .skills-page button{
 
 /* حجم أزرار المهارات قابل للتحكم من لوحة الإدارة عبر متغير --skill-scale
-   (يُضبط على صفحة المهارات نفسها عند الرسم). القيمة 1 = الحجم الافتراضي. */
---skill-scale: 1;
-
+   (يُضبط على صفحة المهارات نفسها عند الرسم). لا تُعيّن قيمة هنا مباشرة
+   لأن أي قيمة على الزر نفسها ستحجب القيمة الموروثة من صفحة المهارات. */
 background: transparent;
 
 border: none;
@@ -1396,9 +1395,9 @@ border: none;
 box-shadow: none;
 
 /* حجم المهارة يتناسب مع مقياس لوحة الإدارة (خط + حشوة داخليًا) */
-font-size: calc(11px * var(--skill-scale));
+font-size: calc(11px * var(--skill-scale, 1));
 
-padding: calc(3px * var(--skill-scale)) calc(5px * var(--skill-scale));
+padding: calc(3px * var(--skill-scale, 1)) calc(5px * var(--skill-scale, 1));
 
 text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6);
 
