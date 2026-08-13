@@ -814,6 +814,8 @@ position:relative;
 
     border: none;
 
+    background: transparent;
+
 }
 
 .skills-page.skill-page-bg::before {
