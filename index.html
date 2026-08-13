@@ -7,7 +7,7 @@
 
     <title>Card Game</title>
 
-    <link rel="stylesheet" href="style.css?v=20260821">
+    <link rel="stylesheet" href="style.css?v=20260822">
 </head>
 
 <body>
@@ -240,6 +240,70 @@ lang="ar">
     </label>
 
     <button onclick="addCharacter()">إضافة</button>
+
+</div>
+
+
+<hr>
+
+
+<h2>
+🚪 الزنازين (Dungeons)
+</h2>
+
+<div id="admin-dungeons-content">
+
+</div>
+
+
+<h3>
+➕ إضافة / تعديل زنزانة
+</h3>
+
+<div class="form-box admin-add-form">
+
+    <input id="dungeon-name" type="text" placeholder="اسم الزنزانة">
+
+    <label>التدرّج (الدرجة)
+        <select id="dungeon-grade">
+            <option value="C">C</option>
+            <option value="B">B</option>
+            <option value="A">A</option>
+            <option value="S">S</option>
+        </select>
+    </label>
+
+    <input id="dungeon-gold" type="number" placeholder="جائزة الذهب">
+
+    <input id="dungeon-points" type="number" placeholder="نقاط التطوير">
+
+    <label>طريقة الدخول
+        <select id="dungeon-repeat">
+            <option value="unlimited">غير محدود</option>
+            <option value="daily">مرات محددة يوميًا</option>
+            <option value="total">مرات محددة إجماليًا</option>
+        </select>
+    </label>
+
+    <input id="dungeon-max-attempts" type="number" placeholder="عدد المرات المسموحة (يوميًا/إجماليًا)">
+
+    <label class="admin-checkbox-label">
+        <input id="dungeon-active" type="checkbox" checked>
+        مفعّلة (تظهر للاعبين)
+    </label>
+
+    <label>ترتيب الوحوش (من الأضعف للأقوى)</label>
+
+    <div class="dungeon-monster-picker">
+        <select id="dungeon-monster-select"></select>
+        <button type="button" onclick="addMonsterToDungeonOrder()">➕ إضافة وحش</button>
+    </div>
+
+    <div id="dungeon-monster-order"></div>
+
+    <button onclick="saveDungeon()">حفظ الزنزانة</button>
+
+    <button onclick="resetDungeonForm()">إلغاء</button>
 
 </div>
 
@@ -643,9 +707,9 @@ lang="ar">
 </h2>
 
 
-<div class="empty-card">
+<div id="gate-list">
 
-نظام البوابات قيد التطوير
+جاري تحميل الزنازين...
 
 </div>
 
@@ -1179,11 +1243,13 @@ id="pve-player-used-skills">
 <script src="cache.js"></script>
 <div id="global-challenge-banner" class="global-challenge-banner hidden"></div>
 
-<script src="game.js?v=20260821"></script>
+<script src="game.js?v=20260822"></script>
 
-<script src="battle.js?v=20260821"></script>
+<script src="battle.js?v=20260822"></script>
 
-<script src="pvp.js?v=20260821"></script>
+<script src="pvp.js?v=20260822"></script>
+
+<script src="dungeon.js?v=20260822"></script>
 
   </body>
 

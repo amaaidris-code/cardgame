@@ -293,10 +293,21 @@ function openScreen(screenId){
     
     loadAdminPanel();
 
+    loadAdminDungeons();
+
+    populateDungeonMonsterSelect();
+
     loadAdminPlayers();
     
     loadCharacterRequests();
     
+}
+
+
+        if(screenId === "gate-screen"){
+
+    loadGates();
+
 }
 
 

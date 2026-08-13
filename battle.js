@@ -52,6 +52,17 @@ let battle = {
     playerShadowPool: [],       // مجموعة شخصيات الظلال التي تمتلكها
     enemyShadowPool: [],        // مجموعة شخصيات الظلال التي يمتلكها العدو
 
+    // ===== حالة الزنزانة (Dungeon) =====
+    // عند الدخول في زنزانة: يحتفظ اللاعب بصحته وتهدئة مهاراته بين الوحوش
+    // ولا يُعاد بناؤه من جديد إلا عند بدء زنزانة جديدة كليًا
+    dungeonId: null,            // معرّف الزنزانة (null في المعارك العادية)
+    dungeonName: null,
+    dungeonGrade: null,
+    dungeonGoldPrize: 0,
+    dungeonPointsPrize: 0,
+    dungeonMonsterIds: [],      // ترتيب معرّفات الوحوش
+    dungeonIndex: 0,            // فهرس الوحش الحالي
+
 };
 
 
@@ -569,6 +580,10 @@ function buildFighter(pc, skills, isPlayer){
         // وأول ضربة قابلة للصد قادمة على صاحب الدرع ترتد على مهاجمها
         reflectMult: 0,
 
+        // مهارة "انعكاس لا يُصدّ": عندما تكون صحيحة يُعكس الضرر كضرر لا
+        // يُحجب إلا بالامتصاص، ويُعكس ضرر السُم كذلك
+        reflectUnblockable: false,
+
         // أدوار تهدئة إضافية تُضاف لمهارة معيّنة (مهارة "تأجيل التهدئة")
         cooldownExtra: {},
 
@@ -922,6 +937,8 @@ function buildMonsterFighter(character, skills){
 
         reflectMult: 0,
 
+        reflectUnblockable: false,
+
         cooldownExtra: {},
 
         isPlayer: false,
@@ -1082,6 +1099,214 @@ async function startPVEBattle(monsterId){
 
 
     await runIntroSequence("pve");
+
+}
+
+
+
+// ========================================
+// وضع الزنزانة (Dungeon): يقاتل اللاعب عدة وحوش بالتتابع مع بقاء صحته
+// وتهدئة مهاراته كما هي بين النزالات، ولا تُستعاد إلا عند إكمال الزنزانة
+// كلها أو الهزيمة
+// ========================================
+
+async function startDungeonBattle(dungeon){
+
+    if(!dungeon || !dungeon.monster_ids || dungeon.monster_ids.length === 0){
+
+        alert("هذه الزنزانة بلا وحوش");
+
+        openScreen("gate-screen");
+
+        loadGates();
+
+        return;
+
+    }
+
+    openScreen("pve-battle-screen");
+
+    resetBattleVisuals("pve");
+
+    let pc = await getActivePlayerCharacter();
+
+    if(!pc){
+
+        alert("لا توجد شخصية نشطة");
+
+        openScreen("gate-screen");
+
+        return;
+
+    }
+
+    let skills = await loadCharacterSkills(pc.character_id);
+
+    if(skills.length === 0){
+
+        skills = [
+
+            {id:"default_atk", name:"هجوم عادي", type:"attack", damage:100, cooldown:0, effect:null},
+
+            {id:"default_def", name:"دفاع", type:"defense", damage:0, cooldown:2, effect:null}
+
+        ];
+
+    }
+
+    await loadSkillPageBackgrounds(pc.character_id);
+
+    // يُبنى اللاعب مرة واحدة فقط عند بدء الزنزانة؛ نزالات الوحوش اللاحقة
+    // تعيد استخدام نفس الكائن فتبقى صحته وتهدئة مهاراته محفوظة
+    battle.player = buildFighter(pc, skills, true);
+
+    battle.player.scaledAttackDamages = computeScaledAttackDamages(battle.player.atk, battle.player.skills);
+
+    battle.prefix = "pve";
+
+    battle.phase = "idle";
+
+    battle.finished = false;
+
+    battle.raceWon = false;
+
+    battle.raceButtonLockedUntil = 0;
+
+    battle.dungeonId = dungeon.id;
+
+    battle.dungeonName = dungeon.name;
+
+    battle.dungeonGrade = dungeon.grade;
+
+    battle.dungeonGoldPrize = dungeon.gold_prize || 0;
+
+    battle.dungeonPointsPrize = dungeon.points_prize || 0;
+
+    battle.dungeonMonsterIds = (dungeon.monster_ids || []).slice();
+
+    battle.dungeonIndex = 0;
+
+    battle.playerUsedSkills = [];
+
+    battle.enemyUsedSkills = [];
+
+    battle.enemyUsedSkillsThisBattle = [];
+
+    battle.playerSealedSkillIds = [];
+
+    battle.enemySealedSkillIds = [];
+
+    ensureLogBox("pve");
+
+    addBattleLog(`🚪 دخول الزنزانة: ${battle.dungeonName} (التدرّج ${battle.dungeonGrade}) — ${battle.dungeonMonsterIds.length} وحوش`);
+
+    await startDungeonMonster(battle.dungeonMonsterIds[0]);
+
+}
+
+
+async function startDungeonMonster(monsterId){
+
+    let monsterRow = null;
+
+    await GameCache.fetchWithCache(
+
+        "monster_row_" + monsterId,
+
+        async () => {
+
+            let {data, error} = await supabaseClient.from("characters").select("*").eq("id", monsterId).single();
+
+            if(error) throw error;
+
+            return data;
+
+        },
+
+        (data) => { monsterRow = data; },
+
+        () => { monsterRow = null; },
+
+        10 * 60 * 1000
+
+    );
+
+    if(!monsterRow){
+
+        alert("تعذر تحميل أحد الوحوش");
+
+        openScreen("gate-screen");
+
+        return;
+
+    }
+
+    let monsterSkills = await loadCharacterSkills(monsterId);
+
+    // بين الوحوش تُصفَّر تأثيرات المعركة المؤقتة للاعب (السم، الدروع،
+    // التجميد، ...) بينما تبقى صحته وتهدئة مهاراته كما هي
+    resetPlayerTransientState();
+
+    battle.enemy = buildMonsterFighter(monsterRow, monsterSkills);
+
+    battle.currentMonsterId = monsterId;
+
+    battle.enemyUsedSkillsThisBattle = [];
+
+    let revealedIds = pveLoadRevealedSkillIds(monsterId);
+
+    battle.enemyUsedSkills = monsterSkills.filter(s => revealedIds.includes(s.id));
+
+    battle.playerUsedSkills = [];
+
+    setTurnIndicatorText("pve-turn-indicator", "", null);
+
+    updateBattleScreen();
+
+    renderUsedSkillsUI("pve");
+
+    hideBattleResult("pve");
+
+    await runIntroSequence("pve");
+
+}
+
+
+// تصفير تأثيرات المعركة المؤقتة للاعب عند الانتقال لوحش جديد، مع الإبقاء
+// على الصحة الحالية وتهدئة المهارات
+function resetPlayerTransientState(){
+
+    let p = battle.player;
+
+    if(!p) return;
+
+    p.shieldCharges = 0;
+
+    p.frozenTurns = 0;
+
+    p.sealedSkillIds = [];
+
+    p.tempAtk = 0;
+
+    p.tempHp = 0;
+
+    p.extraTurns = 0;
+
+    p.poisonDamage = 0;
+
+    p.poisonTurns = 0;
+
+    p.absorbMode = null;
+
+    p.absorbHits = 0;
+
+    p.reflectMult = 0;
+
+    p.reflectUnblockable = false;
+
+    p.lastHitSnapshot = null;
+
+    p.defending = false;
 
 }
 
@@ -1579,17 +1804,35 @@ function processTurn(){
     let poisonedFighter = (currentFighter === battle.player) ? battle.enemy : battle.player;
     if(poisonedFighter.poisonTurns > 0 && poisonedFighter.poisonDamage > 0 && poisonedFighter.hp > 0){
         let poisonDmg = poisonedFighter.poisonDamage;
-        poisonedFighter.hp = Math.max(0, poisonedFighter.hp - poisonDmg);
-        poisonedFighter.poisonTurns--;
-        addBattleLog(`☠️ ${poisonedFighter.name} يتلقى ${poisonDmg} ضرر سُم! (متبقي ${poisonedFighter.poisonTurns} ${poisonedFighter.poisonTurns === 1 ? "دور" : "أدوار"})`);
-        updateBattleScreen();
-        if(poisonedFighter.hp <= 0){
-            battle.finished = true;
-            let winner = (poisonedFighter === battle.player) ? "enemy" : "player";
-            battle.winner = winner;
-            endBattle(winner);
-            return;
+        // مهارة "انعكاس لا يُصدّ": إذا كان درع الانعكاس فعّالًا يعكس ضرر
+        // السُم كضرر لا يُصدّ على مَن سمَّمه (الطرف الآخر)
+        if(poisonedFighter.reflectUnblockable){
+            let poisoner = (poisonedFighter === battle.player) ? battle.enemy : battle.player;
+            poisonedFighter.reflectUnblockable = false;
+            poisonedFighter.reflectMult = 0;
+            poisoner.hp = Math.max(0, poisoner.hp - poisonDmg);
+            addBattleLog(`🔁 ${poisonedFighter.name} عكس ضرر السُم! ${poisoner.name} يتلقى ${poisonDmg} ضرر لا يُصدّ`);
+            updateBattleScreen();
+            if(poisoner.hp <= 0){
+                battle.finished = true;
+                let winner = (poisoner === battle.player) ? "enemy" : "player";
+                battle.winner = winner;
+                endBattle(winner);
+                return;
+            }
+        } else {
+            poisonedFighter.hp = Math.max(0, poisonedFighter.hp - poisonDmg);
+            addBattleLog(`☠️ ${poisonedFighter.name} يتلقى ${poisonDmg} ضرر سُم! (متبقي ${poisonedFighter.poisonTurns} ${poisonedFighter.poisonTurns === 1 ? "دور" : "أدوار"})`);
+            updateBattleScreen();
+            if(poisonedFighter.hp <= 0){
+                battle.finished = true;
+                let winner = (poisonedFighter === battle.player) ? "enemy" : "player";
+                battle.winner = winner;
+                endBattle(winner);
+                return;
+            }
         }
+        poisonedFighter.poisonTurns--;
     }
 
     // فحص التجميد/الشلل: صاحب الدور المجمّد يخسر دوره بالكامل بدون أي
@@ -3051,6 +3294,8 @@ function executeShadowSkill(user, target, skill){
 
         user.reflectMult = reflectMult;
 
+        user.reflectUnblockable = !!(skill.params && skill.params.unblockable_reflect);
+
         updateBattleScreen();
 
         addBattleLog(`${user.name} جهّز درع انعكاس بمهارة "${skill.name}" الظلية! (×${reflectMult})`);
@@ -3803,9 +4048,43 @@ function resolveAction(attacker, defender, skill, trackUsed = true, isReflectedH
 
         reflectedDmg = Math.max(1, Math.floor(dmg * defender.reflectMult));
 
+        let unblockableReflect = !!defender.reflectUnblockable;
+
         defender.reflectMult = 0;
 
-        attacker.hp = Math.max(0, attacker.hp - reflectedDmg);
+        defender.reflectUnblockable = false;
+
+        // انعكاس لا يُصدّ: الضرر المنعكس لا يُحجب إلا بمهارة الامتصاص لدى
+        // المهاجم. وإلا فيُعكس كضرر مباشر لا يُصدّ على المهاجم
+        if(unblockableReflect && attacker.absorbHits > 0){
+
+            if(attacker.absorbMode === "atk"){
+
+                attacker.tempAtk += reflectedDmg;
+
+            } else {
+
+                attacker.hp += reflectedDmg;
+
+                if(attacker.hp > attacker.maxHp) attacker.maxHp = attacker.hp;
+
+            }
+
+            attacker.absorbHits--;
+
+            if(attacker.absorbHits <= 0){
+
+                attacker.absorbMode = null;
+
+                attacker.absorbHits = 0;
+
+            }
+
+        } else {
+
+            attacker.hp = Math.max(0, attacker.hp - reflectedDmg);
+
+        }
 
     }
 
@@ -4108,6 +4387,8 @@ function playerUseReflect(reflectSkill){
 
     battle.player.reflectMult = reflectMult;
 
+    battle.player.reflectUnblockable = !!(reflectSkill.params && reflectSkill.params.unblockable_reflect);
+
     battle.player.turnsTaken++;
 
     if(reflectSkill.cooldown > 0)
@@ -4140,6 +4421,8 @@ function enemyUseReflect(reflectSkill){
     let reflectMult = Math.max(1, skillParamAmount(reflectSkill, "reflect_mult", reflectSkill.damage));
 
     enemy.reflectMult = reflectMult;
+
+    enemy.reflectUnblockable = !!(reflectSkill.params && reflectSkill.params.unblockable_reflect);
 
     markEnemySkillUsed(reflectSkill);
 
@@ -4820,6 +5103,8 @@ function runControlledSkillsQueue(queue, index, consumesPlayerTurn){
 
         battle.player.reflectMult = reflectMult;
 
+        battle.player.reflectUnblockable = !!(targetSkill.params && targetSkill.params.unblockable_reflect);
+
         updateBattleScreen();
 
         addBattleLog(`${battle.player.name} جهّز درع الانعكاس بالسيطرة على "${targetSkill.name}"! (×${reflectMult})`);
@@ -5036,6 +5321,8 @@ function runStolenSkillsQueue(queue, index, consumesPlayerTurn){
         let reflectMult = Math.max(1, skillParamAmount(targetSkill, "reflect_mult", targetSkill.damage));
 
         battle.player.reflectMult = reflectMult;
+
+        battle.player.reflectUnblockable = !!(targetSkill.params && targetSkill.params.unblockable_reflect);
 
         updateBattleScreen();
 
@@ -5399,6 +5686,8 @@ function runCopiedSkillsQueue(queue, index, consumesPlayerTurn){
         let reflectMult = Math.max(1, skillParamAmount(targetSkill, "reflect_mult", targetSkill.damage));
 
         battle.player.reflectMult = reflectMult;
+
+        battle.player.reflectUnblockable = !!(targetSkill.params && targetSkill.params.unblockable_reflect);
 
         updateBattleScreen();
 
@@ -6221,15 +6510,110 @@ function showBattleResult(playerWon){
 
     if(!arena) return;
 
+    let inDungeon = !!battle.dungeonId;
+
+    let isLastMonster = inDungeon && (battle.dungeonIndex >= battle.dungeonMonsterIds.length - 1);
+
     let overlay = document.createElement("div");
 
     overlay.className = "battle-result-overlay";
 
+    // زنزانة: هزم اللاعب الوحش الأخير — سلم الجائزة من السيرفر
+    if(playerWon && inDungeon && isLastMonster){
+
+        overlay.innerHTML = `
+
+            <h2>🏆 أكملت الزنزانة!</h2>
+
+            <p id="dungeon-reward-line">جاري تسليم الجائزة...</p>
+
+            <button id="battle-result-back-btn">العودة إلى البوابات</button>
+
+        `;
+
+        arena.appendChild(overlay);
+
+        overlay.querySelector("#battle-result-back-btn").onclick = () => {
+
+            overlay.remove();
+
+            clearDungeonState();
+
+            openScreen("gate-screen");
+
+            loadGates();
+
+        };
+
+        dungeonClaimReward(battle.dungeonId)
+
+        .then(result => {
+
+            let line = document.getElementById("dungeon-reward-line");
+
+            if(line && result && result.status === "success"){
+
+                line.textContent = `🪙 +${result.gold_added} ذهب · ⭐ +${result.points_added} نقطة تطوير`;
+
+            } else if(line && result && result.error){
+
+                line.textContent = result.error;
+
+            }
+
+        })
+
+        .catch(err => {
+
+            let line = document.getElementById("dungeon-reward-line");
+
+            if(line) line.textContent = (err && err.message) ? err.message : "تعذر تسليم الجائزة";
+
+        });
+
+        return;
+
+    }
+
+    // زنزانة: هزم اللاعب الوحش الحالي ويبقى التالي — زر للانتقال للوحش التالي
+    if(playerWon && inDungeon && !isLastMonster){
+
+        overlay.innerHTML = `
+
+            <h2>✅ هزمت الوحش!</h2>
+
+            <p>الوحش التالي قادم...</p>
+
+            <button id="dungeon-next-btn">الوحش التالي (${battle.dungeonIndex + 1}/${battle.dungeonMonsterIds.length})</button>
+
+        `;
+
+        arena.appendChild(overlay);
+
+        overlay.querySelector("#dungeon-next-btn").onclick = () => {
+
+            overlay.remove();
+
+            battle.dungeonIndex++;
+
+            let nextId = battle.dungeonMonsterIds[battle.dungeonIndex];
+
+            startDungeonMonster(nextId);
+
+        };
+
+        return;
+
+    }
+
+    // معركة عادية أو هزيمة في زنزانة
+    let title = playerWon ? "🏆 فزت!" : "💀 خسرت";
+
     overlay.innerHTML = `
 
-        <h2>${playerWon ? "🏆 فزت!" : "💀 خسرت"}</h2>
+        <h2>${title}</h2>
 
-        <button id="battle-result-back-btn">العودة</button>
+        <button id="battle-result-back-btn">${inDungeon ? "العودة إلى البوابات" : "العودة"}</button>
 
     `;
 
@@ -6241,9 +6625,33 @@ function showBattleResult(playerWon){
 
         overlay.remove();
 
-        openScreen("solo-battle-screen");
+        clearDungeonState();
+
+        openScreen(inDungeon ? "gate-screen" : "solo-battle-screen");
+
+        if(inDungeon) loadGates();
 
     };
+
+}
+
+
+// إعادة تهيئة حالة الزنزانة عند مغادرتها (هزيمة أو إكمال أو خروج)
+function clearDungeonState(){
+
+    battle.dungeonId = null;
+
+    battle.dungeonName = null;
+
+    battle.dungeonGrade = null;
+
+    battle.dungeonGoldPrize = 0;
+
+    battle.dungeonPointsPrize = 0;
+
+    battle.dungeonMonsterIds = [];
+
+    battle.dungeonIndex = 0;
 
 }
 

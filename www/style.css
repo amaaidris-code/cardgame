@@ -4933,3 +4933,95 @@ box-shadow: 0 6px 24px rgba(0,0,0,0.5), 0 0 18px rgba(255,120,0,0.4);
 
 }
 
+/* ===== الزنازين (Dungeons) ===== */
+
+.dungeon-grade{
+
+    display: inline-block;
+
+    padding: 2px 8px;
+
+    margin-right: 6px;
+
+    background: #ff8a00;
+
+    color: #1a1a2e;
+
+    border-radius: 6px;
+
+    font-weight: bold;
+
+    font-size: 13px;
+
+}
+
+.dungeon-card{
+
+    margin-bottom: 12px;
+
+}
+
+.dungeon-monster-picker{
+
+    display: flex;
+
+    gap: 8px;
+
+    align-items: center;
+
+    margin-bottom: 8px;
+
+}
+
+.dungeon-monster-picker select{
+
+    flex: 1;
+
+}
+
+.dungeon-order-chip{
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 6px;
+
+    background: #22244a;
+
+    border: 1px solid #3b4a6b;
+
+    border-radius: 8px;
+
+    padding: 6px 10px;
+
+    margin: 4px 0;
+
+}
+
+.dungeon-order-chip span{
+
+    flex: 1;
+
+    color: #e6ecff;
+
+}
+
+.dungeon-order-chip button{
+
+    background: transparent;
+
+    color: #8fa2c4;
+
+    border: 1px solid #3b4a6b;
+
+    border-radius: 6px;
+
+    cursor: pointer;
+
+    font-size: 13px;
+
+    padding: 2px 6px;
+
+}
+
