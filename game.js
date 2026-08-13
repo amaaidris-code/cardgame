@@ -5665,9 +5665,15 @@ async function checkForAppUpdate(){
         let latestVersion = parseInt(manifest.version, 10);
         if(isNaN(latestVersion)) return;
 
-        // إذا كان هناك إصدار أحدث → اعرض نافذة التحديث
-        if(latestVersion > installedVersion){
-            showUpdatePrompt(manifest, installedVersion, latestVersion);
+        // الإصدار الأحدث والمطلوب إجبارًا؟ (required = true)
+        let isRequired = manifest.required === true || String(manifest.required) === "true";
+
+        // إذا كان هناك إصدار أحدث → اعرض نافذة التحديث فقط إذا كان إلزاميًا
+        if(latestVersion > installedVersion && isRequired){
+            showUpdatePrompt(manifest, installedVersion, latestVersion, true);
+        }else if(latestVersion > installedVersion){
+            // تحديث اختياري: لا نعرض أي رسالة (يُحدَّث تلقائيًا لاحقًا عند الإصدار الإجباري)
+            console.log("يتوفر تحديث اختياري (" + latestVersion + ") - لا حاجة للإلزام");
         }
 
     }catch(e){
@@ -5676,7 +5682,7 @@ async function checkForAppUpdate(){
 
 }
 
-function showUpdatePrompt(manifest, installedVersion, latestVersion){
+function showUpdatePrompt(manifest, installedVersion, latestVersion, isRequired){
 
     let existing = document.getElementById("update-modal");
     if(existing && existing.style.display !== "none") return;
@@ -5685,18 +5691,30 @@ function showUpdatePrompt(manifest, installedVersion, latestVersion){
         ? "<div class=\"update-notes\">" + manifest.releaseNotes + "</div>"
         : "";
 
+    // رسالة واضحة حسب نوع التحديث
+    let message = isRequired
+        ? "هناك تحديث إلزامي مهم للعبة. يجب تحديث التطبيق للاستمرار والحصول على أحدث الميزات."
+        : "يتوفر إصدار جديد من اللعبة. ننصحك بتحديث التطبيق الآن للاستفادة من أحدث الميزات والتحسينات.";
+
+    // التحديث الإلزامي: زر واحد فقط للتحميل (لا يوجد "لاحقًا")
+    let actions = isRequired
+        ? "<div class=\"update-actions\">" +
+              "<button id=\"update-download-btn\" class=\"update-download-btn\">تحميل التحديث الآن</button>" +
+          "</div>"
+        : "<div class=\"update-actions\">" +
+              "<button id=\"update-download-btn\" class=\"update-download-btn\">تحميل التحديث</button>" +
+              "<button id=\"update-later-btn\" class=\"update-later-btn\">لاحقًا</button>" +
+          "</div>";
+
     let modal = document.createElement("div");
     modal.id = "update-modal";
-    modal.className = "update-modal";
+    modal.className = "update-modal" + (isRequired ? " update-modal-required" : "");
     modal.innerHTML =
         "<div class=\"update-modal-box\">" +
             "<h2>تحديث متاح</h2>" +
-            "<p>يتوفر إصدار جديد من اللعبة. ننصحك بتحديث التطبيق الآن للاستفادة من أحدث الميزات والتحسينات.</p>" +
+            "<p>" + message + "</p>" +
             notes +
-            "<div class=\"update-actions\">" +
-                "<button id=\"update-download-btn\" class=\"update-download-btn\">تحميل التحديث</button>" +
-                "<button id=\"update-later-btn\" class=\"update-later-btn\">لاحقًا</button>" +
-            "</div>" +
+            actions +
         "</div>";
 
     document.body.appendChild(modal);
@@ -5707,10 +5725,19 @@ function showUpdatePrompt(manifest, installedVersion, latestVersion){
             window.open(manifest.downloadUrl, "_system", "location=yes");
         });
 
-    document.getElementById("update-later-btn")
-        .addEventListener("click", function(){
+    let laterBtn = document.getElementById("update-later-btn");
+    if(laterBtn){
+        laterBtn.addEventListener("click", function(){
             modal.style.display = "none";
         });
+    }
+
+    // التحديث الإلزامي: منع إغلاق النافذة نهائيًا حتى التحديث
+    if(isRequired){
+        modal.addEventListener("click", function(e){
+            if(e.target === modal) return; // لا يغلق عند الضغط على الخلفية
+        });
+    }
 
 }
 

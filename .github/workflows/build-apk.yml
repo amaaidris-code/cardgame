@@ -3,7 +3,16 @@ name: Build APK and Deploy
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      required:
+        description: 'Mark this update as REQUIRED (mandatory prompt)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 
 jobs:
   build:
@@ -79,12 +88,23 @@ jobs:
 
       - name: Update version manifest
         run: |
+          # يعتبر التحديث إلزاميًا إذا:
+          #  1) طُلب يدويًا عبر workflow_dispatch (input: required=true)، أو
+          #  2) ورد "UPDATE REQUIRED" في رسالة آخر commit
+          if [ "${{ github.event.inputs.required }}" = "true" ]; then
+            REQUIRED="true"
+          elif echo "${{ github.event.head_commit.message }}" | grep -qi "UPDATE REQUIRED"; then
+            REQUIRED="true"
+          else
+            REQUIRED="false"
+          fi
           cat > www/version.json <<EOF
           {
             "version": ${{ steps.version.outputs.code }},
             "versionName": "${{ steps.version.outputs.versionName }}",
             "downloadUrl": "https://cardgame-5nv.pages.dev/app/cardgame-v${{ steps.version.outputs.code }}.apk",
-            "releaseNotes": ""
+            "releaseNotes": "",
+            "required": "$REQUIRED"
           }
           EOF
 
