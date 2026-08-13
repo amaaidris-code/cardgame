@@ -2407,7 +2407,11 @@ async function enemyAct(){
     && enemy.lastHitSnapshot
     && !enemy.lastHitSnapshot.consumed;
 
-    if(canDefend && Math.random() < 0.5){
+    // إذا كان الخصم على صفر صحة (نجا من ضربة قاتلة كان بمقدوره صدّها) يجب
+    // عليه الدفاع حتمًا — لا خيار له ولا قرعة، وإلا يموت في نفس الدور
+    let mustDefend = canDefend && enemy.hp <= 0;
+
+    if(canDefend && (mustDefend || Math.random() < 0.5)){
 
         enemy.hp = enemy.lastHitSnapshot.hpBefore;
 
@@ -5980,11 +5984,32 @@ function clearTurnTimer(){
 
 function checkBattleEnd(){
 
+    // نفس قاعدة السيرفر (pvp_use_skill): إذا وصل المدافع إلى صفر من ضربة
+    // قابلة للصد (ليست "لا تُصد") وعنده مهارة دفاع جاهزة (غير مختومة وليست
+    // في التهدئة) ولم يستهلك لقطة الضربة، فلا تنتهي المعركة — ينجو على صفر
+    // ويتاح له الدفاع في دوره (يسترجع صحته إلى hpBefore). هذا يمنع موت الوحش
+    // من ضربة كان بمقدوره صدّها
+    if(battle.enemy.hp <= 0 && fighterCanBlockLastHit(battle.enemy)){
+        battle.enemy.hp = 0;
+        addBattleLog(`🛡️ ${battle.enemy.name} صمد عند صفر صحة ولديه دفاع جاهز!`);
+        return false;
+    }
+
     if(battle.enemy.hp <= 0){
 
         endBattle(true);
 
         return true;
+
+    }
+
+    if(battle.player.hp <= 0 && fighterCanBlockLastHit(battle.player)){
+
+        battle.player.hp = 0;
+
+        addBattleLog(`🛡️ ${battle.player.name} صمد عند صفر صحة ولديه دفاع جاهز!`);
+
+        return false;
 
     }
 
@@ -5997,6 +6022,30 @@ function checkBattleEnd(){
     }
 
     return false;
+
+}
+
+// هل يستطيع المقاتل صدّ آخر ضربة قاتلة وردّ نفسه للحياة؟ يُستدعى قبل إنهاء
+// المعركة: إذا كانت الضربة قابلة للصد (ليست "لا تُصد") وألحقت ضررًا فعليًا
+// (لم تُمتص أو تُحجب) وعنده دفاع جاهز، فينجو على صفر صحة وينتظر دوره ليُفعّل
+// الدفاع (يسترجع hpBefore). مطابق لمنطق السيرفر pvp_has_ready_defense
+function fighterCanBlockLastHit(fighter){
+
+    let snapshot = fighter.lastHitSnapshot;
+
+    if(!snapshot || snapshot.consumed) return false;
+
+    if((snapshot.dmgDealt || 0) <= 0) return false;
+
+    let defenseSkill = fighter.skills.find(s => s.type === "defense");
+
+    if(!defenseSkill) return false;
+
+    if(!isSkillReady(fighter, defenseSkill)) return false;
+
+    if(isSkillSealed(fighter, defenseSkill)) return false;
+
+    return true;
 
 }
 
