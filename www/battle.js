@@ -3862,7 +3862,7 @@ function resolveAction(attacker, defender, skill, trackUsed = true, isReflectedH
 
     } else {
 
-        applyDamageEffect(battle.prefix, defenderPrefix, dmg, false);
+        applyDamageEffect(battle.prefix, defenderPrefix, dmg, false, !!skill.unblockable);
 
     }
 
@@ -6061,7 +6061,7 @@ function hideBattleResult(prefix){
 // تأثيرات بصرية (اهتزاز + رقم داميج طائر)
 // ========================================
 
-function showDamagePopup(targetPrefix, amount, isHeal){
+function showDamagePopup(targetPrefix, amount, isHeal, isUnblockable){
 
     let img = document.getElementById(targetPrefix + "-image");
 
@@ -6075,7 +6075,7 @@ function showDamagePopup(targetPrefix, amount, isHeal){
 
     let popup = document.createElement("div");
 
-    popup.className = "damage-popup" + (isHeal ? " heal" : "");
+    popup.className = "damage-popup" + (isHeal ? " heal" : "") + (isUnblockable ? " unblockable" : "");
 
     popup.textContent = (isHeal ? "+" : "-") + amount;
 
@@ -6092,29 +6092,45 @@ function showDamagePopup(targetPrefix, amount, isHeal){
 }
 
 
-function playHitEffect(prefix){
+function playHitEffect(prefix, isUnblockable){
 
     let arena =
     document.querySelector("#" + prefix + "-battle-screen .battle-arena");
 
     if(!arena) return;
 
-    arena.classList.add("shake", "hit-flash");
+    if(isUnblockable){
 
-    setTimeout(() => {
+        // ضربة "لا تُصد": اهتزاز أقوى + وميض برتقالي-أحمر واضح يختلف
+        // بصريًا عن الضربة العادية البيضاء حتى يميزها اللاعب فورًا
+        arena.classList.add("shake", "unblockable-flash");
 
-        arena.classList.remove("shake", "hit-flash");
+        setTimeout(() => {
 
-    }, 350);
+            arena.classList.remove("shake", "unblockable-flash");
+
+        }, 420);
+
+    } else {
+
+        arena.classList.add("shake", "hit-flash");
+
+        setTimeout(() => {
+
+            arena.classList.remove("shake", "hit-flash");
+
+        }, 350);
+
+    }
 
 }
 
 
-function applyDamageEffect(prefix, targetPrefix, amount, isHeal){
+function applyDamageEffect(prefix, targetPrefix, amount, isHeal, isUnblockable){
 
-    playHitEffect(prefix);
+    playHitEffect(prefix, isUnblockable);
 
-    showDamagePopup(targetPrefix, amount, isHeal);
+    showDamagePopup(targetPrefix, amount, isHeal, isUnblockable);
 
 }
 

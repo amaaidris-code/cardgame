@@ -3765,3 +3765,298 @@ box-shadow: 0 0 0 3px rgba(140,210,255,0.55), 0 0 22px rgba(120,190,255,0.55);
 
 }
 
+
+/* ========================================
+   تخطيط مدمج لشاشتي المعركة (PvE و PvP): يُراد رؤية كل شيء في
+   الشاشة الواحدة دون الحاجة للتمرير لأعلى وأسفل
+   ======================================== */
+
+#pve-battle-screen,
+#pvp-battle-screen{
+
+height:100dvh;
+
+min-height:100dvh;
+
+overflow:hidden;
+
+display:flex;
+
+flex-direction:column;
+
+justify-content:flex-start;
+
+padding:6px 8px 8px;
+
+}
+
+#pve-battle-screen > h2,
+#pvp-battle-screen > h2{
+
+flex:0 0 auto;
+
+margin:2px 0 4px;
+
+font-size:18px;
+
+}
+
+#pve-battle-screen .battle-arena,
+#pvp-battle-screen .battle-arena{
+
+flex:1 1 auto;
+
+min-height:0;
+
+gap:8px;
+
+padding:8px 6px;
+
+overflow-y:auto;
+
+}
+
+#pve-battle-screen .battle-card,
+#pvp-battle-screen .battle-card{
+
+width:100%;
+
+padding:8px 10px;
+
+}
+
+#pve-battle-screen .battle-image,
+#pvp-battle-screen .battle-image{
+
+width:56px;
+
+height:56px;
+
+}
+
+#pve-battle-screen .battle-card h3,
+#pvp-battle-screen .battle-card h3{
+
+margin:4px 0 2px;
+
+font-size:15px;
+
+}
+
+#pve-battle-screen .hp-bar,
+#pvp-battle-screen .hp-bar{
+
+height:10px;
+
+margin:2px auto;
+
+}
+
+#pve-battle-screen .battle-card p,
+#pvp-battle-screen .battle-card p{
+
+font-size:12px;
+
+margin:2px 0;
+
+}
+
+/* منطقة مهارات الخصم/اللاعب المستخدمة: صف واحد مدمج */
+
+#pve-battle-screen .used-skills,
+#pvp-battle-screen .used-skills{
+
+min-height:0;
+
+margin:4px 0;
+
+padding:4px;
+
+gap:4px;
+
+}
+
+#pve-battle-screen .used-skill-chip,
+#pvp-battle-screen .used-skill-chip{
+
+padding:3px 6px;
+
+font-size:11px;
+
+}
+
+/* أزرار المهارات: أصغر ومتماسك حتى تظهر كلها معًا */
+
+#pve-battle-screen .skills-container,
+#pvp-battle-screen .skills-container{
+
+margin-top:6px;
+
+}
+
+#pve-battle-screen .skills-page,
+#pvp-battle-screen .skills-page{
+
+gap:6px;
+
+}
+
+#pve-battle-screen .skills-page button,
+#pvp-battle-screen .skills-page button{
+
+font-size:12px;
+
+padding:4px 6px;
+
+}
+
+#pve-battle-screen .skill-dots,
+#pvp-battle-screen .skill-dots{
+
+margin-top:6px;
+
+}
+
+#pve-battle-screen .skill-dots span,
+#pvp-battle-screen .skill-dots span{
+
+width:6px;
+
+height:6px;
+
+}
+
+/* منتصف الساحة: VS أصغر + زر هجوم أصغر */
+
+#pve-battle-screen .battle-middle,
+#pvp-battle-screen .battle-middle{
+
+gap:4px;
+
+}
+
+#pve-battle-screen #pve-attack-button,
+#pvp-battle-screen #pvp-attack-button{
+
+width:52px;
+
+height:52px;
+
+font-size:22px;
+
+}
+
+#pve-battle-screen #pve-battle-timer,
+#pvp-battle-screen #pvp-battle-timer{
+
+width:34px;
+
+height:34px;
+
+font-size:14px;
+
+}
+
+#pve-battle-screen .turn-indicator,
+#pvp-battle-screen .turn-indicator{
+
+margin-top:2px;
+
+font-size:11px;
+
+padding:2px 8px;
+
+}
+
+/* أزرار العودة داخل شاشة المعركة */
+
+#pve-battle-screen > button:last-child,
+#pvp-battle-screen > button:last-child{
+
+flex:0 0 auto;
+
+margin-top:6px;
+
+}
+
+
+/* ========================================
+   تأثير الضربة "لا تُصدّ" (unblockable): وميض برتقالي-أحمر قوي
+   على الساحة كلها، مختلف بصريًا عن الوميض الأبيض للضربة العادية
+   ======================================== */
+
+.battle-arena.unblockable-flash::after{
+
+content:"";
+
+position:absolute;
+
+top:0; left:0; right:0; bottom:0;
+
+background:
+radial-gradient(circle at 50% 50%, rgba(255,120,0,0.55), rgba(255,30,30,0.3) 60%, rgba(255,20,20,0.1));
+
+animation: unblockableFlashOut .42s ease;
+
+pointer-events:none;
+
+}
+
+@keyframes unblockableFlashOut{
+
+0%{ opacity:1; }
+100%{ opacity:0; }
+
+}
+
+.battle-arena.unblockable-flash.shake{
+
+animation: shakeAnimStrong .42s ease;
+
+}
+
+@keyframes shakeAnimStrong{
+
+0%,100%{ transform: translateX(0); }
+15%{ transform: translateX(-12px); }
+30%{ transform: translateX(12px); }
+45%{ transform: translateX(-9px); }
+60%{ transform: translateX(9px); }
+75%{ transform: translateX(-5px); }
+90%{ transform: translateX(5px); }
+
+}
+
+/* رقم الداميج للضربة "لا تُصدّ": أكبر ولون مختلف عن الأحمر العادي */
+
+.damage-popup.unblockable{
+
+color:#ffc04d;
+
+font-size:36px;
+
+text-shadow: 0 0 14px rgba(255,140,0,1), 0 0 30px rgba(255,80,0,0.9);
+
+animation: floatUpUnblockable 1s ease-out forwards;
+
+}
+
+@keyframes floatUpUnblockable{
+
+0%{ opacity:1; transform: translateY(0) scale(1); }
+100%{ opacity:0; transform: translateY(-70px) scale(1.6); }
+
+}
+
+/* شارة الحدث للضربة "لا تُصدّ" في PvP */
+
+.battle-effect-banner.effect-unblockable{
+
+color:#ffc04d;
+
+border-color: rgba(255,140,0,0.6);
+
+box-shadow: 0 6px 24px rgba(0,0,0,0.5), 0 0 18px rgba(255,120,0,0.4);
+
+}
+

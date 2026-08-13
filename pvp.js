@@ -979,6 +979,12 @@ async function pvpRefreshState(isFirstLoad){
     let iGotFrozenNow = newOppSkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].effect === "freeze");
     let iFrozeOppNow = newMySkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].effect === "freeze");
 
+    // هل استُخدمت مهارة "لا تُصد" (unblockable) تُلحق ضررًا هذا الاستطلاع
+    // تحديدًا؟ (عندي أو عند الخصم) — نستخدمها لإظهار تأثير بصري مختلف
+    // عن الضربة العادية حتى يعرف اللاعب فورًا أنه تعرّض لضربة لا تُصدّ
+    let oppUnblockableNow = newOppSkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].unblockable);
+    let myUnblockableNow = newMySkillIds.some(id => pvpState.skillCache[id] && pvpState.skillCache[id].unblockable);
+
     // كشف أحداث الختم/فك الختم هذا الاستطلاع تحديدًا (بمقارنة قائمتي
     // المختوم عندي وعند الخصم بالقديمة): ختمُّ الخصم لي، ختمي للخصم،
     // أو فكّي للختم عن مهارتي المختومة
@@ -1108,7 +1114,11 @@ async function pvpRefreshState(isFirstLoad){
 
             if(myHp <= 0){
                 pvpAddBattleLog("💀 ضربة قاتلة! صحتك أصبحت صفرًا، لكن يمكنك الاستمرار بأي مهارة");
-                showBattleEffectBanner("pvp", "💀 ضربة قاتلة! صحتك أصبحت صفرًا", "hit");
+                showBattleEffectBanner("pvp", "💀 ضربة قاتلة! صحتك أصبحت صفرًا", oppUnblockableNow ? "unblockable" : "hit");
+            } else if(oppUnblockableNow){
+                pvpAddBattleLog(`💥 ضربة لا تُصدّ عليك! -${prevMyHp - myHp}`);
+                playHitEffect("pvp", true);
+                showBattleEffectBanner("pvp", `💥 ضربة لا تُصدّ! -${prevMyHp - myHp}`, "unblockable");
             } else {
                 pvpAddBattleLog(`💥 تعرّضتَ لهجوم! -${prevMyHp - myHp}`);
                 showBattleEffectBanner("pvp", `💥 تعرّضتَ لهجوم! -${prevMyHp - myHp}`, "hit");
@@ -1118,7 +1128,11 @@ async function pvpRefreshState(isFirstLoad){
 
             if(oppHp <= 0){
                 pvpAddBattleLog("⚔️ ضربة قاتلة! لكن الخصم نجى — عليه الدفاع أو الانعكاس الآن");
-                showBattleEffectBanner("pvp", "⚔️ ضربة قاتلة! لكن الخصم صَدّها!", "hit");
+                showBattleEffectBanner("pvp", "⚔️ ضربة قاتلة! لكن الخصم صَدّها!", myUnblockableNow ? "unblockable" : "hit");
+            } else if(myUnblockableNow){
+                pvpAddBattleLog(`⚔️ ضربة لا تُصدّ موفّقة! -${prevOppHp - oppHp} على الخصم`);
+                playHitEffect("pvp", true);
+                showBattleEffectBanner("pvp", `⚔️ ضربة لا تُصدّ! -${prevOppHp - oppHp}`, "unblockable");
             } else {
                 pvpAddBattleLog(`⚔️ ضربة موفّقة! -${prevOppHp - oppHp} على الخصم`);
                 showBattleEffectBanner("pvp", `⚔️ ضربة موفّقة! -${prevOppHp - oppHp}`, "hit");
