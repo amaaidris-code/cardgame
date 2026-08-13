@@ -5675,14 +5675,24 @@ function openUnsealMenu(unsealSkill){
 
     closeUnsealMenu();
 
-    let maxUnseal = Math.max(1, Number(unsealSkill.damage) || 1);
-
-    let selectedNames = [];
-
     let mySealedSkills =
     (battle.player.sealedSkillIds || [])
         .map(id => battle.player.skills.find(s => s.id === id))
         .filter(Boolean);
+
+    // لو لم تكن أي مهارة من مهارات اللاعب مختومة، فمهارة فك الختم لا فائدة
+    // منها إطلاقًا — نُعلِم اللاعب ونلغي الفعل دون أي ضرر أو استهلاك دور
+    if(mySealedSkills.length === 0){
+
+        alert("لا توجد أي مهارة مختومة لديك لفك ختمها — هذه المهارة بلا فائدة الآن");
+
+        return;
+
+    }
+
+    let maxUnseal = Math.max(1, Number(unsealSkill.damage) || 1);
+
+    let selectedNames = [];
 
     let usedListHtml = mySealedSkills.length > 0
     ? mySealedSkills
