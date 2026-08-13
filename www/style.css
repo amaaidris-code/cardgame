@@ -800,7 +800,7 @@ position:relative;
 
     width: 100%;
 
-    max-width: 320px;
+    max-width: 220px;
 
     margin: 0 auto;
 
@@ -3797,7 +3797,7 @@ flex-direction:column;
 
 justify-content:flex-start;
 
-padding:6px 8px 8px;
+padding:4px 8px 8px;
 
 width:100%;
 
@@ -3812,24 +3812,24 @@ margin:0 auto;
 
 flex:0 0 auto;
 
-margin:2px 0 4px;
+margin:0 0 2px;
 
-font-size:18px;
+font-size:14px;
 
 }
 
 #pve-battle-screen .battle-arena,
 #pvp-battle-screen .battle-arena{
 
-flex:1 1 auto;
+flex:0 0 auto;
 
 min-height:0;
 
-gap:8px;
+gap:6px;
 
-padding:8px 6px;
+padding:6px;
 
-overflow-y:auto;
+overflow:hidden;
 
 }
 
@@ -3838,32 +3838,32 @@ overflow-y:auto;
 
 width:100%;
 
-padding:8px 10px;
+padding:4px 8px;
 
 }
 
 #pve-battle-screen .battle-image,
 #pvp-battle-screen .battle-image{
 
-width:56px;
+width:40px;
 
-height:56px;
+height:40px;
 
 }
 
 #pve-battle-screen .battle-card h3,
 #pvp-battle-screen .battle-card h3{
 
-margin:4px 0 2px;
+margin:2px 0 0;
 
-font-size:15px;
+font-size:12px;
 
 }
 
 #pve-battle-screen .hp-bar,
 #pvp-battle-screen .hp-bar{
 
-height:10px;
+height:8px;
 
 margin:2px auto;
 
@@ -3872,9 +3872,9 @@ margin:2px auto;
 #pve-battle-screen .battle-card p,
 #pvp-battle-screen .battle-card p{
 
-font-size:12px;
+font-size:11px;
 
-margin:2px 0;
+margin:1px 0;
 
 }
 
@@ -3885,20 +3885,20 @@ margin:2px 0;
 
 min-height:0;
 
-margin:4px 0;
+margin:2px 0;
 
-padding:4px;
+padding:2px;
 
-gap:4px;
+gap:2px;
 
 }
 
 #pve-battle-screen .used-skill-chip,
 #pvp-battle-screen .used-skill-chip{
 
-padding:3px 6px;
+padding:2px 5px;
 
-font-size:11px;
+font-size:10px;
 
 }
 
@@ -3907,39 +3907,39 @@ font-size:11px;
 #pve-battle-screen .skills-container,
 #pvp-battle-screen .skills-container{
 
-margin-top:6px;
+margin-top:4px;
 
 }
 
 #pve-battle-screen .skills-page,
 #pvp-battle-screen .skills-page{
 
-gap:6px;
+gap:4px;
 
 }
 
 #pve-battle-screen .skills-page button,
 #pvp-battle-screen .skills-page button{
 
-font-size:12px;
+font-size:11px;
 
-padding:4px 6px;
+padding:3px 5px;
 
 }
 
 #pve-battle-screen .skill-dots,
 #pvp-battle-screen .skill-dots{
 
-margin-top:6px;
+margin-top:4px;
 
 }
 
 #pve-battle-screen .skill-dots span,
 #pvp-battle-screen .skill-dots span{
 
-width:6px;
+width:5px;
 
-height:6px;
+height:5px;
 
 }
 
@@ -3948,40 +3948,40 @@ height:6px;
 #pve-battle-screen .battle-middle,
 #pvp-battle-screen .battle-middle{
 
-gap:4px;
+gap:2px;
 
 }
 
 #pve-battle-screen #pve-attack-button,
 #pvp-battle-screen #pvp-attack-button{
 
-width:52px;
+width:40px;
 
-height:52px;
+height:40px;
 
-font-size:22px;
+font-size:18px;
 
 }
 
 #pve-battle-screen #pve-battle-timer,
 #pvp-battle-screen #pvp-battle-timer{
 
-width:34px;
+width:28px;
 
-height:34px;
+height:28px;
 
-font-size:14px;
+font-size:12px;
 
 }
 
 #pve-battle-screen .turn-indicator,
 #pvp-battle-screen .turn-indicator{
 
-margin-top:2px;
+margin-top:1px;
 
-font-size:11px;
+font-size:10px;
 
-padding:2px 8px;
+padding:1px 6px;
 
 }
 
@@ -3992,7 +3992,7 @@ padding:2px 8px;
 
 flex:0 0 auto;
 
-margin-top:6px;
+margin-top:4px;
 
 }
 
