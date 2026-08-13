@@ -5198,4 +5198,96 @@ function goBack(){
 
 }
 
+// ========================================
+// التحقق التلقائي من إصدار التطبيق (تحديث APK)
+// ========================================
+
+const UPDATE_MANIFEST_URL = "https://cardgame-5nv.pages.dev/version.json";
+
+async function checkForAppUpdate(){
+
+    // يعمل فقط داخل تطبيق Capacitor (APK)، وليس في متصفح الويب
+    if(!window.Capacitor
+    || !window.Capacitor.isNativePlatform
+    || !window.Capacitor.isNativePlatform()
+    || !window.Capacitor.Plugins
+    || !window.Capacitor.Plugins.App){
+        return;
+    }
+
+    try{
+
+        // قراءة إصدار التطبيق المثبَّت حاليًا (versionCode)
+        let info = await window.Capacitor.Plugins.App.getInfo();
+        let installedVersion = parseInt(info.build, 10);
+        if(isNaN(installedVersion)){
+            installedVersion = 0;
+        }
+
+        // جلب آخر إصدار متاح من السيرفر (مع كسر ذاكرة التخزين المؤقت)
+        let res = await fetch(UPDATE_MANIFEST_URL + "?t=" + Date.now(), { cache: "no-store" });
+        if(!res.ok) return;
+        let manifest = await res.json();
+
+        let latestVersion = parseInt(manifest.version, 10);
+        if(isNaN(latestVersion)) return;
+
+        // إذا كان هناك إصدار أحدث → اعرض نافذة التحديث
+        if(latestVersion > installedVersion){
+            showUpdatePrompt(manifest, installedVersion, latestVersion);
+        }
+
+    }catch(e){
+        console.log("فشل التحقق من التحديث", e);
+    }
+
+}
+
+function showUpdatePrompt(manifest, installedVersion, latestVersion){
+
+    let existing = document.getElementById("update-modal");
+    if(existing && existing.style.display !== "none") return;
+
+    let notes = (manifest.releaseNotes || "").trim()
+        ? "<div class=\"update-notes\">" + manifest.releaseNotes + "</div>"
+        : "";
+
+    let modal = document.createElement("div");
+    modal.id = "update-modal";
+    modal.className = "update-modal";
+    modal.innerHTML =
+        "<div class=\"update-modal-box\">" +
+            "<h2>تحديث متاح</h2>" +
+            "<p>يتوفر إصدار جديد من اللعبة. ننصحك بتحديث التطبيق الآن للاستفادة من أحدث الميزات والتحسينات.</p>" +
+            notes +
+            "<div class=\"update-actions\">" +
+                "<button id=\"update-download-btn\" class=\"update-download-btn\">تحميل التحديث</button>" +
+                "<button id=\"update-later-btn\" class=\"update-later-btn\">لاحقًا</button>" +
+            "</div>" +
+        "</div>";
+
+    document.body.appendChild(modal);
+
+    document.getElementById("update-download-btn")
+        .addEventListener("click", function(){
+            // فتح رابط التحميل في المتصفح الخارجي لتنزيل ملف APK
+            window.open(manifest.downloadUrl, "_system", "location=yes");
+        });
+
+    document.getElementById("update-later-btn")
+        .addEventListener("click", function(){
+            modal.style.display = "none";
+        });
+
+}
+
+// تشغيل فحص التحديث بعد تحميل الصفحة
+if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", function(){
+        setTimeout(checkForAppUpdate, 1500);
+    });
+}else{
+    setTimeout(checkForAppUpdate, 1500);
+}
+
 

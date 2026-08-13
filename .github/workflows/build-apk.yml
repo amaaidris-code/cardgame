@@ -1,4 +1,4 @@
-name: Build APK
+name: Build APK and Deploy
 
 on:
   push:
@@ -30,6 +30,13 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Determine version code
+        id: version
+        run: |
+          # versionCode = run number (monotonic, always increases on each build)
+          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "versionName=1.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
       - name: Install dependencies
         run: |
           npm install
@@ -48,6 +55,11 @@ jobs:
           sed -i 's/networkTimeout=10000/networkTimeout=120000/' android/gradle/wrapper/gradle-wrapper.properties ||
           sed -i 's/networkTimeout=10000/networkTimeout=120000/' android/gradle/wrapper/gradle-wrapper.properties
 
+      - name: Set version code
+        run: |
+          sed -i "s/versionCode [0-9]*/versionCode ${{ steps.version.outputs.code }}/" android/app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"${{ steps.version.outputs.versionName }}\"/" android/app/build.gradle
+
       - name: Generate app icon
         run: npx @capacitor/assets generate --android
 
@@ -60,8 +72,35 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Upload APK
+      - name: Stage APK for Cloudflare hosting
+        run: |
+          mkdir -p www/app
+          cp android/app/build/outputs/apk/debug/app-debug.apk www/app/cardgame-v${{ steps.version.outputs.code }}.apk
+
+      - name: Update version manifest
+        run: |
+          cat > www/version.json <<EOF
+          {
+            "version": ${{ steps.version.outputs.code }},
+            "versionName": "${{ steps.version.outputs.versionName }}",
+            "downloadUrl": "https://cardgame-5nv.pages.dev/app/cardgame-v${{ steps.version.outputs.code }}.apk",
+            "releaseNotes": ""
+          }
+          EOF
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Deploy www to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then
+            echo "::warning::CLOUDFLARE_API_TOKEN secret not set - skipping Pages deploy. APK is still uploaded as artifact."
+            exit 0
+          fi
+          npx wrangler pages deploy www --project-name=cardgame --branch=main
