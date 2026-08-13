@@ -1243,6 +1243,19 @@ async function startDungeonMonster(monsterId){
 
     let monsterSkills = await loadCharacterSkills(monsterId);
 
+    // إعادة ضبط حالة النزال كاملة قبل بدء الوحش الجديد: بدون هذا يبقى
+    // battle.finished نشطًا من نهاية النزال السابق فتُجمَّد جميع الأدوار
+    // (لا يستطيع اللاعب الحركة ولا يعمل الخصم)
+    battle.phase = "idle";
+
+    battle.finished = false;
+
+    battle.turnOwner = null;
+
+    battle.raceWon = false;
+
+    battle.raceButtonLockedUntil = 0;
+
     // بين الوحوش تُصفَّر تأثيرات المعركة المؤقتة للاعب (السم، الدروع،
     // التجميد، ...) بينما تبقى صحته وتهدئة مهاراته كما هي
     resetPlayerTransientState();
