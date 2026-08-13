@@ -57,7 +57,15 @@ jobs:
           cp *.html *.js *.css www/ 2>/dev/null || true
 
       - name: Add Android platform
-        run: ./node_modules/.bin/cap add android
+        run: |
+          # android/ is committed to the repo (see commit "Include android/ APK project").
+          # Only run `cap add android` when the platform directory is missing, otherwise
+          # it fails with "android platform already exists".
+          if [ ! -d android ]; then
+            ./node_modules/.bin/cap add android
+          else
+            echo "android/ already present in repo - skipping cap add android"
+          fi
 
       - name: Fix Gradle network timeout
         run: |
