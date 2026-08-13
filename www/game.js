@@ -2664,6 +2664,31 @@ async function loadAdminPanel() {
 
     adminCharactersCache = characterList || [];
 
+    // اجلب الإحصاءات المطوَّرة الحالية لكل شخصية يملكها لاعب (من
+    // player_characters) وعرضها بدل قيم characters الأساسية الثابتة — حتى
+    // تظهر في لوحة الأدمن نفس الأرقام المحدّثة التي يراها اللاعب.
+    try {
+        let { data: statRows } =
+        await supabaseClient
+        .rpc("admin_get_current_character_stats", {
+            p_admin_token: localStorage.getItem("admin_token")
+        });
+        let statMap = {};
+        (statRows || []).forEach(s => { statMap[s.character_id] = s; });
+        adminCharactersCache = adminCharactersCache.map(c => {
+            let s = statMap[c.id];
+            if(!s) return c;
+            return Object.assign({}, c, {
+                current_level: s.level,
+                current_hp: s.hp,
+                current_atk: s.atk,
+                current_available_points: s.available_points
+            });
+        });
+    }catch(e){
+        console.log("admin current character stats error", e);
+    }
+
 
     let realCharacters = adminCharactersCache.filter(c => !c.is_monster);
 
@@ -2712,7 +2737,7 @@ function renderAdminCharacterCards(list, emptyMessage){
 
                 <p class="admin-character-anime">${safeAnime}</p>
 
-                <p class="admin-character-stats">❤️ ${character.hp || 0} &nbsp;·&nbsp; ⚔️ ${character.atk || 0} &nbsp;·&nbsp; LV ${character.level || 1}</p>
+                <p class="admin-character-stats">❤️ ${character.current_hp != null ? character.current_hp : (character.hp || 0)} &nbsp;·&nbsp; ⚔️ ${character.current_atk != null ? character.current_atk : (character.atk || 0)} &nbsp;·&nbsp; LV ${character.current_level != null ? character.current_level : (character.level || 1)}</p>
 
                 <p class="admin-character-owner">${character.admin_only ? "🔒 خاصة بالأدمن" : (character.is_monster ? "👹 وحش PvE" : (character.owner_id ? "🔴 مأخوذة (لدى لاعب)" : "🟢 متاحة للاختيار"))}</p>
 
