@@ -3109,24 +3109,30 @@ async function fetchCustomShadowCharacters(charIds, selfCharacterId){
 
         let {data: skills, error: skillsErr} = await supabaseClient
             .from("character_skills")
-            .select("character_id, skill_id, name, type, damage, cooldown, effect, unblockable, color, description, params")
+            .select(`
+                character_id,
+                skill_id,
+                skills (*)
+            `)
             .in("character_id", filtered);
         if(skillsErr) skills = [];
 
         let skillMap = {};
         (skills || []).forEach(s => {
+            let sk = s.skills;
+            if(!sk) return;
             if(!skillMap[s.character_id]) skillMap[s.character_id] = [];
             skillMap[s.character_id].push({
                 id: s.skill_id,
-                name: s.name,
-                type: s.type,
-                damage: s.damage,
-                cooldown: s.cooldown,
-                effect: s.effect,
-                unblockable: s.unblockable,
-                color: s.color,
-                description: s.description,
-                params: s.params
+                name: sk.name,
+                type: sk.type,
+                damage: sk.damage,
+                cooldown: sk.cooldown,
+                effect: sk.effect,
+                unblockable: sk.unblockable,
+                color: sk.color,
+                description: sk.description,
+                params: sk.params
             });
         });
 

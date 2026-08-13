@@ -1627,64 +1627,80 @@ async function sendCharacterRequest(){
 
 function logout(){
 
+    // أي خطأ أثناء إنهاء الجلسة في الخلفية يجب ألا يمنع تسجيل الخروج محليًا
+    // أو الانتقال لشاشة الدخول، لذلك نلف كل الخطوات في محاولة آمنة
 
-    // إنهاء جلسة اللاعب فعليًا في قاعدة البيانات ثم مسحها من هذا الجهاز
-    let playerToken = localStorage.getItem("player_token");
+    try{
 
-    if(playerToken){
+        // إنهاء جلسة اللاعب فعليًا في قاعدة البيانات ثم مسحها من هذا الجهاز
+        let playerToken = localStorage.getItem("player_token");
 
-        supabaseClient.rpc("player_logout_session", {
-            p_token: playerToken
-        }).catch(() => {});
+        if(playerToken){
 
+            supabaseClient.rpc("player_logout_session", {
+                p_token: playerToken
+            }).then(() => {}, () => {});
+
+        }
+
+    }catch(e){
+        console.error("player logout session failed", e);
     }
 
-    localStorage.removeItem(
-        "player_token"
-    );
+    try{
+        localStorage.removeItem("player_token");
+    }catch(e){}
 
 
-    localStorage.removeItem(
-        "player_id"
-    );
+    try{
+        localStorage.removeItem("player_id");
+    }catch(e){}
 
 
-    localStorage.removeItem(
-        "username"
-    );
+    try{
+        localStorage.removeItem("username");
+    }catch(e){}
 
 
-    localStorage.removeItem(
-        "character_id"
-    );
+    try{
+        localStorage.removeItem("character_id");
+    }catch(e){}
 
 
-    localStorage.removeItem(
-        "character_name"
-    );
+    try{
+        localStorage.removeItem("character_name");
+    }catch(e){}
 
 
-    // إنهاء جلسة الأدمن فعليًا في قاعدة البيانات (لا تُترك صالحة بالخلفية)
-    // ثم مسحها من هذا الجهاز
-    let adminToken = localStorage.getItem("admin_token");
+    try{
 
-    if(adminToken){
+        // إنهاء جلسة الأدمن فعليًا في قاعدة البيانات (لا تُترك صالحة بالخلفية)
+        // ثم مسحها من هذا الجهاز
+        let adminToken = localStorage.getItem("admin_token");
 
-        supabaseClient.rpc("admin_logout_session", {
-            p_token: adminToken
-        }).catch(() => {});
+        if(adminToken){
 
+            supabaseClient.rpc("admin_logout_session", {
+                p_token: adminToken
+            }).then(() => {}, () => {});
+
+        }
+
+    }catch(e){
+        console.error("admin logout session failed", e);
     }
 
-    localStorage.removeItem(
-        "admin_token"
-    );
+    try{
+        localStorage.removeItem("admin_token");
+    }catch(e){}
 
 
 
-    openScreen(
-        "login-screen"
-    );
+    try{
+        openScreen("login-screen");
+    }catch(e){
+        console.error("logout: openScreen failed", e);
+    }
 
 
 
