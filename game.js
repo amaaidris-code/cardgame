@@ -3725,10 +3725,19 @@ async function openEditCharacterModal(characterId){
 
     closeEditCharacterModal();
 
+    // الإحصاءات الحالية الفعلية (بعد الترقيات من player_characters إذا كانت
+    // الشخصية مملوكة) لتُعرض وتُحرَّر في نافذة التعديل، بدل قيم characters
+    // الأساسية الثابتة — حتى تطابق ما يراه اللاعب في اللعبة.
+    let eff = {
+        level: character.current_level != null ? character.current_level : (character.level || 1),
+        hp: character.current_hp != null ? character.current_hp : (character.hp || 0),
+        atk: character.current_atk != null ? character.current_atk : (character.atk || 0)
+    };
+
     let skills = await loadCharacterSkillsForAdmin(characterId);
 
     currentEditSkills = skills || [];
-    currentEditAtk = Number(character.atk) || 100;
+    currentEditAtk = Number(eff.atk) || 100;
 
     // خلفيات صفحات المهارات الحالية (كل 4 مهارات = صفحة) ليُعرض كل رابط
     // في صندوقه، ويُحدَّث فورًا عند تغييره (بدون انتظار كاش المعارك)
@@ -3791,8 +3800,8 @@ async function openEditCharacterModal(characterId){
     // ليظهر في لوحة الإدارة نفس الضرر الذي سيُلحق في المعارك فعلًا
     let scaledDamageMap = {};
     try{
-        if(typeof computeScaledAttackDamages === "function" && character.atk){
-            scaledDamageMap = computeScaledAttackDamages(character.atk, skills) || {};
+        if(typeof computeScaledAttackDamages === "function" && eff.atk){
+            scaledDamageMap = computeScaledAttackDamages(eff.atk, skills) || {};
         }
     }catch(e){}
 
@@ -3886,11 +3895,11 @@ async function openEditCharacterModal(characterId){
 
                 <p id="edit-image-status" class="upload-status"></p>
 
-                <input id="edit-char-hp" type="number" value="${character.hp || 0}" placeholder="نقاط الحياة">
+                <input id="edit-char-hp" type="number" value="${eff.hp}" placeholder="نقاط الحياة">
 
-                <input id="edit-char-atk" type="number" value="${character.atk || 0}" placeholder="قوة الهجوم">
+                <input id="edit-char-atk" type="number" value="${eff.atk}" placeholder="قوة الهجوم">
 
-                <input id="edit-char-level" type="number" value="${character.level || 1}" placeholder="المستوى">
+                <input id="edit-char-level" type="number" value="${eff.level}" placeholder="المستوى">
 
                 <input id="edit-char-power-name" type="text" value="${character.power_name || ''}" placeholder="اسم القوة الخاصة">
 
