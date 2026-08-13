@@ -1630,6 +1630,8 @@ function logout(){
     // أي خطأ أثناء إنهاء الجلسة في الخلفية يجب ألا يمنع تسجيل الخروج محليًا
     // أو الانتقال لشاشة الدخول، لذلك نلف كل الخطوات في محاولة آمنة
 
+    stopPlayerPresence();
+
     try{
 
         // إنهاء جلسة اللاعب فعليًا في قاعدة البيانات ثم مسحها من هذا الجهاز
@@ -1826,12 +1828,91 @@ function renderPlayerScreen(player){
 
     updatePlayerInfo();
 
+    // أبقِ اللاعب "متصلًا" في قائمة PvP واستقبل تحدّيات أي لاعب آخر من أي شاشة
+    startPlayerPresence();
+
 }
 
 
 
 
 
+
+// ========================================
+// حضور اللاعب في اللعبة + إشعار التحدّيات الواردة
+// ========================================
+
+let presenceTimer = null;
+let challengePollTimer = null;
+
+// نبضة نشاط خفيفة تُبقي اللاعب "متصلًا" في قائمة PvP حتى لو لم يكن على
+// تبويب PvP، ونفحص دوريًا إن كان هناك تحدٍّ وارد بانتظار الرد لنعرض لافتة
+// قبوله من أي شاشة داخل اللعبة.
+function startPlayerPresence(){
+    try{
+        if(presenceTimer){ clearInterval(presenceTimer); presenceTimer = null; }
+        if(challengePollTimer){ clearInterval(challengePollTimer); challengePollTimer = null; }
+
+        presenceTimer = setInterval(() => {
+            let token = pvpGetToken();
+            if(!token) return;
+            supabaseClient.rpc("pvp_presence_ping", { p_token: token }).then(() => {}, () => {});
+        }, 30000);
+
+        challengePollTimer = setInterval(() => {
+            let token = pvpGetToken();
+            if(!token) return;
+            supabaseClient.rpc("pvp_get_incoming_challenge", { p_token: token })
+            .then(({ data, error }) => {
+                if(error) return;
+                let inc = (data && data.length > 0) ? data[0] : null;
+                renderGlobalChallengeBanner(inc);
+            }, () => {});
+        }, 6000);
+    }catch(e){}
+}
+
+function stopPlayerPresence(){
+    if(presenceTimer){ clearInterval(presenceTimer); presenceTimer = null; }
+    if(challengePollTimer){ clearInterval(challengePollTimer); challengePollTimer = null; }
+    hideGlobalChallengeBanner();
+}
+
+function renderGlobalChallengeBanner(inc){
+    let box = document.getElementById("global-challenge-banner");
+    if(!box) return;
+
+    // داخل ردهة PvP أو نزال فعلي: الردهة تعرض التحدي الوارد بنفسها، فلا
+    // نعرض اللافتة المكررة
+    let active = document.querySelector(".screen.active");
+    let activeId = active ? active.id : "";
+    if(activeId === "pvp-lobby-screen" || activeId === "pvp-battle-screen"){
+        hideGlobalChallengeBanner();
+        return;
+    }
+
+    if(!inc){
+        hideGlobalChallengeBanner();
+        return;
+    }
+
+    box.classList.remove("hidden");
+    let safeName = escapeHtml(inc.challenger_name || "لاعب");
+    box.innerHTML =
+        `<span class="gcb-text">⚔️ لديك تحدي من ${safeName}</span>` +
+        `<button class="gcb-accept">قبول</button>` +
+        `<button class="gcb-dismiss">لاحقًا</button>`;
+    box.querySelector(".gcb-accept").onclick = () => {
+        box.classList.add("hidden");
+        try{ pvpRespondChallenge(inc.match_id, true); }catch(e){}
+    };
+    box.querySelector(".gcb-dismiss").onclick = () => hideGlobalChallengeBanner();
+}
+
+function hideGlobalChallengeBanner(){
+    let box = document.getElementById("global-challenge-banner");
+    if(box) box.classList.add("hidden");
+}
 
 // ========================================
 // تشغيل اللعبة
