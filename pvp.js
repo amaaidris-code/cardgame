@@ -36,7 +36,7 @@ let pvpState = {
     // مؤقت الـ60 ثانية للدور الحالي (متزامن مع turn_deadline على السيرفر)
     turnDeadline: null,
     turnTimerInterval: null,
-    skipTurnRequested: false,
+        skipInFlight: false,
 
     // المهارات المختومة حتى نهاية المباراة (skill_id) لكل طرف — تُمنع
     // من الاستخدام، وتظهر مقفلة بشارة 🔒
@@ -104,7 +104,6 @@ function pvpUpdateTurnTimer(turnDeadlineIso){
     }
 
     pvpState.turnDeadline = turnDeadlineIso || null;
-    pvpState.skipTurnRequested = false;
 
     if(pvpState.turnTimerInterval){
         clearInterval(pvpState.turnTimerInterval);
@@ -131,8 +130,12 @@ function pvpUpdateTurnTimer(turnDeadlineIso){
         let s = seconds % 60;
         box.textContent = m + ":" + (s < 10 ? "0" + s : s);
 
-        if(remainingMs <= 0 && !pvpState.skipTurnRequested){
-            pvpState.skipTurnRequested = true;
+        if(remainingMs <= 0){
+            // لا نتوقف بعد محاولة فاشلة واحدة: بسبب فرق توقيت بسيط بين
+            // المتصفح والخادم قد يرفض السيرفر pvp_skip_turn بقول "لم تنتهِ
+            // مهلة الدور بعد" حتى وإن عرضنا نحن 0:00 — لذا نعيد المحاولة في
+            // كل نبضة حتى يسلّم السيرفر الدور فعلًا (skipInFlight يمنع
+            // تكدّس طلبات متزامنة)
             pvpRequestSkipTurn();
         }
     };
@@ -143,6 +146,8 @@ function pvpUpdateTurnTimer(turnDeadlineIso){
 
 async function pvpRequestSkipTurn(){
     if(!pvpState.matchId) return;
+    if(pvpState.skipInFlight) return;
+    pvpState.skipInFlight = true;
     try{
         await supabaseClient.rpc("pvp_skip_turn", {
             p_token: pvpGetToken(),
@@ -150,8 +155,10 @@ async function pvpRequestSkipTurn(){
         });
     }catch(e){
         // قد تفشل لأن الطرف الآخر تخطّى الدور أولاً أو المهلة لم تنتهِ
-        // فعليًا بعد على السيرفر (فرق توقيت بسيط) — لا مشكلة، الاستطلاع
-        // القادم سيُحدّث الحالة والمؤقت من جديد
+        // فعليًا بعد على السيرفر (فرق توقيت بسيط) — لا مشكلة، سنعيد
+        // المحاولة في النبضة التالية من المؤقّت حتى يسلّم السيرفر الدور
+    }finally{
+        pvpState.skipInFlight = false;
     }
     pvpRefreshState(false);
 }

@@ -6007,17 +6007,22 @@ function startTurnTimer(){
 
     clearTurnTimer();
 
-    let seconds = 60;
+    // مؤقّت يعتمد على موعد انتهاء ثابت (Date.now()) بدل إنقاص عداد داخل
+    // setInterval — فالمتصفحات تخنق المؤقّتات في التبويبات الخلفية، وإنقاص
+    // عداد لكل نبضة قد يجعل العداد يتأخر أو يتجمد فيبقى الدور عالقًا حتى
+    // بعد وصوله للصفر. الحساب من الموعد الحقيقي يضمن أنه متى ما مرّ الوقت
+    // الفعلي تُنفَّذ النقلة تلقائيًا في أول نبضة تالية مهما تأخّرت.
+    let deadline = Date.now() + 60000;
 
-    updateTimerDisplay(seconds);
+    let tick = () => {
 
-    battle.turnInterval = setInterval(() => {
+        if(battle.finished){ clearTurnTimer(); return; }
 
-        seconds--;
+        let remaining = Math.max(0, deadline - Date.now());
 
-        updateTimerDisplay(seconds);
+        updateTimerDisplay(Math.ceil(remaining / 1000));
 
-        if(seconds <= 0){
+        if(remaining <= 0){
 
             clearTurnTimer();
 
@@ -6029,7 +6034,11 @@ function startTurnTimer(){
 
         }
 
-    }, 1000);
+    };
+
+    tick();
+
+    battle.turnInterval = setInterval(tick, 1000);
 
 }
 
