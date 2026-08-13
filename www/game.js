@@ -2728,7 +2728,7 @@ function renderAdminCharacterCards(list, emptyMessage){
 // رفع صورة شخصية من الجهاز (Supabase Storage)
 // ========================================
 
-async function uploadCharacterImage(fileInputId, textInputId, statusId){
+async function uploadCharacterImage(fileInputId, textInputId, statusId, cropOptions){
 
     let fileInput = document.getElementById(fileInputId);
 
@@ -2736,7 +2736,7 @@ async function uploadCharacterImage(fileInputId, textInputId, statusId){
 
     let statusBox = document.getElementById(statusId);
 
-    let file = fileInput.files[0];
+    let file = fileInput ? fileInput.files[0] : null;
 
     if(!file) return;
 
@@ -2748,6 +2748,30 @@ async function uploadCharacterImage(fileInputId, textInputId, statusId){
         if(statusBox) statusBox.textContent = "❌ يجب تسجيل الدخول كأدمن لرفع صورة";
 
         return;
+
+    }
+
+
+    // إذا طُلب الاقتصاص، اعرض نافذة الاقتصاص أولًا، وعند التأكيد نرفع النتيجة
+    if(cropOptions && cropOptions.crop !== false){
+
+        try{
+
+            let croppedBlob = await openCropModal(file, cropOptions);
+
+            if(!croppedBlob) return; // أُلغيت
+
+            file = new File([croppedBlob], file.name, { type: croppedBlob.type || file.type });
+
+        }catch(e){
+
+            console.log("فشل الاقتصاص", e);
+
+            if(statusBox) statusBox.textContent = "❌ فشل معالجة الصورة: " + (e && e.message || e);
+
+            return;
+
+        }
 
     }
 
@@ -2812,6 +2836,414 @@ async function uploadCharacterImage(fileInputId, textInputId, statusId){
     textInput.value = data.publicUrl;
 
     if(statusBox) statusBox.textContent = "✅ تم رفع الصورة بنجاح";
+
+    if(fileInput) fileInput.value = "";
+
+}
+
+
+// ========================================
+// نافذة الاقتصاص (قصّ الصورة داخل اللعبة)
+// ========================================
+//
+// تُعرض الصورة داخل نافذة مع صندوق قصّ يمكن سحبه وتغيير حجمه والحفاظ على
+// نسبة أبعاد محددة. عند التأكيد تُرجع الصورة المقتصَّة كـ Blob.
+
+let _cropState = null;
+
+function openCropModal(file, options){
+
+    options = options || {};
+
+    return new Promise(function(resolve, reject){
+
+        let url = URL.createObjectURL(file);
+
+        let img = new Image();
+
+        img.onload = function(){
+
+            // أبعاد الشاشة الفعلية لعرض النافذة
+            let viewW = Math.min(window.innerWidth - 40, 440);
+
+            let viewH = Math.min(window.innerHeight - 180, 480);
+
+            // نسبة الأبعاد المطلوبة للقص (افتراضي 1:1 مربّع)
+            let aspect = options.aspectRatio || 1;
+
+            let cropW = 220;
+
+            let cropH = cropW / aspect;
+
+            if(cropH > viewH - 120){ cropH = viewH - 120; cropW = cropH * aspect; }
+
+            // مقياس العرض داخل النافذة مع مساحة بيضاء (عرض) ومساحة بيضاء (ارتفاع)
+            let fitScale = Math.min((viewW - 24) / img.width, (viewH - 24) / img.height);
+
+            let dispW = Math.round(img.width * fitScale);
+
+            let dispH = Math.round(img.height * fitScale);
+
+            _cropState = {
+                img: img,
+                file: file,
+                dispW: dispW,
+                dispH: dispH,
+                scale: fitScale,
+                aspect: aspect,
+                cropW: cropW,
+                cropH: cropH,
+                cropX: Math.round((dispW - cropW) / 2),
+                cropY: Math.round((dispH - cropH) / 2),
+                imgOffX: 0,
+                imgOffY: 0,
+                zoom: 1,
+                resolve: resolve,
+                reject: reject
+            };
+
+            buildCropModal(_cropState);
+
+            URL.revokeObjectURL(url);
+
+        };
+
+        img.onerror = function(){ reject(new Error("تعذّر قراءة الصورة")); };
+
+        img.src = url;
+
+    });
+
+}
+
+
+function buildCropModal(state){
+
+    let existing = document.getElementById("crop-modal");
+
+    if(existing) existing.remove();
+
+    let modal = document.createElement("div");
+
+    modal.id = "crop-modal";
+
+    modal.className = "crop-modal";
+
+    modal.innerHTML =
+        "<div class=\"crop-modal-box\">" +
+            "<h2>قصّ الصورة</h2>" +
+            "<div class=\"crop-stage\" id=\"crop-stage\">" +
+                "<canvas id=\"crop-canvas\"></canvas>" +
+                "<div class=\"crop-box\" id=\"crop-box\">" +
+                    "<div class=\"crop-box-hint\"></div>" +
+                    "<span class=\"crop-handle crop-nw\"></span>" +
+                    "<span class=\"crop-handle crop-ne\"></span>" +
+                    "<span class=\"crop-handle crop-sw\"></span>" +
+                    "<span class=\"crop-handle crop-se\"></span>" +
+                "</div>" +
+            "</div>" +
+            "<div class=\"crop-toolbar\">" +
+                "<label>النسبة:</label>" +
+                "<select id=\"crop-aspect\">" +
+                    "<option value=\"1\">مربّع 1:1</option>" +
+                    "<option value=\"1.25\">4:5 (عمودي)</option>" +
+                    "<option value=\"0.75\">3:4 (رأسي)</option>" +
+                    "<option value=\"1.78\">16:9 (عريض)</option>" +
+                "</select>" +
+                "<button id=\"crop-zoom-in\">+ تكبير</button>" +
+                "<button id=\"crop-zoom-out\">− تصغير</button>" +
+            "</div>" +
+            "<div class=\"crop-actions\">" +
+                "<button id=\"crop-confirm\" class=\"crop-confirm-btn\">تأكيد</button>" +
+                "<button id=\"crop-cancel\" class=\"crop-cancel-btn\">إلغاء</button>" +
+            "</div>" +
+        "</div>";
+
+    document.body.appendChild(modal);
+
+    let stage = document.getElementById("crop-stage");
+
+    let canvas = document.getElementById("crop-canvas");
+
+    canvas.width = state.dispW;
+
+    canvas.height = state.dispH;
+
+    stage.style.width = state.dispW + "px";
+
+    stage.style.height = state.dispH + "px";
+
+    let box = document.getElementById("crop-box");
+
+    box.style.width = state.cropW + "px";
+
+    box.style.height = state.cropH + "px";
+
+    box.style.left = state.cropX + "px";
+
+    box.style.top = state.cropY + "px";
+
+    box.style.display = "block";
+
+    drawCropCanvas(state);
+
+    let aspectSel = document.getElementById("crop-aspect");
+
+    aspectSel.value = String(state.aspect);
+
+    aspectSel.addEventListener("change", function(){
+        applyAspect(state, parseFloat(aspectSel.value));
+    });
+
+    document.getElementById("crop-zoom-in")
+        .addEventListener("click", function(){ setCropZoom(state, state.zoom + 0.25); });
+
+    document.getElementById("crop-zoom-out")
+        .addEventListener("click", function(){ setCropZoom(state, state.zoom - 0.25); });
+
+    document.getElementById("crop-confirm")
+        .addEventListener("click", function(){ confirmCrop(state); });
+
+    document.getElementById("crop-cancel")
+        .addEventListener("click", function(){
+            let m = document.getElementById("crop-modal");
+            if(m) m.remove();
+            state.reject(new Error("أُلغيت"));
+        });
+
+    // تفاعلات السحب على الصندوق والمقابض
+    setupCropDrag(state, box);
+
+}
+
+
+function drawCropCanvas(state){
+
+    let canvas = document.getElementById("crop-canvas");
+
+    if(!canvas) return;
+
+    let ctx = canvas.getContext("2d");
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // رسم الصورة مع نسبة الزوم المطبق
+    let drawW = state.dispW * state.zoom;
+
+    let drawH = state.dispH * state.zoom;
+
+    let drawX = (state.dispW - drawW) / 2 + state.imgOffX;
+
+    let drawY = (state.dispH - drawH) / 2 + state.imgOffY;
+
+    ctx.drawImage(state.img, drawX, drawY, drawW, drawH);
+
+    // عتامة خارج صندوق القص
+    ctx.fillStyle = "rgba(0,0,0,0.6)";
+
+    ctx.beginPath();
+
+    ctx.rect(0, 0, canvas.width, canvas.height);
+
+    ctx.rect(state.cropX, state.cropY, state.cropW, state.cropH);
+
+    ctx.fill("evenodd");
+
+}
+
+
+function setupCropDrag(state, box){
+
+    let stage = document.getElementById("crop-stage");
+
+    let canvas = document.getElementById("crop-canvas");
+
+    let dragging = null;
+
+    function toStageCoords(e){
+        let r = stage.getBoundingClientRect();
+        return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+
+    function clampBox(){
+        state.cropX = Math.max(0, Math.min(state.dispW - state.cropW, state.cropX));
+        state.cropY = Math.max(0, Math.min(state.dispH - state.cropH, state.cropY));
+    }
+
+    // سحب الصندوق (تحريك موضعه)
+    box.addEventListener("pointerdown", function(e){
+        e.preventDefault();
+        dragging = { type: "move", sx: e.clientX, sy: e.clientY, ox: state.cropX, oy: state.cropY };
+        box.setPointerCapture(e.pointerId);
+    });
+
+    // مقابض تغيير الحجم
+    ["nw", "ne", "sw", "se"].forEach(function(handle){
+        let el = box.querySelector(".crop-handle.crop-" + handle);
+        el.addEventListener("pointerdown", function(e){
+            e.preventDefault();
+            e.stopPropagation();
+            dragging = { type: "resize", handle: handle, sx: e.clientX, sy: e.clientY,
+                         ox: state.cropX, oy: state.cropY, ow: state.cropW, oh: state.cropH };
+            el.setPointerCapture(e.pointerId);
+        });
+    });
+
+    stage.addEventListener("pointermove", function(e){
+        if(!dragging) return;
+        let dx = e.clientX - dragging.sx;
+        let dy = e.clientY - dragging.sy;
+
+        if(dragging.type === "move"){
+            state.cropX = dragging.ox + dx;
+            state.cropY = dragging.oy + dy;
+            clampBox();
+        }else if(dragging.type === "resize"){
+            let aspect = state.aspect;
+            // الحجم الجديد يُقيَّد بنسبة الأبعاد
+            let newW = dragging.ow;
+            let newH = dragging.oh;
+            if(dragging.handle.indexOf("e") !== -1){ newW = dragging.ow + dx; }
+            if(dragging.handle.indexOf("s") !== -1){ newH = dragging.oh + dy; }
+            if(dragging.handle.indexOf("w") !== -1){ newW = dragging.ow - dx; }
+            if(dragging.handle.indexOf("n") !== -1){ newH = dragging.oh - dy; }
+
+            newW = Math.max(40, Math.min(state.dispW, newW));
+            let hByAspect = newW / aspect;
+            if(hByAspect > state.dispH){ hByAspect = state.dispH; newW = hByAspect * aspect; }
+            newH = hByAspect;
+            if(newH < 40){ newH = 40; newW = newH * aspect; if(newW > state.dispW) newW = state.dispW; }
+
+            state.cropW = newW;
+            state.cropH = newH;
+
+            // إبقاء الحواف المثبّتة (nw/sw تثبّت اليمين، ne/se تثبّت اليسار...)
+            if(dragging.handle.indexOf("e") !== -1){
+                // يثبّت اليسار: اليسار = ox
+                state.cropX = dragging.ox;
+            }else if(dragging.handle.indexOf("w") !== -1){
+                state.cropX = dragging.ox + dragging.ow - newW;
+            }
+            if(dragging.handle.indexOf("s") !== -1){
+                state.cropY = dragging.oy;
+            }else if(dragging.handle.indexOf("n") !== -1){
+                state.cropY = dragging.oy + dragging.oh - newH;
+            }
+            clampBox();
+        }
+
+        applyCropBox(state);
+    });
+
+    function endDrag(e){
+        dragging = null;
+    }
+
+    stage.addEventListener("pointerup", endDrag);
+    stage.addEventListener("pointercancel", endDrag);
+
+}
+
+
+function applyCropBox(state){
+
+    let box = document.getElementById("crop-box");
+
+    if(!box) return;
+
+    box.style.left = state.cropX + "px";
+
+    box.style.top = state.cropY + "px";
+
+    box.style.width = state.cropW + "px";
+
+    box.style.height = state.cropH + "px";
+
+    drawCropCanvas(state);
+
+}
+
+
+function applyAspect(state, aspect){
+
+    state.aspect = aspect;
+
+    // تحويل الصندوق الحالي مع الحفاظ على المنتصف
+    let cx = state.cropX + state.cropW / 2;
+
+    let cy = state.cropY + state.cropH / 2;
+
+    let newW = state.cropW;
+
+    let newH = newW / aspect;
+
+    if(newH > state.dispH){ newH = state.dispH; newW = newH * aspect; }
+    if(newW > state.dispW){ newW = state.dispW; newH = newW / aspect; }
+    if(newH < 40){ newH = 40; newW = newH * aspect; if(newW > state.dispW) newW = state.dispW; }
+
+    state.cropW = newW;
+
+    state.cropH = newH;
+
+    state.cropX = Math.round(cx - newW / 2);
+
+    state.cropY = Math.round(cy - newH / 2);
+
+    state.cropX = Math.max(0, Math.min(state.dispW - state.cropW, state.cropX));
+
+    state.cropY = Math.max(0, Math.min(state.dispH - state.cropH, state.cropY));
+
+    applyCropBox(state);
+
+}
+
+
+function setCropZoom(state, zoom){
+
+    state.zoom = Math.max(1, Math.min(3, zoom));
+
+    state.imgOffX = 0;
+
+    state.imgOffY = 0;
+
+    drawCropCanvas(state);
+
+}
+
+
+function confirmCrop(state){
+
+    let canvas = document.createElement("canvas");
+
+    let outW = 800;
+
+    let outH = Math.round(outW / state.aspect);
+
+    canvas.width = outW;
+
+    canvas.height = outH;
+
+    let ctx = canvas.getContext("2d");
+
+    // نسبة أبعاد المعاينة إلى الصورة الأصلية
+    let sx = (state.cropX - ((state.dispW - state.dispW * state.zoom) / 2 + state.imgOffX)) / (state.dispW * state.zoom) * state.img.width;
+    let sy = (state.cropY - ((state.dispH - state.dispH * state.zoom) / 2 + state.imgOffY)) / (state.dispH * state.zoom) * state.img.height;
+    let sw = state.cropW / (state.dispW * state.zoom) * state.img.width;
+    let sh = state.cropH / (state.dispH * state.zoom) * state.img.height;
+
+    ctx.drawImage(state.img, sx, sy, sw, sh, 0, 0, outW, outH);
+
+    let m = document.getElementById("crop-modal");
+
+    if(m) m.remove();
+
+    canvas.toBlob(function(blob){
+        if(blob){
+            state.resolve(blob);
+        }else{
+            state.reject(new Error("تعذّر إنشاء الصورة"));
+        }
+    }, "image/png");
 
 }
 
@@ -3051,7 +3483,8 @@ async function uploadPageBackground(characterId, pageIndex){
     await uploadCharacterImage(
         "page-bg-file-" + pageIndex,
         "page-bg-" + pageIndex,
-        "page-bg-status-" + pageIndex
+        "page-bg-status-" + pageIndex,
+        { aspectRatio: 1.78, crop: true }
     );
 
     let input = document.getElementById("page-bg-" + pageIndex);
@@ -3292,7 +3725,7 @@ async function openEditCharacterModal(characterId){
 
                 <input id="edit-char-image" type="text" value="${character.identity_image || ''}" placeholder="رابط الصورة (أو ارفع من الجهاز)">
 
-                <input id="edit-char-image-file" type="file" accept="image/*" onchange="uploadCharacterImage('edit-char-image-file','edit-char-image','edit-image-status')">
+                <input id="edit-char-image-file" type="file" accept="image/*" onchange="uploadCharacterImage('edit-char-image-file','edit-char-image','edit-image-status',{aspectRatio:1,crop:true})">
 
                 <p id="edit-image-status" class="upload-status"></p>
 

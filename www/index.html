@@ -201,7 +201,7 @@ lang="ar">
 
     <input id="admin-character-image" type="text" placeholder="رابط صورة الشخصية (أو ارفع من الجهاز)">
 
-    <input id="admin-character-image-file" type="file" accept="image/*" onchange="uploadCharacterImage('admin-character-image-file','admin-character-image','admin-image-status')">
+    <input id="admin-character-image-file" type="file" accept="image/*" onchange="uploadCharacterImage('admin-character-image-file','admin-character-image','admin-image-status',{aspectRatio:1,crop:true})">
 
     <p id="admin-image-status" class="upload-status"></p>
 

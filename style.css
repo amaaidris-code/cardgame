@@ -4487,3 +4487,237 @@ box-shadow: 0 6px 24px rgba(0,0,0,0.5), 0 0 18px rgba(255,120,0,0.4);
 
 }
 
+/* ===== نافذة اقتصاص الصورة ===== */
+
+.crop-modal{
+
+    position: fixed;
+
+    top: 0;
+
+    left: 0;
+
+    right: 0;
+
+    bottom: 0;
+
+    background: rgba(0, 0, 0, 0.8);
+
+    z-index: 10000;
+
+    display: flex;
+
+    align-items: center;
+
+    justify-content: center;
+
+    padding: 16px;
+
+}
+
+.crop-modal-box{
+
+    background: linear-gradient(160deg, #1a2238, #0d1226);
+
+    border: 1px solid #3b4a6b;
+
+    border-radius: 14px;
+
+    padding: 16px;
+
+    max-width: 480px;
+
+    width: 100%;
+
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.7);
+
+}
+
+.crop-modal-box h2{
+
+    margin: 0 0 10px;
+
+    font-size: 18px;
+
+    color: #7ab7ff;
+
+    text-align: center;
+
+}
+
+.crop-stage{
+
+    position: relative;
+
+    margin: 0 auto;
+
+    overflow: hidden;
+
+    border: 1px solid #3b4a6b;
+
+    border-radius: 8px;
+
+    background: #11162a;
+
+    touch-action: none;
+
+    cursor: grab;
+
+}
+
+.crop-stage canvas{
+
+    display: block;
+
+}
+
+.crop-box{
+
+    position: absolute;
+
+    border: 2px solid #fff;
+
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+
+    cursor: move;
+
+}
+
+.crop-box-hint{
+
+    position: absolute;
+
+    inset: 0;
+
+    background:
+        linear-gradient(90deg, transparent 49%, rgba(255,255,255,0.25) 49%, rgba(255,255,255,0.25) 51%, transparent 51%),
+        linear-gradient(0deg, transparent 49%, rgba(255,255,255,0.25) 49%, rgba(255,255,255,0.25) 51%, transparent 51%);
+
+    pointer-events: none;
+
+}
+
+.crop-handle{
+
+    position: absolute;
+
+    width: 14px;
+
+    height: 14px;
+
+    background: #3b82ff;
+
+    border: 2px solid #fff;
+
+    border-radius: 3px;
+
+}
+
+.crop-nw{ top: -8px; left: -8px; cursor: nw-resize; }
+
+.crop-ne{ top: -8px; right: -8px; cursor: ne-resize; }
+
+.crop-sw{ bottom: -8px; left: -8px; cursor: sw-resize; }
+
+.crop-se{ bottom: -8px; right: -8px; cursor: se-resize; }
+
+.crop-toolbar{
+
+    display: flex;
+
+    align-items: center;
+
+    gap: 8px;
+
+    margin: 12px 0;
+
+    flex-wrap: wrap;
+
+    font-size: 13px;
+
+    color: #cfd8ea;
+
+}
+
+.crop-toolbar select{
+
+    padding: 6px;
+
+    border-radius: 6px;
+
+    border: 1px solid #3b4a6b;
+
+    background: #11162a;
+
+    color: #cfd8ea;
+
+}
+
+.crop-toolbar button{
+
+    padding: 6px 10px;
+
+    font-size: 13px;
+
+    border-radius: 6px;
+
+    border: 1px solid #3b4a6b;
+
+    background: #1c2740;
+
+    color: #cfd8ea;
+
+    cursor: pointer;
+
+}
+
+.crop-actions{
+
+    display: flex;
+
+    gap: 10px;
+
+}
+
+.crop-confirm-btn{
+
+    flex: 1;
+
+    padding: 11px;
+
+    background: linear-gradient(180deg, #3b82ff, #2563eb);
+
+    color: #fff;
+
+    border: none;
+
+    border-radius: 10px;
+
+    font-size: 15px;
+
+    font-weight: bold;
+
+    cursor: pointer;
+
+}
+
+.crop-cancel-btn{
+
+    flex: 1;
+
+    padding: 11px;
+
+    background: transparent;
+
+    color: #8fa2c4;
+
+    border: 1px solid #3b4a6b;
+
+    border-radius: 10px;
+
+    font-size: 15px;
+
+    cursor: pointer;
+
+}
+
