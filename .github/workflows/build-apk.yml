@@ -83,11 +83,28 @@ jobs:
       - name: Sync web assets
         run: ./node_modules/.bin/cap sync android
 
+      - name: Ensure Android SDK packages and licenses
+        run: |
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$PATH"
+          yes | sdkmanager --licenses > /dev/null 2>&1 || true
+          sdkmanager "platforms;android-34" "build-tools;34.0.0" > /dev/null 2>&1 || true
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          echo "SDK platforms installed:"
+          ls "$ANDROID_HOME/platforms" 2>/dev/null || echo "no platforms dir"
+
       - name: Build debug APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee gradle_build.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Upload gradle build log
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: android/gradle_build.log
 
       - name: Stage APK for Cloudflare hosting
         run: |
