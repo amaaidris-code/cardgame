@@ -3327,6 +3327,10 @@ async function loadAdminPlayers(){
 
                 <p class="admin-player-sub">${player.has_character ? "🎴 يملك شخصية" : "بدون شخصية"}</p>
 
+                ${player.character_name
+                    ? `<p class="admin-player-sub">🎭 ${escapeHtml(player.character_name)} · ⭐ LV ${player.char_level || 0} · ❤️ ${player.char_hp || 0} · ⚔️ ${player.char_atk || 0} · 💎 ${player.points || 0}</p>`
+                    : ""}
+
             </div>
 
             <div class="admin-player-gold-edit">
@@ -3334,6 +3338,10 @@ async function loadAdminPlayers(){
                 <input type="number" id="player-gold-${player.player_id}" value="${player.gold || 0}">
 
                 <button onclick="savePlayerGold('${player.player_id}')">💾 حفظ</button>
+
+                <input type="number" id="player-points-${player.player_id}" value="${player.points || 0}" placeholder="نقاط تطوير" style="margin-top:6px;">
+
+                <button onclick="savePlayerPoints('${player.player_id}')">💎 نقاط</button>
 
                 <button onclick="deletePlayerAdmin('${player.player_id}', '${jsSafeUsername}')" class="admin-danger-btn">🗑️ حذف</button>
 
@@ -3347,6 +3355,50 @@ async function loadAdminPlayers(){
 
 
     box.innerHTML = html;
+
+}
+
+
+async function savePlayerPoints(playerId){
+
+    let input = document.getElementById("player-points-" + playerId);
+
+    let points = Number(input.value);
+
+    if(isNaN(points) || points < 0){
+
+        alert("اكتب رقمًا صحيحًا للنقاط");
+
+        return;
+
+    }
+
+    let admin_token = localStorage.getItem("admin_token");
+
+    let {error} =
+
+    await supabaseClient
+    .rpc("admin_set_player_points", {
+
+        p_admin_token: admin_token,
+
+        p_player_id: playerId,
+
+        p_points: points
+
+    });
+
+    if(error){
+
+        alert(error.message);
+
+        return;
+
+    }
+
+    alert("تم تحديث نقاط التطوير");
+
+    loadAdminPlayers();
 
 }
 

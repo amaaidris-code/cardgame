@@ -629,7 +629,7 @@ function computeScaledAttackDamages(atk, skills){
     const result = {};
     const atkSkills = (skills || []).filter(s =>
         (s.type === "attack" || s.type === "special")
-        && (s.effect === null || s.effect === undefined || s.effect === "")
+        && (s.effect === null || s.effect === undefined || s.effect === "" || s.effect === "poison")
     );
     if(atkSkills.length === 0) return result;
 
@@ -643,13 +643,13 @@ function computeScaledAttackDamages(atk, skills){
         (Number(a.slot) || 0) - (Number(b.slot) || 0)
     );
     const n = sorted.length;
-    const f = sorted.map(s => s.unblockable ? 2 : 1);
+    const f = sorted.map(s => (s.unblockable || s.effect === "poison") ? 2 : 1);
     const base = sorted.map(s => Math.max(0, Number(s.damage) || 0));
 
     // هدف الفجوة التراكمية لكل مهارة (بالمكافئ العادي)
     const cum = [0];
     for(let i = 1; i < n; i++){
-        cum[i] = cum[i - 1] + (sorted[i].unblockable ? 200 : 150);
+        cum[i] = cum[i - 1] + ((sorted[i].unblockable || sorted[i].effect === "poison") ? 200 : 150);
     }
 
     // حل نظام خطي لإيجاد الزيادة (بالضرر الفعلي) لكل مهارة بحيث:
@@ -686,6 +686,22 @@ function computeScaledAttackDamages(atk, skills){
     sorted.forEach((s, i) => { result[s.id] = base[i] + r[i]; });
     return result;
 }
+
+// الضرر "الفعلي" لمهارة ما بعد تطبيق توسّع ATK (أساسي + الزيادة الموزعة).
+// للمهارات داخل computeScaledAttackDamages (هجوم/خاصة ضررية + سم) يُؤخذ
+// الرقم الموسّع مباشرة من خريطة scaledAttackDamages، وإلا فالقيمة الأساسية
+function effectiveSkillDamage(skill, attacker){
+
+    if(attacker && attacker.scaledAttackDamages && attacker.scaledAttackDamages[skill.id] !== undefined){
+
+        return attacker.scaledAttackDamages[skill.id];
+
+    }
+
+    return Number(skill.damage) || 0;
+
+}
+
 
 function calcDamage(skill, attacker){
 
@@ -2381,7 +2397,7 @@ function playerUsePoisonSkill(skill){
 
     if(checkBattleEnd()) return;
 
-    let poisonDmg = Math.max(1, skillParamAmount(skill, "poison_damage", skill.damage));
+    let poisonDmg = Math.max(1, skillParamAmount(skill, "poison_damage", effectiveSkillDamage(skill, battle.player)));
 
     let poisonTurns = Math.max(1, skillParamAmount(skill, "poison_turns", skill.damage));
 
@@ -2657,7 +2673,7 @@ async function enemyAct(){
 
         if(checkBattleEnd()) return;
 
-        let poisonDmg = Math.max(1, skillParamAmount(chosen, "poison_damage", chosen.damage));
+        let poisonDmg = Math.max(1, skillParamAmount(chosen, "poison_damage", effectiveSkillDamage(chosen, battle.enemy)));
 
         let poisonTurns = Math.max(1, skillParamAmount(chosen, "poison_turns", chosen.damage));
 
@@ -2785,8 +2801,36 @@ function enemyUseSealOrUnseal(skill){
 
 
 // ========================================
+// نجاة من الضربة القاتلة عند صفر صحة
+// ========================================
+// عندما يصل المقاتل إلى صفر صحة من ضربة كان بمقدوره صدّها، يُنقَذ من الموت
+// الفوري ويبقى على صفر حتى دوره (انظر fighterCanBlockLastHit). حين يستخدم
+// بعدها أي مهارة صدّ (دفاع/انعكاس/امتصاص) تُعيد هذه الدالة صحته إلى ما قبل
+// الضربة القاتلة وتُستهلك اللقطة — أي أنه "صدّ" الضربة فعليًا. يُرجع true
+// إن كان هناك فعلاً نجاة تمّت
+function rescueFighterFromFatalHit(fighter){
+
+    let snapshot = fighter.lastHitSnapshot;
+
+    if(snapshot && !snapshot.consumed && (fighter.hp || 0) <= 0 && (snapshot.dmgDealt || 0) > 0){
+
+        fighter.hp = snapshot.hpBefore;
+
+        snapshot.consumed = true;
+
+        return true;
+
+    }
+
+    return false;
+
+}
+
+
+// ========================================
 // مفاعيل الأنواع الجديدة (PvE)
 // ========================================
+
 
 // المهارات الممنوعة من استخدامها عبر "الظل" (مطابقة لقائمة المنع في السيرفر)
 const PVE_SHADOW_EXCLUDED_EFFECTS = ["copy", "seal", "unseal", "shadow", "delay_cooldown"];
@@ -2825,21 +2869,28 @@ function applyPveBuff(fighter, skill){
 
     if(skill.effect === "absorb_atk"){
 
+        // نجاة من الضربة القاتلة: لو كان المقاتل على صفر وعنده لقطة ضربة غير
+        // مُستهلكة فيستعيد صحته السابقة (يُنقَذ) قبل تجهيز درع الامتصاص
+        let rescued = rescueFighterFromFatalHit(fighter);
+
         fighter.absorbMode = "atk";
 
         fighter.absorbHits = (fighter.absorbHits || 0) + amount;
 
-        return `${fighter.name} جهّز درع امتصاص! يحوّل أول ${amount} ${amount === 1 ? "ضربة" : "ضربات"} إلى قوة هجومية مؤقتة`;
+        return `${fighter.name} جهّز درع امتصاص! يحوّل أول ${amount} ${amount === 1 ? "ضربة" : "ضربات"} إلى قوة هجومية مؤقتة` + (rescued ? " واستعاد صحته من الضربة القاتلة!" : "");
 
     }
 
     if(skill.effect === "absorb_hp"){
 
+        // نفس النجاة من الضربة القاتلة قبل تجهيز درع امتصاص الصحة
+        let rescued = rescueFighterFromFatalHit(fighter);
+
         fighter.absorbMode = "hp";
 
         fighter.absorbHits = (fighter.absorbHits || 0) + amount;
 
-        return `${fighter.name} جهّز درع امتصاص! يحوّل أول ${amount} ${amount === 1 ? "ضربة" : "ضربات"} إلى صحة مؤقتة`;
+        return `${fighter.name} جهّز درع امتصاص! يحوّل أول ${amount} ${amount === 1 ? "ضربة" : "ضربات"} إلى صحة مؤقتة` + (rescued ? " واستعاد صحته من الضربة القاتلة!" : "");
 
     }
 
@@ -2853,7 +2904,7 @@ function applyPveBuff(fighter, skill){
 
     if(skill.effect === "poison"){
 
-        let poisonDmg = Math.max(1, skillParamAmount(skill, "poison_damage", skill.damage));
+        let poisonDmg = Math.max(1, skillParamAmount(skill, "poison_damage", effectiveSkillDamage(skill, fighter)));
         let poisonTurns = Math.max(1, skillParamAmount(skill, "poison_turns", skill.damage));
 
         let target = (fighter === battle.player) ? battle.enemy : battle.player;
@@ -3852,6 +3903,7 @@ function resolveAction(attacker, defender, skill, trackUsed = true, isReflectedH
             hpBefore: hpBefore,
             dmgDealt: dmgApplied,
             consumed: !!skill.unblockable || absorbedByShield || absorbedByAbsorb,
+            unblockable: !!skill.unblockable,
             reflectable: false,
             attackerLifestealHeal: (skill.effect === "lifesteal") ? healedAmount : 0
         };
@@ -4049,6 +4101,10 @@ function playerUseReflect(reflectSkill){
     clearTurnTimer();
 
     let reflectMult = Math.max(1, skillParamAmount(reflectSkill, "reflect_mult", reflectSkill.damage));
+
+    // نجاة من الضربة القاتلة: لو كان اللاعب على صفر صحته (نجا لأن لديه
+    // مهارة صدّ) فيستعيد صحته السابقة عند استخدامه الانعكاس بدل أن يموت
+    rescueFighterFromFatalHit(battle.player);
 
     battle.player.reflectMult = reflectMult;
 
@@ -6064,15 +6120,60 @@ function fighterCanBlockLastHit(fighter){
 
     if((snapshot.dmgDealt || 0) <= 0) return false;
 
-    let defenseSkill = fighter.skills.find(s => s.type === "defense");
+    let unblockable = !!snapshot.unblockable;
 
-    if(!defenseSkill) return false;
+    // الوحش (الخصم في PvE) يحتفظ بسلوكه السابق: ينجو عند صفر فقط إن كان لديه
+    // دفاع جاهز — وليس انعكاس/امتصاص، لأن العدو لا يستخدمها فعليًا لإنقاذ
+    // نفسه فيبقى معلّقًا على صفر بلا نهاية. توسعة النجاة بالانعكاس/الامتصاص/
+    // السرقة/النسخ تنطبق على اللاعب فقط
+    if(fighter !== battle.player){
 
-    if(!isSkillReady(fighter, defenseSkill)) return false;
+        let defenseSkill = fighter.skills.find(s => s.type === "defense");
 
-    if(isSkillSealed(fighter, defenseSkill)) return false;
+        if(!defenseSkill) return false;
 
-    return true;
+        if(!isSkillReady(fighter, defenseSkill)) return false;
+
+        if(isSkillSealed(fighter, defenseSkill)) return false;
+
+        return true;
+
+    }
+
+    let opponent = battle.enemy;
+
+    // مهارات امتصاص جاهزة عند المقاتل نفسه (امتصاص → صحة أو قوة)
+    let hasAbsorb =
+    fighter.skills.some(s =>
+        (s.effect === "absorb_atk" || s.effect === "absorb_hp")
+        && isSkillReady(fighter, s)
+        && !isSkillSealed(fighter, s));
+
+    // هل يستطيع الحصول على مهارة امتصاص من الخصم عبر سرقة/نسخ/سيطرة جاهزة؟
+    let canObtainAbsorb =
+    !!opponent
+    && opponent.skills.some(s => s.effect === "absorb_atk" || s.effect === "absorb_hp")
+    && fighter.skills.some(s =>
+        (s.effect === "steal" || s.effect === "copy" || s.effect === "control")
+        && isSkillReady(fighter, s)
+        && !isSkillSealed(fighter, s));
+
+    // الضربة "لا تُصد": لا يمكن صدّها إلا بدرع امتصاص (صحة أو قوة) متوفر
+    // لديه أو يمكنه الحصول عليه بالسرقة/النسخ/السيطرة من الخصم
+    if(unblockable){
+
+        return hasAbsorb || canObtainAbsorb;
+
+    }
+
+    // الضربة العادية القابلة للصد: تُصد بالدفاع أو الانعكاس أو الامتصاص
+    let hasBlock =
+    fighter.skills.some(s =>
+        ((s.type === "defense") || (s.effect === "reflect"))
+        && isSkillReady(fighter, s)
+        && !isSkillSealed(fighter, s));
+
+    return hasBlock || hasAbsorb || canObtainAbsorb;
 
 }
 
