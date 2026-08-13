@@ -3182,7 +3182,7 @@ async function openEditCharacterModal(characterId){
 
             <label class="admin-color-row skill-page-color-row">
                 📏 سماكة حد مهارات الصفحة
-                <input type="number" id="page-stroke-width-${p}" value="${(pageSkills.length > 0) ? (pageSkills[0].stroke_width || 0) : 0}" min="0" max="10" step="1" style="width:60px;">
+                <input type="number" id="page-stroke-width-${p}" value="${(pageSkills.length > 0) ? (pageSkills[0].stroke_width || 0) : 0}" min="0" max="10" step="0.1" style="width:60px;">
             </label>
 
             <button onclick="applyPageColor(${p})" class="admin-page-color-apply-btn">تطبيق اللون والحد على جميع المهارات</button>
@@ -3258,7 +3258,7 @@ async function openEditCharacterModal(characterId){
 
             <label class="admin-color-row skill-color-row">
                 📏 سماكة الحد
-                <input type="number" id="skill-stroke-width-${s.id}" value="${s.stroke_width || 0}" min="0" max="10" step="1" style="width:60px;">
+                <input type="number" id="skill-stroke-width-${s.id}" value="${s.stroke_width || 0}" min="0" max="10" step="0.1" style="width:60px;">
             </label>
 
             <button onclick="saveSkillEdit('${s.id}')">حفظ</button>
@@ -3394,7 +3394,7 @@ async function openEditCharacterModal(characterId){
 
                 <label class="admin-color-row skill-color-row">
                     📏 سماكة الحد
-                    <input id="new-skill-stroke-width" type="number" value="0" min="0" max="10" step="1" style="width:60px;">
+                    <input id="new-skill-stroke-width" type="number" value="0" min="0" max="10" step="0.1" style="width:60px;">
                 </label>
 
                 <button onclick="addSkillToCharacter('${characterId}')">إضافة المهارة</button>
