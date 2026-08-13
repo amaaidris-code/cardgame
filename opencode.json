@@ -1,0 +1,34 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "ollama/qwen2.5-coder:3b",
+  "mcp": {
+    "supabase": {
+      "type": "remote",
+      "url": "https://mcp.supabase.com/mcp?project_ref=cbjphdhoabktsplcxvxu"
+    }
+  },
+  "provider": {
+    "omniroute": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "OmniRoute",
+      "options": {
+        "baseURL": "http://localhost:20128/v1",
+        "apiKey": "sk_omniroute"
+      },
+      "models": {
+        "auto": { "name": "Auto-Combo (Recommended)" },
+        "auto/coding": { "name": "Auto-Combo (Coding Focused)" },
+        "auto/fast": { "name": "Auto-Combo (Low Latency)" },
+        "auto/cheap": { "name": "Auto-Combo (Low Cost)" }
+      }
+    },
+    "ollama": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Ollama",
+      "options": {
+        "baseURL": "http://localhost:11434/v1",
+        "apiKey": "ollama"
+      }
+    }
+  }
+}

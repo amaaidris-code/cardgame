@@ -3466,7 +3466,7 @@ async function loadSkillPageBackgroundsForAdmin(character_id){
 
     await supabaseClient
     .from("character_skill_page_backgrounds")
-    .select("page_index, image_url")
+    .select("page_index, image_url, skill_scale")
     .eq("character_id", character_id);
 
     if(error || !data) return {};
@@ -3475,7 +3475,10 @@ async function loadSkillPageBackgroundsForAdmin(character_id){
 
     data.forEach(row => {
 
-        if(row.image_url) map[row.page_index] = row.image_url;
+        map[row.page_index] = {
+            url: row.image_url || "",
+            scale: Number(row.skill_scale) > 0 ? Number(row.skill_scale) : 1
+        };
 
     });
 
@@ -3496,7 +3499,10 @@ async function uploadPageBackground(characterId, pageIndex){
     if(!file) return;
 
     // نرفع الصورة ونضع الرابط في حقل النص ثم نحفظه (مثل زر حفظ تمامًا)
-    // نسبة الاقتصاص 1:1 (مربع) لتطابق حاوية العرض المربعة في شاشة المعركة
+    // نسبة الاقتصاص 1:1 (مربع) لتطابق حاوية العرض في شاشة المعركة التي
+    // هي مربعة أيضًا (aspect-ratio: 1/1). لو اقتصصناها 16:9 (أعرض من الأطول)
+    // فإن background-size: cover في الحاوية المربعة يكبّر الصورة بحيث تملأ
+    // العرض ويقصّ الأعلى والأسفل، فلا تظهر إلا قطعة صغيرة من منتصف الصورة.
     await uploadCharacterImage(
         "page-bg-file-" + pageIndex,
         "page-bg-" + pageIndex,
@@ -3571,6 +3577,58 @@ async function clearSkillPageBackground(characterId, pageIndex){
 }
 
 
+// يحفظ حجم أزرار مهارات الصفحة عبر دالة السيرفر الآمنة، ويمسح كاش
+// المعارك لهذه الشخصية حتى يظهر الحجم الجديد في المباراة التالية مباشرة
+async function saveSkillPageScale(characterId, pageIndex){
+
+    let input = document.getElementById("page-scale-" + pageIndex);
+
+    let scale = input ? parseFloat(input.value) : 1;
+
+    if(isNaN(scale) || scale <= 0) scale = 1;
+
+    if(scale > 3) scale = 3;
+
+    if(scale < 0.5) scale = 0.5;
+
+    if(input) input.value = scale;
+
+    let admin_token = localStorage.getItem("admin_token");
+
+    let {error} =
+
+    await supabaseClient
+    .rpc("admin_set_character_skill_page_scale", {
+
+        p_admin_token: admin_token,
+
+        p_character_id: characterId,
+
+        p_page_index: pageIndex,
+
+        p_skill_scale: scale
+
+    });
+
+    let status = document.getElementById("page-bg-status-" + pageIndex);
+
+    if(error){
+
+        if(status) status.textContent = "";
+
+        alert(error.message || "تعذر حفظ حجم المهارات");
+
+        return;
+
+    }
+
+    if(status) status.textContent = "✓ حُفظ الحجم";
+
+    GameCache.clear("skill_page_bgs_" + characterId);
+
+}
+
+
 // الشخصية المفتوحة حاليًا في نافذة التعديل — نستخدمها لمسح كاش مهاراتها
 // بعد أي تعديل حتى تظهر التغييرات فورًا في ساحة المعركة
 let currentEditCharacterId = null;
@@ -3612,7 +3670,7 @@ async function openEditCharacterModal(characterId){
 
             <span class="admin-page-bg-label">🎨 صفحة ${p + 1}</span>
 
-            <input type="text" id="page-bg-${p}" value="${escapeHtml(pageBgs[p] || '')}" placeholder="رابط صورة خلفية هذه الصفحة (اختياري)">
+            <input type="text" id="page-bg-${p}" value="${escapeHtml(pageBgs[p] ? pageBgs[p].url : '')}" placeholder="رابط صورة خلفية هذه الصفحة (اختياري)">
 
             <button onclick="saveSkillPageBackground('${characterId}', ${p})">حفظ</button>
 
@@ -3633,6 +3691,11 @@ async function openEditCharacterModal(characterId){
             <label class="admin-color-row skill-page-color-row">
                 📏 سماكة حد مهارات الصفحة
                 <input type="number" id="page-stroke-width-${p}" value="${(pageSkills.length > 0) ? (pageSkills[0].stroke_width || 0) : 0}" min="0" max="10" step="0.1" style="width:60px;">
+            </label>
+
+            <label class="admin-color-row skill-page-color-row">
+                🔍 حجم مهارات الصفحة (1 = عادي، 1.3 = أكبر)
+                <input type="number" id="page-scale-${p}" value="${pageBgs[p] && pageBgs[p].scale ? pageBgs[p].scale : 1}" min="0.5" max="3" step="0.1" style="width:70px;" onchange="saveSkillPageScale('${characterId}', ${p})">
             </label>
 
             <button onclick="applyPageColor(${p})" class="admin-page-color-apply-btn">تطبيق اللون والحد على جميع المهارات</button>

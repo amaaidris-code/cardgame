@@ -1296,6 +1296,15 @@ function renderPVPSkillButtons(){
 
         }
 
+        // حجم أزرار المهارات لهذه الصفحة (مقياس تُضبط من لوحة الإدارة)
+        let pageScale = getSkillPageScale(pvpState.myCharacterId, i);
+
+        if(pageScale > 0 && pageScale !== 1){
+
+            pageDiv.style.setProperty("--skill-scale", pageScale);
+
+        }
+
         skillsChunk.forEach(skill => {
 
             let btn = document.createElement("button");

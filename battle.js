@@ -450,7 +450,7 @@ async function loadSkillPageBackgrounds(character_id){
             let {data, error} =
             await supabaseClient
             .from("character_skill_page_backgrounds")
-            .select("page_index, image_url")
+            .select("page_index, image_url, skill_scale")
             .eq("character_id", character_id);
 
             if(error) throw error;
@@ -458,7 +458,10 @@ async function loadSkillPageBackgrounds(character_id){
             let map = {};
 
             (data || []).forEach(row => {
-                if(row.image_url) map[row.page_index] = row.image_url;
+                map[row.page_index] = {
+                    url: row.image_url || "",
+                    scale: Number(row.skill_scale) > 0 ? Number(row.skill_scale) : 1
+                };
             });
 
             return map;
@@ -478,7 +481,22 @@ function getSkillPageBackground(character_id, pageIndex){
 
     if(!map) return "";
 
-    return map[pageIndex] || "";
+    let entry = map[pageIndex];
+
+    return (entry && entry.url) || "";
+
+}
+
+// يُرجع مقياس حجم أزرار المهارات لهذه الصفحة (يُضبط من لوحة الإدارة)
+function getSkillPageScale(character_id, pageIndex){
+
+    let map = skillPageBackgroundsCache[character_id];
+
+    if(!map) return 1;
+
+    let entry = map[pageIndex];
+
+    return (entry && Number(entry.scale) > 0) ? Number(entry.scale) : 1;
 
 }
 function safeGlowColor(color, fallback){
@@ -1833,6 +1851,15 @@ function renderSkillButtons(prefix){
 
         }
 
+        // حجم أزرار المهارات لهذه الصفحة (مقياس تُضبط من لوحة الإدارة)
+        let pageScale = getSkillPageScale(battle.player.characterId, i);
+
+        if(pageScale > 0 && pageScale !== 1){
+
+            pageDiv.style.setProperty("--skill-scale", pageScale);
+
+        }
+
         skillsChunk.forEach(skill => {
 
             pageDiv.appendChild(buildSkillButton(skill));
@@ -2762,7 +2789,7 @@ function enemyUseSealOrUnseal(skill){
 // ========================================
 
 // المهارات الممنوعة من استخدامها عبر "الظل" (مطابقة لقائمة المنع في السيرفر)
-const PVE_SHADOW_EXCLUDED_EFFECTS = ["steal", "copy", "seal", "unseal", "shadow", "delay_cooldown"];
+const PVE_SHADOW_EXCLUDED_EFFECTS = ["copy", "seal", "unseal", "shadow", "delay_cooldown"];
 
 
 // يُطبّق المفعول الذاتي لمهارات الأنواع الجديدة (تعزيز/امتصاص/أدوار متتالية)
