@@ -2775,8 +2775,10 @@ async function enemyAct(){
     enemy.skills.find(s =>
         s.type === "special" && s.effect === "reflect" && !isSkillSealed(enemy, s) && isSkillReady(enemy, s));
 
+    // الانعكاس (بأثر رجعي مثل الدفاع): يعكس آخر ضربة من اللاعب، لذا لا يستخدمه
+    // الخصم إلا إن كانت هناك ضربة أخيرة قابلة للعكس (لم يدافع عنها بعد)
     let reflectChoice =
-    (reflectSkill && !(enemy.reflectMult > 0) && Math.random() < 0.3)
+    (reflectSkill && enemy.lastHitSnapshot && !enemy.lastHitSnapshot.consumed && Math.random() < 0.3)
     ? reflectSkill
     : null;
 
@@ -3303,15 +3305,19 @@ function executeShadowSkill(user, target, skill){
 
     if(skill.effect === "reflect"){
 
-        let reflectMult = Math.max(1, skillParamAmount(skill, "reflect_mult", skill.damage));
+        if(!user.lastHitSnapshot || user.lastHitSnapshot.consumed){
 
-        user.reflectMult = reflectMult;
+            addBattleLog(`لا يوجد ضرر حالٍ ليعكسه الانعكاس بمهارة "${skill.name}" الظلية`);
 
-        user.reflectUnblockable = !!(skill.params && skill.params.unblockable_reflect);
+            return;
+
+        }
+
+        let reflectDmg = retroReflectNow(user, skill);
 
         updateBattleScreen();
 
-        addBattleLog(`${user.name} جهّز درع انعكاس بمهارة "${skill.name}" الظلية! (×${reflectMult})`);
+        addBattleLog(`${user.name} عكسَ آخر ضربة بمهارة "${skill.name}" الظلية! (ضرر ${reflectDmg})`);
 
         return;
 
@@ -4376,6 +4382,48 @@ function resolveAction(attacker, defender, skill, trackUsed = true, isReflectedH
 // مطابق تمامًا لمنطق السيرفر في PvP
 // ========================================
 
+// الانعكاس الاستباقي أصبح بأثر رجعي مثل الدفاع تمامًا: عوض أن يُجهّز درعًا
+// ليرتدّ عن أول ضربة قابلة للصد قادمة، يعكس آخر ضربة وقعها الخصم على المستخدم
+// — يستعيد صحته السابقة، يُستهلك اللقطة، ويُعيد الضرر نفسه × المضاعف على الخصم.
+// يعيد مقدار الضرر المنعكس، أو null إن لم توجد ضربة حالية ليعكسها
+function retroReflectNow(caster, skill){
+
+    let snapshot = caster.lastHitSnapshot;
+
+    if(!snapshot || snapshot.consumed || (snapshot.dmgDealt || 0) <= 0){
+
+        if(snapshot && snapshot.consumed && (caster.hp || 0) > 0 && (snapshot.dmgDealt || 0) > 0) return null;
+
+        return null;
+
+    }
+
+    let attacker = (caster === battle.player) ? battle.enemy : battle.player;
+
+    // استرجاع صحة المستخدم إلى ما قبل آخر ضربة (يُنقَذ حتى لو كان على صفر)
+    caster.hp = snapshot.hpBefore;
+
+    snapshot.consumed = true;
+
+    // لو كانت الضربة المُلغاة من نوع امتصاص، يُسترجع الشفاء الذي كسبه الخصم
+    // منها — لا يصح أن يبقى على صحته الجديدة من ضربة أُلغيت أساسًا
+    if(snapshot.attackerLifestealHeal > 0){
+
+        attacker.hp = Math.max(0, attacker.hp - snapshot.attackerLifestealHeal);
+
+    }
+
+    let reflectMult = Math.max(1, skillParamAmount(skill, "reflect_mult", skill.damage));
+
+    let reflectDmg = Math.max(1, Math.floor(snapshot.dmgDealt * reflectMult));
+
+    attacker.hp = Math.max(0, attacker.hp - reflectDmg);
+
+    return reflectDmg;
+
+}
+
+
 function playerUseReflect(reflectSkill){
 
     if(battle.turnOwner !== "player") return;
@@ -4390,17 +4438,19 @@ function playerUseReflect(reflectSkill){
 
     }
 
+    if(!battle.player.lastHitSnapshot || battle.player.lastHitSnapshot.consumed){
+
+        addBattleLog("لا يوجد ضرر حالٍ ليعكسه الانعكاس");
+
+        showBattleEffectBanner(battle.prefix, "🔁 لا توجد ضربة أخيرة لتعكسها", "info");
+
+        return;
+
+    }
+
     clearTurnTimer();
 
-    let reflectMult = Math.max(1, skillParamAmount(reflectSkill, "reflect_mult", reflectSkill.damage));
-
-    // نجاة من الضربة القاتلة: لو كان اللاعب على صفر صحته (نجا لأن لديه
-    // مهارة صدّ) فيستعيد صحته السابقة عند استخدامه الانعكاس بدل أن يموت
-    rescueFighterFromFatalHit(battle.player);
-
-    battle.player.reflectMult = reflectMult;
-
-    battle.player.reflectUnblockable = !!(reflectSkill.params && reflectSkill.params.unblockable_reflect);
+    let reflectDmg = retroReflectNow(battle.player, reflectSkill);
 
     battle.player.turnsTaken++;
 
@@ -4417,9 +4467,9 @@ function playerUseReflect(reflectSkill){
 
     updateBattleScreen();
 
-    addBattleLog(`${battle.player.name} جهّز درع الانعكاس! (×${reflectMult}) — أول ضربة قابلة للصد سترتد على الخصم`);
+    addBattleLog(`${battle.player.name} عكسَ آخر ضربة من الخصم وألغاها! (ضرر ${reflectDmg})`);
 
-    showBattleEffectBanner(battle.prefix, `🔁 جهّزتَ درع الانعكاس! (×${reflectMult})`, "reflect");
+    showBattleEffectBanner(battle.prefix, `🔁 عكستَ آخر ضربة! (ضرر ${reflectDmg})`, "reflect");
 
     pveEndTurn("player");
 
@@ -4431,11 +4481,11 @@ function enemyUseReflect(reflectSkill){
 
     let enemy = battle.enemy;
 
-    let reflectMult = Math.max(1, skillParamAmount(reflectSkill, "reflect_mult", reflectSkill.damage));
+    // بأثر رجعي مثل الدفاع: لا يعكس إلا إن كانت هناك ضربة أخيرة من اللاعب
+    // غير مدافَع عنها. (القرعة في enemyAct تضمن وجودها قبل استدعاء هذه الدالة)
+    if(!enemy.lastHitSnapshot || enemy.lastHitSnapshot.consumed) return;
 
-    enemy.reflectMult = reflectMult;
-
-    enemy.reflectUnblockable = !!(reflectSkill.params && reflectSkill.params.unblockable_reflect);
+    let reflectDmg = retroReflectNow(enemy, reflectSkill);
 
     markEnemySkillUsed(reflectSkill);
 
@@ -4443,9 +4493,9 @@ function enemyUseReflect(reflectSkill){
 
     updateBattleScreen();
 
-    addBattleLog(`${enemy.name} جهّز درع الانعكاس! (×${reflectMult}) — أول ضربة قابلة للصد سترتد عليك`);
+    addBattleLog(`${enemy.name} عكسَ آخر ضربة منك وألغاها! (ضرر ${reflectDmg})`);
 
-    showBattleEffectBanner(battle.prefix, `🔁 ${enemy.name} جهّز درع الانعكاس! (×${reflectMult})`, "reflect");
+    showBattleEffectBanner(battle.prefix, `🔁 ${enemy.name} عكسَ آخر ضربة! (ضرر ${reflectDmg})`, "reflect");
 
     if(checkBattleEnd()) return;
 
@@ -5112,17 +5162,23 @@ function runControlledSkillsQueue(queue, index, consumesPlayerTurn){
 
     if(targetSkill.effect === "reflect"){
 
-        let reflectMult = Math.max(1, skillParamAmount(targetSkill, "reflect_mult", targetSkill.damage));
+        if(!battle.player.lastHitSnapshot || battle.player.lastHitSnapshot.consumed){
 
-        battle.player.reflectMult = reflectMult;
+            addBattleLog(`لا يوجد ضرر حالٍ ليعكسه الانعكاس بمهارة "${targetSkill.name}" المُسيطر عليها`);
 
-        battle.player.reflectUnblockable = !!(targetSkill.params && targetSkill.params.unblockable_reflect);
+            runControlledSkillsQueue(queue, index + 1, consumesPlayerTurn);
+
+            return;
+
+        }
+
+        let reflectDmg = retroReflectNow(battle.player, targetSkill);
 
         updateBattleScreen();
 
-        addBattleLog(`${battle.player.name} جهّز درع الانعكاس بالسيطرة على "${targetSkill.name}"! (×${reflectMult})`);
+        addBattleLog(`${battle.player.name} عكسَ آخر ضربة بالسيطرة على "${targetSkill.name}"! (ضرر ${reflectDmg})`);
 
-        showBattleEffectBanner(battle.prefix, `🔁 جهّزتَ درع انعكاس بالسيطرة عليها! (×${reflectMult})`, "reflect");
+        showBattleEffectBanner(battle.prefix, `🔁 عكستَ آخر ضربة بالسيطرة عليها! (ضرر ${reflectDmg})`, "reflect");
 
         runControlledSkillsQueue(queue, index + 1, consumesPlayerTurn);
 
@@ -5329,19 +5385,23 @@ function runStolenSkillsQueue(queue, index, consumesPlayerTurn){
 
     if(targetSkill.effect === "reflect"){
 
-        // مهارة انعكاس مسروقة: تُفعَّل كدرع استباقي — يُثبَّت مضاعف الانعكاس
-        // على اللاعب، وأول ضربة قابلة للصد قادمة سترتد على الخصم
-        let reflectMult = Math.max(1, skillParamAmount(targetSkill, "reflect_mult", targetSkill.damage));
+        if(!battle.player.lastHitSnapshot || battle.player.lastHitSnapshot.consumed){
 
-        battle.player.reflectMult = reflectMult;
+            addBattleLog(`لا يوجد ضرر حالٍ ليعكسه الانعكاس بمهارة "${targetSkill.name}" المسروقة`);
 
-        battle.player.reflectUnblockable = !!(targetSkill.params && targetSkill.params.unblockable_reflect);
+            runStolenSkillsQueue(queue, index + 1, consumesPlayerTurn);
+
+            return;
+
+        }
+
+        let reflectDmg = retroReflectNow(battle.player, targetSkill);
 
         updateBattleScreen();
 
-        addBattleLog(`${battle.player.name} جهّز درع الانعكاس بمهارة "${targetSkill.name}" المسروقة! (×${reflectMult})`);
+        addBattleLog(`${battle.player.name} عكسَ آخر ضربة بمهارة "${targetSkill.name}" المسروقة! (ضرر ${reflectDmg})`);
 
-        showBattleEffectBanner(battle.prefix, `🔁 جهّزتَ درع انعكاس مسروق! (×${reflectMult})`, "reflect");
+        showBattleEffectBanner(battle.prefix, `🔁 عكستَ آخر ضربة بمهارة مسروقة! (ضرر ${reflectDmg})`, "reflect");
 
         runStolenSkillsQueue(queue, index + 1, consumesPlayerTurn);
 
@@ -5694,19 +5754,23 @@ function runCopiedSkillsQueue(queue, index, consumesPlayerTurn){
 
     if(targetSkill.effect === "reflect"){
 
-        // مهارة انعكاس منسوخة: تُفعَّل كدرع استباقي — يُثبَّت مضاعف الانعكاس
-        // على اللاعب، وأول ضربة قابلة للصد قادمة سترتد على الخصم
-        let reflectMult = Math.max(1, skillParamAmount(targetSkill, "reflect_mult", targetSkill.damage));
+        if(!battle.player.lastHitSnapshot || battle.player.lastHitSnapshot.consumed){
 
-        battle.player.reflectMult = reflectMult;
+            addBattleLog(`لا يوجد ضرر حالٍ ليعكسه الانعكاس بمهارة "${targetSkill.name}" المنسوخة`);
 
-        battle.player.reflectUnblockable = !!(targetSkill.params && targetSkill.params.unblockable_reflect);
+            runCopiedSkillsQueue(queue, index + 1, consumesPlayerTurn);
+
+            return;
+
+        }
+
+        let reflectDmg = retroReflectNow(battle.player, targetSkill);
 
         updateBattleScreen();
 
-        addBattleLog(`${battle.player.name} جهّز درع الانعكاس بمهارة "${targetSkill.name}" المنسوخة! (×${reflectMult})`);
+        addBattleLog(`${battle.player.name} عكسَ آخر ضربة بمهارة "${targetSkill.name}" المنسوخة! (ضرر ${reflectDmg})`);
 
-        showBattleEffectBanner(battle.prefix, `🔁 جهّزتَ درع انعكاس منسوخ! (×${reflectMult})`, "reflect");
+        showBattleEffectBanner(battle.prefix, `🔁 عكستَ آخر ضربة بمهارة منسوخة! (ضرر ${reflectDmg})`, "reflect");
 
         runCopiedSkillsQueue(queue, index + 1, consumesPlayerTurn);
 
