@@ -4359,7 +4359,7 @@ async function saveSkillEdit(skillId){
 
     let strokeColor = strokeColorInput && strokeColorInput.value ? strokeColorInput.value : null;
 
-    let strokeWidth = strokeWidthInput ? Number(strokeWidthInput.value) || 0 : 0;
+    let strokeWidth = strokeWidthInput ? Math.round(Number(strokeWidthInput.value)) || 0 : 0;
 
     if(name === ""){
 
