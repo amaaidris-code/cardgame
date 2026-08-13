@@ -2278,6 +2278,45 @@ async function loadCharacterProfile(){
 
     let character = characterData;
 
+    // مهارات الشخصية (عرض فقط، لا تعديل): تُقرأ من البيانات المرجعية العامة
+    let skills = [];
+    try{
+        skills = await loadCharacterSkills(characterData.character_id) || [];
+    }catch(e){ skills = []; }
+
+    // الضرر الفعلي (بعد تطوير ATK) لتظهر المهارات كما تُلحق ضررًا فعلًا في المعارك
+    let scaledDamageMap = {};
+    try{
+        if(typeof computeScaledAttackDamages === "function" && characterData.atk){
+            scaledDamageMap = computeScaledAttackDamages(characterData.atk, skills) || {};
+        }
+    }catch(e){}
+
+    let skillsHtml = skills.length > 0
+    ? `
+    <h3>⚔️ المهارات</h3>
+    <div class="character-skills-list">
+    ${skills.map(s => {
+        let isDmgSkill = (s.type === "attack" || s.type === "special") && s.effect !== "shadow";
+        let scaled = (isDmgSkill && scaledDamageMap[s.id] !== undefined) ? scaledDamageMap[s.id] : null;
+        let dmgText = isDmgSkill ? (scaled != null ? scaled : (s.damage || 0)) : "-";
+        return `
+        <div class="character-skill-item">
+            <div class="character-skill-head">
+                <strong>${escapeHtml(s.name || "")}</strong>
+                <span class="skill-badge">${escapeHtml(s.type || "")}</span>
+            </div>
+            <div class="character-skill-meta">
+                <span>⚔️ الضرر: ${escapeHtml(String(dmgText))}</span>
+                <span>⏳ التهدئة: ${s.cooldown || 0}</span>
+            </div>
+            <p class="character-skill-desc">${escapeHtml(s.description || "")}</p>
+        </div>`;
+    }).join("")}
+    </div>
+    `
+    : `<p>لا توجد مهارات</p>`;
+
 
 
 
@@ -2381,6 +2420,8 @@ async function loadCharacterProfile(){
     </p>
 
 
+
+    ${skillsHtml}
 
     `;
 
