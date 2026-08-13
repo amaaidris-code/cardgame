@@ -3771,8 +3771,8 @@ box-shadow: 0 0 0 3px rgba(140,210,255,0.55), 0 0 22px rgba(120,190,255,0.55);
    الشاشة الواحدة دون الحاجة للتمرير لأعلى وأسفل
    ======================================== */
 
-#pve-battle-screen,
-#pvp-battle-screen{
+#pve-battle-screen.active,
+#pvp-battle-screen.active{
 
 height:100dvh;
 
