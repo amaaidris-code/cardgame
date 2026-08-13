@@ -1386,6 +1386,11 @@ background: transparent;
 
 border: none;
 
+/* نزيل ظل الصندوق الموروث من القاعدة العامة button (style.css:3302) الذي
+   يضيف صندوقًا شبه شفاف خلف كل مهارة فوق صورة الخلفية. بدون هذا، يبقى
+   لكل زر ظل داكن + توهج داخلي فيظهر صندوق خفيف خلف كل اسم مهارة. */
+box-shadow: none;
+
 text-shadow: 0 1px 3px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6);
 
 transition: all .2s ease;
