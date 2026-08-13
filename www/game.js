@@ -5789,8 +5789,11 @@ async function checkForAppUpdate(){
             installedVersion = 0;
         }
 
-        // جلب آخر إصدار متاح من السيرفر (مع كسر ذاكرة التخزين المؤقت)
-        let res = await fetch(UPDATE_MANIFEST_URL + "?t=" + Date.now(), { cache: "no-store" });
+        // جلب آخر إصدار متاح من السيرفر. ملاحظة: لا نضيف أي query string هنا
+        // لأن Cloudflare Pages يفسّر الإضافة بوجود استعلام على أنه مسار SPA
+        // ويعيد index.html بدل ملف JSON (cache: no-store يكفي لتفادي تخزين
+        // العميل، ويُمنع التخزين الطرفي عبر www/_headers)
+        let res = await fetch(UPDATE_MANIFEST_URL, { cache: "no-store" });
         if(!res.ok) return;
         let manifest = await res.json();
 

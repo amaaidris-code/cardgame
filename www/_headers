@@ -1,8 +1,2 @@
-/*
-  X-Robots-Tag: noindex
-
-/index.html
-  Cache-Control: no-cache, no-store, must-revalidate
-
-/*
-  Cache-Control: no-cache
+/version.json
+  Cache-Control: no-store, max-age=0
