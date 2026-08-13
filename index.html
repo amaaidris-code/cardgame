@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 
 <head>
@@ -7,14 +7,14 @@
 
     <title>Card Game</title>
 
-    <link rel="stylesheet" href="style.css?v=20260813">
+    <link rel="stylesheet" href="style.css?v=20260814">
 </head>
 
 <body>
 
 <div id="app">
 
-    <!-- الشريط العلوي -->
+    <!-- ط§ظ„ط´ط±ظٹط· ط§ظ„ط¹ظ„ظˆظٹ -->
     <header class="top-bar">
 
         <div class="game-title">
@@ -28,18 +28,18 @@
             </span>
 
             <span id="player-gold">
-                🪙 1000
+                ًںھ™ 1000
             </span>
 
-            <button id="game-reload-btn" class="reload-btn" onclick="reloadGame()" title="إعادة تحميل اللعبة">
-                🔄
+            <button id="game-reload-btn" class="reload-btn" onclick="reloadGame()" title="ط¥ط¹ط§ط¯ط© طھط­ظ…ظٹظ„ ط§ظ„ظ„ط¹ط¨ط©">
+                ًں”„
             </button>
 
         </div>
 
     </header>
 
-<!-- شاشة تسجيل الدخول -->
+<!-- ط´ط§ط´ط© طھط³ط¬ظٹظ„ ط§ظ„ط¯ط®ظˆظ„ -->
 
 <section id="login-screen" class="screen active">
 
@@ -48,20 +48,20 @@
     </h1>
 
     <p class="subtitle">
-        تسجيل الدخول
+        طھط³ط¬ظٹظ„ ط§ظ„ط¯ط®ظˆظ„
     </p>
 
 
     <div class="form-box">
 
         <label>
-            اسم المستخدم
+            ط§ط³ظ… ط§ظ„ظ…ط³طھط®ط¯ظ…
         </label>
 
         <input 
 id="login-username"
 type="text"
-placeholder="اسم المستخدم"
+placeholder="ط§ط³ظ… ط§ظ„ظ…ط³طھط®ط¯ظ…"
 dir="auto"
 lang="ar"
 autocomplete="off">
@@ -69,23 +69,23 @@ autocomplete="off">
 
 
         <label>
-            كلمة المرور
+            ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±
         </label>
 
         <input
         id="login-password"
         type="password"
-        placeholder="كلمة المرور"
+        placeholder="ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±"
         autocomplete="off">
 
 
         <button id="login-btn" onclick="login()">
-            دخول
+            ط¯ط®ظˆظ„
         </button>
 
 
         <button onclick="openScreen('register-screen')">
-            إنشاء حساب جديد
+            ط¥ظ†ط´ط§ط، ط­ط³ط§ط¨ ط¬ط¯ظٹط¯
         </button>
 
     </div>
@@ -94,12 +94,12 @@ autocomplete="off">
 
 
 
-<!-- شاشة إنشاء الحساب -->
+<!-- ط´ط§ط´ط© ط¥ظ†ط´ط§ط، ط§ظ„ط­ط³ط§ط¨ -->
 
 <section id="register-screen" class="screen">
 
     <h2>
-        إنشاء حساب
+        ط¥ظ†ط´ط§ط، ط­ط³ط§ط¨
     </h2>
 
 
@@ -107,43 +107,43 @@ autocomplete="off">
 
 
         <label>
-            اسم المستخدم
+            ط§ط³ظ… ط§ظ„ظ…ط³طھط®ط¯ظ…
         </label>
 
         <input
 id="register-username"
 type="text"
-placeholder="اختر اسم مستخدم"
+placeholder="ط§ط®طھط± ط§ط³ظ… ظ…ط³طھط®ط¯ظ…"
 dir="auto"
 lang="ar">
 
         <label>
-            البريد الإلكتروني
+            ط§ظ„ط¨ط±ظٹط¯ ط§ظ„ط¥ظ„ظƒطھط±ظˆظ†ظٹ
         </label>
 
         <input
         id="register-email"
         type="email"
-        placeholder="بريدك الإلكتروني"
+        placeholder="ط¨ط±ظٹط¯ظƒ ط§ظ„ط¥ظ„ظƒطھط±ظˆظ†ظٹ"
         dir="ltr">
 
         <label>
-            كلمة المرور
+            ظƒظ„ظ…ط© ط§ظ„ظ…ط±ظˆط±
         </label>
 
         <input
         id="register-password"
         type="password"
-        placeholder="اختر كلمة مرور">
+        placeholder="ط§ط®طھط± ظƒظ„ظ…ط© ظ…ط±ظˆط±">
 
 
         <button id="register-submit-btn" onclick="startRegisterOtp()">
-            إنشاء الحساب
+            ط¥ظ†ط´ط§ط، ط§ظ„ط­ط³ط§ط¨
         </button>
 
 
         <button onclick="openScreen('login-screen')">
-            العودة للدخول
+            ط§ظ„ط¹ظˆط¯ط© ظ„ظ„ط¯ط®ظˆظ„
         </button>
         
         
@@ -153,16 +153,16 @@ lang="ar">
 </section>
 
 
-<!-- لوحة الإدارة -->
+<!-- ظ„ظˆط­ط© ط§ظ„ط¥ط¯ط§ط±ط© -->
 
 <section id="admin-panel-screen" class="screen">
 
     <h2>
-🛠️ لوحة الإدارة
+ًں› ï¸ڈ ظ„ظˆط­ط© ط§ظ„ط¥ط¯ط§ط±ط©
 </h2>
 
 <div id="admin-stats" class="admin-card">
-جاري تحميل الإحصائيات...
+ط¬ط§ط±ظٹ طھط­ظ…ظٹظ„ ط§ظ„ط¥ط­طµط§ط¦ظٹط§طھ...
 </div>
 
 
@@ -170,7 +170,7 @@ lang="ar">
 
 
 <h2>
-الشخصيات
+ط§ظ„ط´ط®طµظٹط§طھ
 </h2>
 
 <div id="admin-content">
@@ -182,7 +182,7 @@ lang="ar">
 
 
 <h2>
-👹 الوحوش (PvE)
+ًں‘¹ ط§ظ„ظˆط­ظˆط´ (PvE)
 </h2>
 
 <div id="admin-monsters-content">
@@ -194,52 +194,52 @@ lang="ar">
 
 
 <h3>
-➕ إضافة شخصية / وحش جديد
+â‍• ط¥ط¶ط§ظپط© ط´ط®طµظٹط© / ظˆط­ط´ ط¬ط¯ظٹط¯
 </h3>
 
 <div class="form-box admin-add-form">
 
-    <input id="admin-character-name" type="text" placeholder="اسم الشخصية">
+    <input id="admin-character-name" type="text" placeholder="ط§ط³ظ… ط§ظ„ط´ط®طµظٹط©">
 
-    <input id="admin-character-anime" type="text" placeholder="اسم الأنمي (أو \"وحوش PvE\" للوحوش)">
+    <input id="admin-character-anime" type="text" placeholder="ط§ط³ظ… ط§ظ„ط£ظ†ظ…ظٹ (ط£ظˆ \"ظˆط­ظˆط´ PvE\" ظ„ظ„ظˆط­ظˆط´)">
 
-    <input id="admin-character-image" type="text" placeholder="رابط صورة الشخصية (أو ارفع من الجهاز)">
+    <input id="admin-character-image" type="text" placeholder="ط±ط§ط¨ط· طµظˆط±ط© ط§ظ„ط´ط®طµظٹط© (ط£ظˆ ط§ط±ظپط¹ ظ…ظ† ط§ظ„ط¬ظ‡ط§ط²)">
 
     <input id="admin-character-image-file" type="file" accept="image/*" onchange="uploadCharacterImage('admin-character-image-file','admin-character-image','admin-image-status',{aspectRatio:1,crop:true})">
 
     <p id="admin-image-status" class="upload-status"></p>
 
-    <input id="admin-character-hp" type="number" placeholder="نقاط الحياة">
+    <input id="admin-character-hp" type="number" placeholder="ظ†ظ‚ط§ط· ط§ظ„ط­ظٹط§ط©">
 
-    <input id="admin-character-atk" type="number" placeholder="قوة الهجوم">
+    <input id="admin-character-atk" type="number" placeholder="ظ‚ظˆط© ط§ظ„ظ‡ط¬ظˆظ…">
 
-    <input id="admin-power-name" type="text" placeholder="اسم القوة الخاصة">
+    <input id="admin-power-name" type="text" placeholder="ط§ط³ظ… ط§ظ„ظ‚ظˆط© ط§ظ„ط®ط§طµط©">
 
-    <textarea id="admin-power-description" placeholder="وصف القوة الخاصة"></textarea>
+    <textarea id="admin-power-description" placeholder="ظˆطµظپ ط§ظ„ظ‚ظˆط© ط§ظ„ط®ط§طµط©"></textarea>
 
-    <input id="admin-character-quote" type="text" placeholder="اقتباس الشخصية">
+    <input id="admin-character-quote" type="text" placeholder="ط§ظ‚طھط¨ط§ط³ ط§ظ„ط´ط®طµظٹط©">
 
     <label class="admin-checkbox-label">
         <input id="admin-character-is-monster" type="checkbox">
-        هذا وحش خاص بـ PvE (لن يظهر للاعبين كشخصية يمكن اختيارها)
+        ظ‡ط°ط§ ظˆط­ط´ ط®ط§طµ ط¨ظ€ PvE (ظ„ظ† ظٹط¸ظ‡ط± ظ„ظ„ط§ط¹ط¨ظٹظ† ظƒط´ط®طµظٹط© ظٹظ…ظƒظ† ط§ط®طھظٹط§ط±ظ‡ط§)
     </label>
 
     <label class="admin-checkbox-label">
         <input id="admin-character-admin-only" type="checkbox">
-        🔒 شخصية خاصة بي فقط (لن تظهر أبدًا للاعبين، وأقدر ألعب بها بنفسي)
+        ًں”’ ط´ط®طµظٹط© ط®ط§طµط© ط¨ظٹ ظپظ‚ط· (ظ„ظ† طھط¸ظ‡ط± ط£ط¨ط¯ظ‹ط§ ظ„ظ„ط§ط¹ط¨ظٹظ†طŒ ظˆط£ظ‚ط¯ط± ط£ظ„ط¹ط¨ ط¨ظ‡ط§ ط¨ظ†ظپط³ظٹ)
     </label>
 
     <label class="admin-color-row">
-        🎨 لون التوهج
+        ًںژ¨ ظ„ظˆظ† ط§ظ„طھظˆظ‡ط¬
         <input id="admin-character-glow-color" type="color" value="#3b82ff">
     </label>
 
     <label class="admin-checkbox-label">
         <input id="admin-character-glow-locked" type="checkbox">
-        🔒 قفل اللون (يمنع اللاعب من تغييره)
+        ًں”’ ظ‚ظپظ„ ط§ظ„ظ„ظˆظ† (ظٹظ…ظ†ط¹ ط§ظ„ظ„ط§ط¹ط¨ ظ…ظ† طھط؛ظٹظٹط±ظ‡)
     </label>
 
-    <button onclick="addCharacter()">إضافة</button>
+    <button onclick="addCharacter()">ط¥ط¶ط§ظپط©</button>
 
 </div>
 
@@ -248,7 +248,7 @@ lang="ar">
 
 
 <button onclick="openScreen('admin-my-characters-screen')">
-🎮 شخصياتي الخاصة
+ًںژ® ط´ط®طµظٹط§طھظٹ ط§ظ„ط®ط§طµط©
 </button>
 
 
@@ -256,7 +256,7 @@ lang="ar">
 
 
 <h2>
-اللاعبون
+ط§ظ„ظ„ط§ط¹ط¨ظˆظ†
 </h2>
 
 <div id="admin-players">
@@ -268,7 +268,7 @@ lang="ar">
 
 
 <h2>
-طلبات الشخصيات
+ط·ظ„ط¨ط§طھ ط§ظ„ط´ط®طµظٹط§طھ
 </h2>
 
 <div id="admin-requests">
@@ -276,7 +276,7 @@ lang="ar">
 </div>
 
 <button onclick="openScreen('login-screen')">
-    🚪 خروج الإدارة
+    ًںڑھ ط®ط±ظˆط¬ ط§ظ„ط¥ط¯ط§ط±ط©
 </button>
 
 </section>
@@ -286,11 +286,11 @@ lang="ar">
 <section id="admin-my-characters-screen" class="screen">
 
 <h2>
-🎮 شخصياتي الخاصة
+ًںژ® ط´ط®طµظٹط§طھظٹ ط§ظ„ط®ط§طµط©
 </h2>
 
 <p class="subtitle">
-شخصيات صممتها لنفسك فقط، لا يراها أي لاعب آخر
+ط´ط®طµظٹط§طھ طµظ…ظ…طھظ‡ط§ ظ„ظ†ظپط³ظƒ ظپظ‚ط·طŒ ظ„ط§ ظٹط±ط§ظ‡ط§ ط£ظٹ ظ„ط§ط¹ط¨ ط¢ط®ط±
 </p>
 
 <div id="admin-my-characters-content">
@@ -298,7 +298,7 @@ lang="ar">
 </div>
 
 <button onclick="openScreen('admin-panel-screen')">
-↩ العودة للوحة الإدارة
+â†© ط§ظ„ط¹ظˆط¯ط© ظ„ظ„ظˆط­ط© ط§ظ„ط¥ط¯ط§ط±ط©
 </button>
 
 </section>
@@ -308,106 +308,106 @@ lang="ar">
 <section id="character-choice-screen" class="screen">
 
     <h1>
-        اختر شخصيتك
+        ط§ط®طھط± ط´ط®طµظٹطھظƒ
     </h1>
 
 
     <div id="available-characters">
 
-        <!-- الشخصيات الجاهزة ستظهر هنا -->
+        <!-- ط§ظ„ط´ط®طµظٹط§طھ ط§ظ„ط¬ط§ظ‡ط²ط© ط³طھط¸ظ‡ط± ظ‡ظ†ط§ -->
 
     </div>
 
 
 
     <h2>
-        لم تجد شخصيتك؟
+        ظ„ظ… طھط¬ط¯ ط´ط®طµظٹطھظƒطں
     </h2>
 
 
     <input
     id="request-character-name"
     type="text"
-    placeholder="اسم الشخصية">
+    placeholder="ط§ط³ظ… ط§ظ„ط´ط®طµظٹط©">
 
 
     <input
     id="request-anime-name"
     type="text"
-    placeholder="اسم الأنمي">
+    placeholder="ط§ط³ظ… ط§ظ„ط£ظ†ظ…ظٹ">
 
 
     <textarea
     id="request-note"
-    placeholder="ملاحظات إضافية">
+    placeholder="ظ…ظ„ط§ط­ط¸ط§طھ ط¥ط¶ط§ظپظٹط©">
     </textarea>
 
 
     <button onclick="sendCharacterRequest()">
-        إرسال الطلب
+        ط¥ط±ط³ط§ظ„ ط§ظ„ط·ظ„ط¨
     </button>
 
 
 </section>
 
-    <!-- محتوى اللعبة -->
+    <!-- ظ…ط­طھظˆظ‰ ط§ظ„ظ„ط¹ط¨ط© -->
     <main id="main-content">
 
 
         <!-- ========================= -->
-        <!-- الصفحة الرئيسية -->
+        <!-- ط§ظ„طµظپط­ط© ط§ظ„ط±ط¦ظٹط³ظٹط© -->
         <!-- ========================= -->
 
         <section id="home-screen" class="screen">
 
             <h1>
-                مرحبًا بك في اللعبة
+                ظ…ط±ط­ط¨ظ‹ط§ ط¨ظƒ ظپظٹ ط§ظ„ظ„ط¹ط¨ط©
             </h1>
 
             <p class="subtitle">
-                لعبة بطاقات تناوب أدوار
+                ظ„ط¹ط¨ط© ط¨ط·ط§ظ‚ط§طھ طھظ†ط§ظˆط¨ ط£ط¯ظˆط§ط±
             </p>
 
 
             <div class="menu">
 
                 <button id="home-admin-panel-btn" onclick="openScreen('admin-panel-screen')" style="display:none;">
-🛠️ العودة للوحة الإدارة
+ًں› ï¸ڈ ط§ظ„ط¹ظˆط¯ط© ظ„ظ„ظˆط­ط© ط§ظ„ط¥ط¯ط§ط±ط©
 </button>
 
                 <button onclick="openScreen('character-profile-screen')">
-👤 شخصيتي
+ًں‘¤ ط´ط®طµظٹطھظٹ
 </button>
 
                 <button onclick="openScreen('upgrade-screen')">
-    ⬆️ تطوير الشخصية
+    â¬†ï¸ڈ طھط·ظˆظٹط± ط§ظ„ط´ط®طµظٹط©
 </button>
 
 
                 <button onclick="openCollection()">
-    🎴 مجموعتي
+    ًںژ´ ظ…ط¬ظ…ظˆط¹طھظٹ
 </button>
 
 
                 <button onclick="openScreen('battle-menu-screen')">
-    ⚔️ المعارك
+    âڑ”ï¸ڈ ط§ظ„ظ…ط¹ط§ط±ظƒ
 </button>
 
 
                 <button onclick="openScreen('story-screen')">
-                    📖 القصة
+                    ًں“– ط§ظ„ظ‚طµط©
                 </button>
 
 
                 <button onclick="openScreen('shop-screen')">
-                    🛒 المتجر
+                    ًں›’ ط§ظ„ظ…طھط¬ط±
                 </button>
                 
                 
                 
                 
                 <button onclick="logout()">
-                 تسجيل الخروج
+                 طھط³ط¬ظٹظ„ ط§ظ„ط®ط±ظˆط¬
                 </button>
 
             </div>
@@ -417,46 +417,46 @@ lang="ar">
 
 
         <!-- ========================= -->
-        <!-- اختيار الشخصية -->
+        <!-- ط§ط®طھظٹط§ط± ط§ظ„ط´ط®طµظٹط© -->
         <!-- ========================= -->
 
         <section id="character-screen" class="screen">
 
             <h2>
-                👤 اختر شخصيتك
+                ًں‘¤ ط§ط®طھط± ط´ط®طµظٹطھظƒ
             </h2>
 
 
             <p class="subtitle">
-                يمكنك امتلاك شخصية واحدة فقط
+                ظٹظ…ظƒظ†ظƒ ط§ظ…طھظ„ط§ظƒ ط´ط®طµظٹط© ظˆط§ط­ط¯ط© ظپظ‚ط·
             </p>
 
 
-            <!-- قائمة الشخصيات -->
+            <!-- ظ‚ط§ط¦ظ…ط© ط§ظ„ط´ط®طµظٹط§طھ -->
             <div id="character-list">
 
-                <!-- الشخصيات ستظهر هنا بواسطة JavaScript -->
+                <!-- ط§ظ„ط´ط®طµظٹط§طھ ط³طھط¸ظ‡ط± ظ‡ظ†ط§ ط¨ظˆط§ط³ط·ط© JavaScript -->
 
             </div>
 
 
-            <!-- طلب شخصية جديدة -->
+            <!-- ط·ظ„ط¨ ط´ط®طµظٹط© ط¬ط¯ظٹط¯ط© -->
 
             <div class="request-character-box">
 
                 <h3>
-                    لا تجد الشخصية التي تريدها؟
+                    ظ„ط§ طھط¬ط¯ ط§ظ„ط´ط®طµظٹط© ط§ظ„طھظٹ طھط±ظٹط¯ظ‡ط§طں
                 </h3>
 
                 <button onclick="showCharacterRequest()">
-                    ➕ طلب شخصية جديدة
+                    â‍• ط·ظ„ط¨ ط´ط®طµظٹط© ط¬ط¯ظٹط¯ط©
                 </button>
 
             </div>
 
 
             <button onclick="openScreen('home-screen')">
-                ↩ العودة
+                â†© ط§ظ„ط¹ظˆط¯ط©
             </button>
 
         </section>
@@ -464,18 +464,18 @@ lang="ar">
 
 
         <!-- ========================= -->
-        <!-- نموذج طلب شخصية -->
+        <!-- ظ†ظ…ظˆط°ط¬ ط·ظ„ط¨ ط´ط®طµظٹط© -->
         <!-- ========================= -->
 
         <section id="character-request-screen" class="screen">
 
             <h2>
-                ➕ طلب شخصية جديدة
+                â‍• ط·ظ„ط¨ ط´ط®طµظٹط© ط¬ط¯ظٹط¯ط©
             </h2>
 
 
             <p class="subtitle">
-                اكتب معلومات الشخصية التي تريدها
+                ط§ظƒطھط¨ ظ…ط¹ظ„ظˆظ…ط§طھ ط§ظ„ط´ط®طµظٹط© ط§ظ„طھظٹ طھط±ظٹط¯ظ‡ط§
             </p>
 
 
@@ -483,48 +483,48 @@ lang="ar">
 
 
                 <label>
-                    اسم الشخصية
+                    ط§ط³ظ… ط§ظ„ط´ط®طµظٹط©
                 </label>
 
                 <input
                     id="requested-character-name"
                     type="text"
-                    placeholder="مثال: ريمورو"
+                    placeholder="ظ…ط«ط§ظ„: ط±ظٹظ…ظˆط±ظˆ"
                 >
 
 
                 <label>
-                    اسم الأنمي
+                    ط§ط³ظ… ط§ظ„ط£ظ†ظ…ظٹ
                 </label>
 
                 <input
                     id="requested-character-anime"
                     type="text"
-                    placeholder="مثال: That Time I Got Reincarnated as a Slime"
+                    placeholder="ظ…ط«ط§ظ„: That Time I Got Reincarnated as a Slime"
                 >
 
 
                 <label>
-                    ملاحظات إضافية
+                    ظ…ظ„ط§ط­ط¸ط§طھ ط¥ط¶ط§ظپظٹط©
                 </label>
 
                 <textarea
                     id="requested-character-notes"
-                    placeholder="أي معلومات تريد إضافتها..."
+                    placeholder="ط£ظٹ ظ…ط¹ظ„ظˆظ…ط§طھ طھط±ظٹط¯ ط¥ط¶ط§ظپطھظ‡ط§..."
                 ></textarea>
 
 
                 <button onclick="submitCharacterRequest()">
-                    📩 إرسال الطلب
+                    ًں“© ط¥ط±ط³ط§ظ„ ط§ظ„ط·ظ„ط¨
                 </button>
 
 
                 <button onclick="openScreen('character-screen')">
-                    ↩ العودة
+                    â†© ط§ظ„ط¹ظˆط¯ط©
                 </button>
                 
                 <button onclick="logout()">
-    تسجيل الخروج
+    طھط³ط¬ظٹظ„ ط§ظ„ط®ط±ظˆط¬
 </button>
 
             </div>
@@ -534,67 +534,67 @@ lang="ar">
 <section id="upgrade-screen" class="screen">
 
     <h2>
-        ⬆️ تطوير الشخصية
+        â¬†ï¸ڈ طھط·ظˆظٹط± ط§ظ„ط´ط®طµظٹط©
     </h2>
 
 
     <div id="upgrade-character-info" class="empty-card">
-        جاري تحميل بيانات التطوير...
+        ط¬ط§ط±ظٹ طھط­ظ…ظٹظ„ ط¨ظٹط§ظ†ط§طھ ط§ظ„طھط·ظˆظٹط±...
     </div>
 
 
     <div id="upgrade-split-box" class="empty-card" style="display:none;">
 
-        <p>🎁 ستكسب 200 نقطة — وزّعها بين HP وATK (بدفعات 50 فقط)</p>
+        <p>ًںژپ ط³طھظƒط³ط¨ 200 ظ†ظ‚ط·ط© â€” ظˆط²ظ‘ط¹ظ‡ط§ ط¨ظٹظ† HP ظˆATK (ط¨ط¯ظپط¹ط§طھ 50 ظپظ‚ط·)</p>
 
         <p>
-            ❤️ HP: <span id="split-hp-gain">100</span>
-            <button onclick="splitAdjustHp(-50)">−</button>
+            â‌¤ï¸ڈ HP: <span id="split-hp-gain">100</span>
+            <button onclick="splitAdjustHp(-50)">âˆ’</button>
             <button onclick="splitAdjustHp(50)">+</button>
         </p>
 
         <p>
-            ⚔️ ATK: <span id="split-atk-gain">100</span>
-            <button onclick="splitAdjustAtk(-50)">−</button>
+            âڑ”ï¸ڈ ATK: <span id="split-atk-gain">100</span>
+            <button onclick="splitAdjustAtk(-50)">âˆ’</button>
             <button onclick="splitAdjustAtk(50)">+</button>
         </p>
 
-        <p id="split-total-label">المجموع: 200 / 200</p>
+        <p id="split-total-label">ط§ظ„ظ…ط¬ظ…ظˆط¹: 200 / 200</p>
 
     </div>
 
 
     <button onclick="upgradeCharacter()">
-        ⬆️ تطوير
+        â¬†ï¸ڈ طھط·ظˆظٹط±
     </button>
 
 
     <button onclick="openScreen('home-screen')">
-        ↩ العودة
+        â†© ط§ظ„ط¹ظˆط¯ط©
     </button>
 
 </section>
 
 <!-- ========================= -->
-<!-- مجموعتي -->
+<!-- ظ…ط¬ظ…ظˆط¹طھظٹ -->
 <!-- ========================= -->
 
 <section id="collection-screen" class="screen">
 
     <h2>
-        🎴 مجموعتي
+        ًںژ´ ظ…ط¬ظ…ظˆط¹طھظٹ
     </h2>
 
 
     <div id="my-characters">
 
-        جاري تحميل المجموعة...
+        ط¬ط§ط±ظٹ طھط­ظ…ظٹظ„ ط§ظ„ظ…ط¬ظ…ظˆط¹ط©...
 
     </div>
 
 
     <button onclick="openScreen('home-screen')">
-        ↩ العودة
+        â†© ط§ظ„ط¹ظˆط¯ط©
     </button>
 
 </section>
@@ -602,25 +602,25 @@ lang="ar">
 
 
 <!-- ========================= -->
-<!-- المعارك -->
+<!-- ط§ظ„ظ…ط¹ط§ط±ظƒ -->
 <!-- ========================= -->
 
 <section id="battle-menu-screen" class="screen">
 
 <h2>
-⚔️ المعارك
+âڑ”ï¸ڈ ط§ظ„ظ…ط¹ط§ط±ظƒ
 </h2>
 
 
 <div class="menu">
 
 <button onclick="openScreen('gate-screen')">
-🚪 البوابات
+ًںڑھ ط§ظ„ط¨ظˆط§ط¨ط§طھ
 </button>
 
 
 <button onclick="openScreen('solo-battle-screen')">
-👥 المواجهات الفردية
+ًں‘¥ ط§ظ„ظ…ظˆط§ط¬ظ‡ط§طھ ط§ظ„ظپط±ط¯ظٹط©
 </button>
 
 
@@ -628,7 +628,7 @@ lang="ar">
 
 
 <button onclick="openScreen('home-screen')">
-↩️ العودة
+â†©ï¸ڈ ط§ظ„ط¹ظˆط¯ط©
 </button>
 
 
@@ -639,19 +639,19 @@ lang="ar">
 <section id="gate-screen" class="screen">
 
 <h2>
-🚪 البوابات
+ًںڑھ ط§ظ„ط¨ظˆط§ط¨ط§طھ
 </h2>
 
 
 <div class="empty-card">
 
-نظام البوابات قيد التطوير
+ظ†ط¸ط§ظ… ط§ظ„ط¨ظˆط§ط¨ط§طھ ظ‚ظٹط¯ ط§ظ„طھط·ظˆظٹط±
 
 </div>
 
 
 <button onclick="openScreen('battle-menu-screen')">
-↩️ العودة
+â†©ï¸ڈ ط§ظ„ط¹ظˆط¯ط©
 </button>
 
 
@@ -662,18 +662,18 @@ lang="ar">
 <section id="solo-battle-screen" class="screen">
 
 <h2>
-👥 المواجهات الفردية
+ًں‘¥ ط§ظ„ظ…ظˆط§ط¬ظ‡ط§طھ ط§ظ„ظپط±ط¯ظٹط©
 </h2>
 
 
 <div class="solo-buttons">
 
     <button onclick="openScreen('pve-select-screen'); loadMonsterList();">
-    ⚔️ PvE
+    âڑ”ï¸ڈ PvE
 </button>
 
     <button onclick="openPVPLobby()">
-🏆 PvP
+ًںڈ† PvP
 </button>
 
 </div>
@@ -681,7 +681,7 @@ lang="ar">
 
 
 <button onclick="openScreen('battle-menu-screen')">
-↩️ العودة
+â†©ï¸ڈ ط§ظ„ط¹ظˆط¯ط©
 </button>
 
 
@@ -690,13 +690,13 @@ lang="ar">
 
 
 <!-- ========================= -->
-<!-- ردهة PvP: اختيار الخصم والتحدي -->
+<!-- ط±ط¯ظ‡ط© PvP: ط§ط®طھظٹط§ط± ط§ظ„ط®طµظ… ظˆط§ظ„طھط­ط¯ظٹ -->
 <!-- ========================= -->
 
 <section id="pvp-lobby-screen" class="screen">
 
 <h2>
-🏆 ردهة PvP
+ًںڈ† ط±ط¯ظ‡ط© PvP
 </h2>
 
 <div id="pvp-lobby-status" style="text-align:center;padding:10px;"></div>
@@ -705,7 +705,7 @@ lang="ar">
 </div>
 
 <button onclick="closePVPLobby()">
-↩️ العودة
+â†©ï¸ڈ ط§ظ„ط¹ظˆط¯ط©
 </button>
 
 </section>
@@ -715,7 +715,7 @@ lang="ar">
 <section id="pve-select-screen" class="screen">
 
 <h2>
-👹 اختر الوحش الذي تريد مواجهته
+ًں‘¹ ط§ط®طھط± ط§ظ„ظˆط­ط´ ط§ظ„ط°ظٹ طھط±ظٹط¯ ظ…ظˆط§ط¬ظ‡طھظ‡
 </h2>
 
 <div id="pve-monster-list">
@@ -723,26 +723,26 @@ lang="ar">
 </div>
 
 <button onclick="openScreen('solo-battle-screen')">
-↩️ العودة
+â†©ï¸ڈ ط§ظ„ط¹ظˆط¯ط©
 </button>
 
 </section>
 
 <!-- ========================= -->
-<!-- شاشة معركة PvP (IDs بادئة pvp-) -->
+<!-- ط´ط§ط´ط© ظ…ط¹ط±ظƒط© PvP (IDs ط¨ط§ط¯ط¦ط© pvp-) -->
 <!-- ========================= -->
 
 <section id="pvp-battle-screen" class="screen">
 
 <h2>
-⚔️ المعركة
+âڑ”ï¸ڈ ط§ظ„ظ…ط¹ط±ظƒط©
 </h2>
 
 
 <div class="battle-arena">
 
 
-<!-- الخصم -->
+<!-- ط§ظ„ط®طµظ… -->
 
 <div class="battle-card enemy-card">
 
@@ -751,7 +751,7 @@ class="battle-image">
 
 
 <h3 id="pvp-enemy-name">
-الوحش
+ط§ظ„ظˆط­ط´
 </h3>
 
 
@@ -763,14 +763,14 @@ class="hp-fill">
 
 
 <p>
-❤️
+â‌¤ï¸ڈ
 <span id="pvp-enemy-hp">
 300 / 300
 </span>
 </p>
 
 
-<!-- شارات حالة الأنواع الجديدة -->
+<!-- ط´ط§ط±ط§طھ ط­ط§ظ„ط© ط§ظ„ط£ظ†ظˆط§ط¹ ط§ظ„ط¬ط¯ظٹط¯ط© -->
 
 <div class="fighter-status-badges"
 id="pvp-enemy-status">
@@ -778,7 +778,7 @@ id="pvp-enemy-status">
 </div>
 
 
-<!-- مهارات الخصم المستخدمة -->
+<!-- ظ…ظ‡ط§ط±ط§طھ ط§ظ„ط®طµظ… ط§ظ„ظ…ط³طھط®ط¯ظ…ط© -->
 
 <div class="used-skills"
 id="pvp-enemy-used-skills">
@@ -790,7 +790,7 @@ id="pvp-enemy-used-skills">
 
 
 
-<!-- الوسط -->
+<!-- ط§ظ„ظˆط³ط· -->
 
 <div class="battle-middle">
 
@@ -814,7 +814,7 @@ id="pvp-enemy-used-skills">
 <div class="attack-button-wrap">
 
 <button id="pvp-attack-button">
-🔴
+ًں”´
 </button>
 
 <div id="pvp-count-overlay" class="count-overlay"></div>
@@ -826,7 +826,7 @@ id="pvp-enemy-used-skills">
 
 
 
-<!-- اللاعب -->
+<!-- ط§ظ„ظ„ط§ط¹ط¨ -->
 
 
 <div class="battle-card player-card">
@@ -837,7 +837,7 @@ class="battle-image">
 
 
 <h3 id="pvp-player-name-battle">
-ريمورو
+ط±ظٹظ…ظˆط±ظˆ
 </h3>
 
 
@@ -852,14 +852,14 @@ class="hp-fill">
 
 
 <p>
-❤️
+â‌¤ï¸ڈ
 <span id="pvp-player-hp">
 300 / 300
 </span>
 </p>
 
 
-<!-- شارات حالة الأنواع الجديدة -->
+<!-- ط´ط§ط±ط§طھ ط­ط§ظ„ط© ط§ظ„ط£ظ†ظˆط§ط¹ ط§ظ„ط¬ط¯ظٹط¯ط© -->
 
 <div class="fighter-status-badges"
 id="pvp-player-status">
@@ -868,7 +868,7 @@ id="pvp-player-status">
 
 
 
-<!-- مهارات اللاعب المستخدمة -->
+<!-- ظ…ظ‡ط§ط±ط§طھ ط§ظ„ظ„ط§ط¹ط¨ ط§ظ„ظ…ط³طھط®ط¯ظ…ط© -->
 
 <div class="used-skills"
 id="pvp-player-used-skills">
@@ -882,17 +882,17 @@ id="pvp-player-used-skills">
     <div class="skills-pages" id="pvp-player-skills-pages">
 
         <div class="skills-page active">
-            <button>هجوم</button>
-            <button>دفاع</button>
-            <button>مفترس</button>
-            <button>مهارة</button>
+            <button>ظ‡ط¬ظˆظ…</button>
+            <button>ط¯ظپط§ط¹</button>
+            <button>ظ…ظپطھط±ط³</button>
+            <button>ظ…ظ‡ط§ط±ط©</button>
         </div>
 
         <div class="skills-page">
-            <button>نسخ</button>
-            <button>ختم</button>
-            <button>مهارة</button>
-            <button>مهارة</button>
+            <button>ظ†ط³ط®</button>
+            <button>ط®طھظ…</button>
+            <button>ظ…ظ‡ط§ط±ط©</button>
+            <button>ظ…ظ‡ط§ط±ط©</button>
         </div>
 
     </div>
@@ -911,26 +911,26 @@ id="pvp-player-used-skills">
 
 
 <button id="pvp-leave-battle-button" onclick="pvpLeaveBattleClicked()">
-↩ العودة
+â†© ط§ظ„ط¹ظˆط¯ط©
 </button>
 
 </section>
 
 <!-- ========================= -->
-<!-- شاشة معركة PvE (IDs بادئة pve-) -->
+<!-- ط´ط§ط´ط© ظ…ط¹ط±ظƒط© PvE (IDs ط¨ط§ط¯ط¦ط© pve-) -->
 <!-- ========================= -->
 
 <section id="pve-battle-screen" class="screen">
 
 <h2>
-⚔️ المعركة
+âڑ”ï¸ڈ ط§ظ„ظ…ط¹ط±ظƒط©
 </h2>
 
 
 <div class="battle-arena">
 
 
-<!-- الخصم -->
+<!-- ط§ظ„ط®طµظ… -->
 
 <div class="battle-card enemy-card">
 
@@ -939,7 +939,7 @@ class="battle-image">
 
 
 <h3 id="pve-enemy-name">
-الوحش
+ط§ظ„ظˆط­ط´
 </h3>
 
 
@@ -951,14 +951,14 @@ class="hp-fill">
 
 
 <p>
-❤️
+â‌¤ï¸ڈ
 <span id="pve-enemy-hp">
 300 / 300
 </span>
 </p>
 
 
-<!-- شارات حالة الأنواع الجديدة (قوة مؤقتة/صحة مؤقتة/درع انعكاس/امتصاص...) -->
+<!-- ط´ط§ط±ط§طھ ط­ط§ظ„ط© ط§ظ„ط£ظ†ظˆط§ط¹ ط§ظ„ط¬ط¯ظٹط¯ط© (ظ‚ظˆط© ظ…ط¤ظ‚طھط©/طµط­ط© ظ…ط¤ظ‚طھط©/ط¯ط±ط¹ ط§ظ†ط¹ظƒط§ط³/ط§ظ…طھطµط§طµ...) -->
 
 <div class="fighter-status-badges"
 id="pve-enemy-status">
@@ -966,7 +966,7 @@ id="pve-enemy-status">
 </div>
 
 
-<!-- مهارات الخصم المستخدمة -->
+<!-- ظ…ظ‡ط§ط±ط§طھ ط§ظ„ط®طµظ… ط§ظ„ظ…ط³طھط®ط¯ظ…ط© -->
 
 <div class="used-skills"
 id="pve-enemy-used-skills">
@@ -978,7 +978,7 @@ id="pve-enemy-used-skills">
 
 
 
-<!-- الوسط -->
+<!-- ط§ظ„ظˆط³ط· -->
 
 <div class="battle-middle">
 
@@ -1002,7 +1002,7 @@ id="pve-enemy-used-skills">
 <div class="attack-button-wrap">
 
 <button id="pve-attack-button">
-🔴
+ًں”´
 </button>
 
 <div id="pve-count-overlay" class="count-overlay"></div>
@@ -1014,7 +1014,7 @@ id="pve-enemy-used-skills">
 
 
 
-<!-- اللاعب -->
+<!-- ط§ظ„ظ„ط§ط¹ط¨ -->
 
 
 <div class="battle-card player-card">
@@ -1025,7 +1025,7 @@ class="battle-image">
 
 
 <h3 id="pve-player-name-battle">
-ريمورو
+ط±ظٹظ…ظˆط±ظˆ
 </h3>
 
 
@@ -1040,14 +1040,14 @@ class="hp-fill">
 
 
 <p>
-❤️
+â‌¤ï¸ڈ
 <span id="pve-player-hp">
 300 / 300
 </span>
 </p>
 
 
-<!-- شارات حالة الأنواع الجديدة -->
+<!-- ط´ط§ط±ط§طھ ط­ط§ظ„ط© ط§ظ„ط£ظ†ظˆط§ط¹ ط§ظ„ط¬ط¯ظٹط¯ط© -->
 
 <div class="fighter-status-badges"
 id="pve-player-status">
@@ -1056,7 +1056,7 @@ id="pve-player-status">
 
 
 
-<!-- مهارات اللاعب المستخدمة -->
+<!-- ظ…ظ‡ط§ط±ط§طھ ط§ظ„ظ„ط§ط¹ط¨ ط§ظ„ظ…ط³طھط®ط¯ظ…ط© -->
 
 <div class="used-skills"
 id="pve-player-used-skills">
@@ -1070,17 +1070,17 @@ id="pve-player-used-skills">
     <div class="skills-pages" id="pve-player-skills-pages">
 
         <div class="skills-page active">
-            <button>هجوم</button>
-            <button>دفاع</button>
-            <button>مفترس</button>
-            <button>مهارة</button>
+            <button>ظ‡ط¬ظˆظ…</button>
+            <button>ط¯ظپط§ط¹</button>
+            <button>ظ…ظپطھط±ط³</button>
+            <button>ظ…ظ‡ط§ط±ط©</button>
         </div>
 
         <div class="skills-page">
-            <button>نسخ</button>
-            <button>ختم</button>
-            <button>مهارة</button>
-            <button>مهارة</button>
+            <button>ظ†ط³ط®</button>
+            <button>ط®طھظ…</button>
+            <button>ظ…ظ‡ط§ط±ط©</button>
+            <button>ظ…ظ‡ط§ط±ط©</button>
         </div>
 
     </div>
@@ -1099,7 +1099,7 @@ id="pve-player-used-skills">
 
 
 <button onclick="openScreen('solo-battle-screen')">
-↩ العودة
+â†© ط§ظ„ط¹ظˆط¯ط©
 </button>
 
 
@@ -1110,21 +1110,21 @@ id="pve-player-used-skills">
 
 
         <!-- ========================= -->
-        <!-- القصة -->
+        <!-- ط§ظ„ظ‚طµط© -->
         <!-- ========================= -->
 
         <section id="story-screen" class="screen">
 
             <h2>
-                📖 القصة
+                ًں“– ط§ظ„ظ‚طµط©
             </h2>
 
             <div class="empty-card">
-                طور القصة قيد التطوير
+                ط·ظˆط± ط§ظ„ظ‚طµط© ظ‚ظٹط¯ ط§ظ„طھط·ظˆظٹط±
             </div>
 
             <button onclick="openScreen('home-screen')">
-                ↩ العودة
+                â†© ط§ظ„ط¹ظˆط¯ط©
             </button>
 
         </section>
@@ -1132,35 +1132,35 @@ id="pve-player-used-skills">
 
 
         <!-- ========================= -->
-        <!-- المتجر -->
+        <!-- ط§ظ„ظ…طھط¬ط± -->
         <!-- ========================= -->
 
         <section id="shop-screen" class="screen">
 
             <h2>
-                🛒 المتجر
+                ًں›’ ط§ظ„ظ…طھط¬ط±
             </h2>
 
             <div class="empty-card">
-                المتجر قيد التطوير
+                ط§ظ„ظ…طھط¬ط± ظ‚ظٹط¯ ط§ظ„طھط·ظˆظٹط±
             </div>
 
             <button onclick="openScreen('home-screen')">
-                ↩ العودة
+                â†© ط§ظ„ط¹ظˆط¯ط©
             </button>
 
         </section>
         <section id="character-profile-screen" class="screen">
 
-    <h2>👤 شخصيتي</h2>
+    <h2>ًں‘¤ ط´ط®طµظٹطھظٹ</h2>
 
     <div id="character-profile" class="empty-card">
-        جاري تحميل الشخصية...
+        ط¬ط§ط±ظٹ طھط­ظ…ظٹظ„ ط§ظ„ط´ط®طµظٹط©...
     </div>
 
 
     <button onclick="openScreen('home-screen')">
-        ↩ العودة
+        â†© ط§ظ„ط¹ظˆط¯ط©
     </button>
    
 
@@ -1178,9 +1178,9 @@ id="pve-player-used-skills">
 
 <script src="cache.js"></script>
 
-<script src="game.js?v=20260813"></script>
-<script src="battle.js?v=20260813"></script>
-<script src="pvp.js?v=20260813"></script>
+<script src="game.js?v=20260814"></script>
+<script src="battle.js?v=20260814"></script>
+<script src="pvp.js?v=20260814"></script>
 
 
   </body>
