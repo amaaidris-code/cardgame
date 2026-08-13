@@ -794,12 +794,13 @@ position:relative;
     display: grid;
 
     /* احجز مربعًا حقيقيًا (عرض = ارتفاع) حتى تظهر الخلفية المرفوعة من لوحة
-       الإدارة كاملة كمربع دون قصّ، مع تحديد أقصى عرض ليناسب الشاشة */
+       الإدارة كاملة كمربع دون قصّ. أقصى عرض معتدل حتى لا يكبر المربع عن
+       الحاجة ولا يمنع التمرير رؤية كل المهارات */
     aspect-ratio: 1 / 1;
 
     width: 100%;
 
-    max-width: calc(100dvh - 230px);
+    max-width: 320px;
 
     margin: 0 auto;
 
@@ -3788,7 +3789,7 @@ height:100dvh;
 
 min-height:100dvh;
 
-overflow:hidden;
+overflow-y:auto;
 
 display:flex;
 
@@ -3798,9 +3799,7 @@ justify-content:flex-start;
 
 padding:6px 8px 8px;
 
-}
-
-#pve-battle-screen > h2,
+}#pve-battle-screen > h2,
 #pvp-battle-screen > h2{
 
 flex:0 0 auto;
