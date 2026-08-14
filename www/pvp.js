@@ -1787,17 +1787,12 @@ function pvpOpenStealMenu(abilitySkill, mode){
     let list = modal.querySelector("#pvp-steal-options-list");
     candidates.forEach(skill => {
         let btn = document.createElement("button");
-        let isProtected = !!(firstSkillId && skill.id === firstSkillId);
-        btn.className = isProtected ? "steal-option pvp-protected-skill" : "steal-option";
-        btn.textContent = isProtected ? `${skill.name} (المهارة الأولى — محمية)` : skill.name;
-        if(isProtected){
-            btn.disabled = true;
-        }else{
-            btn.onclick = () => {
-                pvpCloseSealMenu();
-                pvpUseSealOrUnseal(abilitySkill.id, skill.id);
-            };
-        }
+        btn.className = "steal-option";
+        btn.textContent = skill.name;
+        btn.onclick = () => {
+            pvpCloseStealMenu();
+            pvpUseStealOrCopy(abilitySkill.id, skill.id);
+        };
         list.appendChild(btn);
     });
 
@@ -1980,12 +1975,17 @@ function pvpOpenSealMenu(abilitySkill){
     let list = modal.querySelector("#pvp-steal-options-list");
     candidates.forEach(skill => {
         let btn = document.createElement("button");
-        btn.className = "steal-option";
-        btn.textContent = skill.name;
-        btn.onclick = () => {
-            pvpCloseSealMenu();
-            pvpUseSealOrUnseal(abilitySkill.id, skill.id);
-        };
+        let isProtected = !!(firstSkillId && skill.id === firstSkillId);
+        btn.className = isProtected ? "steal-option pvp-protected-skill" : "steal-option";
+        btn.textContent = isProtected ? `${skill.name} (المهارة الأولى — محمية)` : skill.name;
+        if(isProtected){
+            btn.disabled = true;
+        }else{
+            btn.onclick = () => {
+                pvpCloseSealMenu();
+                pvpUseSealOrUnseal(abilitySkill.id, skill.id);
+            };
+        }
         list.appendChild(btn);
     });
 
