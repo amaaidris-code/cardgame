@@ -363,6 +363,45 @@ function updatePlayerInfo(){
     }
 
 
+    let goldBox =
+    document.getElementById("player-gold");
+
+
+    if(goldBox){
+
+        let token = localStorage.getItem("player_token");
+
+        let storedGold = localStorage.getItem("player_gold");
+
+        if(storedGold !== null){
+            goldBox.textContent = "🪙 " + storedGold;
+        }
+
+        if(token){
+
+            supabaseClient
+            .rpc("get_my_player", { p_token: token })
+            .single()
+            .then(res => {
+
+                if(res && res.data && res.data.gold !== undefined && res.data.gold !== null){
+
+                    localStorage.setItem("player_gold", res.data.gold);
+
+                    let box2 = document.getElementById("player-gold");
+
+                    if(box2) box2.textContent = "🪙 " + res.data.gold;
+
+                }
+
+            })
+            .catch(() => {});
+
+        }
+
+    }
+
+
     let adminBtn = document.getElementById("home-admin-panel-btn");
 
     if(adminBtn){

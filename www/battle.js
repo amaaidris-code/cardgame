@@ -6659,6 +6659,8 @@ function showBattleResult(playerWon){
 
                 line.textContent = `🪙 +${result.gold_added} ذهب · ⭐ +${result.points_added} نقطة تطوير`;
 
+                if(typeof updatePlayerInfo === "function") updatePlayerInfo();
+
             } else if(line && result && result.error){
 
                 line.textContent = result.error;
