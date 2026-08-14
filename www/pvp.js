@@ -196,6 +196,15 @@ async function openPVPLobby(){
 
     pvpLobbyStopPolling();
     pvpLobby.pollTimer = setInterval(pvpRefreshLobby, 3000);
+
+    // عند عودة اللاعب للتبويب (من خلفية/قفل الشاشة) نحدّث قائمة الردهة فورًا
+    // بدل انتظار الدورة التالية، فيرى اللاعبون الجدد/المغادرون لحظيًا
+    if(!pvpLobby._visibilityHandler){
+        pvpLobby._visibilityHandler = () => {
+            if(!document.hidden && pvpLobby.mode !== "waiting") pvpRefreshLobby();
+        };
+        document.addEventListener("visibilitychange", pvpLobby._visibilityHandler);
+    }
 }
 
 async function closePVPLobby(){

@@ -1864,22 +1864,36 @@ function startPlayerPresence(){
         if(presenceTimer){ clearInterval(presenceTimer); presenceTimer = null; }
         if(challengePollTimer){ clearInterval(challengePollTimer); challengePollTimer = null; }
 
-        presenceTimer = setInterval(() => {
+        // نبضة نشاط كل 10 ثوانٍ: نُبقي اللاعب "متصلًا" في قائمة PvP حتى لو
+        // لم يكن على تبويب PvP. نبضة متكررة وقصيرة جدًا بحيث يبقى ضمن نافذة
+        // الاتصال الواسعة حتى لو أخّر المتصفح الموقّت (تبويب في الخلفية).
+        let presencePing = () => {
             let token = pvpGetToken();
             if(!token) return;
             supabaseClient.rpc("pvp_presence_ping", { p_token: token }).then(() => {}, () => {});
-        }, 15000);
+        };
+        presenceTimer = setInterval(presencePing, 10000);
+
+        // عند عودة اللاعب للتبويب (من خلفية/قفل الشاشة) ننبض فورًا بدل انتظار
+        // الدورة التالية، حتى يظهر متصلًا لحظيًا في ردهة الخصم. وننبض مرة
+        // أولى عند التشغيل مباشرة لضمان رؤية سريعة من الطرف الآخر.
+        document.addEventListener("visibilitychange", () => {
+            if(!document.hidden) presencePing();
+        });
+        presencePing();
 
         challengePollTimer = setInterval(() => {
             let token = pvpGetToken();
             if(!token) return;
+            // نتأكد أن نبضة الحضور استمرت حتى في الخلفية، ثم نفحص التحدي الوارد
+            supabaseClient.rpc("pvp_presence_ping", { p_token: token }).then(() => {}, () => {});
             supabaseClient.rpc("pvp_get_incoming_challenge", { p_token: token })
             .then(({ data, error }) => {
                 if(error) return;
                 let inc = (data && data.length > 0) ? data[0] : null;
                 renderGlobalChallengeBanner(inc);
             }, () => {});
-        }, 6000);
+        }, 8000);
     }catch(e){}
 }
 
