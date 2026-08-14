@@ -1868,7 +1868,7 @@ function startPlayerPresence(){
             let token = pvpGetToken();
             if(!token) return;
             supabaseClient.rpc("pvp_presence_ping", { p_token: token }).then(() => {}, () => {});
-        }, 30000);
+        }, 15000);
 
         challengePollTimer = setInterval(() => {
             let token = pvpGetToken();

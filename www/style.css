@@ -1970,6 +1970,14 @@ cursor:not-allowed;
 
 }
 
+.pvp-protected-skill{
+
+border-color:#f5a623 !important;
+
+background:rgba(245,166,35,0.12) !important;
+
+}
+
 .steal-or{
 
 color:#999;

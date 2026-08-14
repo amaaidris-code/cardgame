@@ -1787,12 +1787,17 @@ function pvpOpenStealMenu(abilitySkill, mode){
     let list = modal.querySelector("#pvp-steal-options-list");
     candidates.forEach(skill => {
         let btn = document.createElement("button");
-        btn.className = "steal-option";
-        btn.textContent = skill.name;
-        btn.onclick = () => {
-            pvpCloseStealMenu();
-            pvpUseStealOrCopy(abilitySkill.id, skill.id);
-        };
+        let isProtected = !!(firstSkillId && skill.id === firstSkillId);
+        btn.className = isProtected ? "steal-option pvp-protected-skill" : "steal-option";
+        btn.textContent = isProtected ? `${skill.name} (المهارة الأولى — محمية)` : skill.name;
+        if(isProtected){
+            btn.disabled = true;
+        }else{
+            btn.onclick = () => {
+                pvpCloseSealMenu();
+                pvpUseSealOrUnseal(abilitySkill.id, skill.id);
+            };
+        }
         list.appendChild(btn);
     });
 
@@ -1926,19 +1931,20 @@ function pvpOpenSealMenu(abilitySkill){
 
     pvpCloseSealMenu();
 
-    // المهارة الأولى للخصم (slot 1) محمية: لا نعرضها في قائمة الختم أبدًا
-    // (الخادم يرفضها أيضًا كطبقة حماية إضافية)
+    // المهارة الأولى للخصم (slot 1) محمية من الختم: نُبقيها ظاهرة في القائمة
+    // لكن معطّلة، حتى يرى اللاعب كل المهارات التي استخدمها الخصم مع إدراك
+    // أن الأولى لا يمكن ختمها (الخادم يرفضها أيضًا كطبقة حماية إضافية)
     let firstSkillId = pvpState.oppFirstSkillId;
 
     let usedCandidates = pvpState.oppUsedSkillIds
     .map(id => pvpState.skillCache[id])
-    .filter(s => s && s.id !== firstSkillId && !(pvpState.oppSealedSkillIds || []).includes(s.id));
+    .filter(s => s && !(pvpState.oppSealedSkillIds || []).includes(s.id));
 
     // دفاع الخصم مهارة أساسية: يبقى خيارًا للختم دائمًا حتى لو لم يستخدمه
     // في هذه المباراة بعد (مطابقة لمنطق الخادم pvp_seal_or_unseal_skill)
     let defenseCandidates = (pvpState.oppDefenseSkillIds || [])
     .map(id => pvpState.skillCache[id])
-    .filter(s => s && s.id !== firstSkillId && !(pvpState.oppSealedSkillIds || []).includes(s.id));
+    .filter(s => s && !(pvpState.oppSealedSkillIds || []).includes(s.id));
 
     let candidates = [];
     let seenIds = {};
