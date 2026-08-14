@@ -24,6 +24,9 @@ let pvpState = {
     // لم يستخدمها في هذه المباراة بعد (الدفاع مهارة أساسية لدى أي مقاتل)
     oppDefenseSkillIds: [],
 
+    // المهارة الأولى للخصم (slot 1) — محمية ولا يمكن ختمها أبدًا
+    oppFirstSkillId: null,
+
     // تهدئة مهاراتي في هذه المباراة: skill_id -> last_used_turn
     myCooldowns: {},
     myTurnsTaken: 0,
@@ -944,6 +947,7 @@ async function pvpRefreshState(isFirstLoad){
     pvpState.mySealedSkillIds = mySealedIds;
     pvpState.oppSealedSkillIds = oppSealedIds;
     pvpState.oppDefenseSkillIds = data.opponent_defense_skill_ids || [];
+    pvpState.oppFirstSkillId = data.opponent_first_skill_id || null;
     pvpState.myTurnsTaken = myTurnsTaken;
     pvpState.lastMyHp = myHp;
     pvpState.lastOppHp = oppHp;
@@ -1626,6 +1630,18 @@ function pvpSetSkillsEnabled(enabled){
 // ========================================
 async function pvpUseSkill(skillId){
 
+    // مهارة الختم/فك الختم لا تُرسل أبدًا إلى pvp_use_skill (الخادم يرفضها
+    // بخطأ "يجب استخدامها من قائمتها الخاصة")؛ تُفتح قائمتها بدلًا من ذلك
+    let guardSkill = pvpState.skillCache[skillId];
+    if(guardSkill && guardSkill.effect === "seal"){
+        pvpOpenSealMenu(guardSkill);
+        return;
+    }
+    if(guardSkill && guardSkill.effect === "unseal"){
+        pvpOpenUnsealMenu(guardSkill);
+        return;
+    }
+
     pvpSetSkillsEnabled(false);
 
     let { data, error } =
@@ -1910,15 +1926,19 @@ function pvpOpenSealMenu(abilitySkill){
 
     pvpCloseSealMenu();
 
+    // المهارة الأولى للخصم (slot 1) محمية: لا نعرضها في قائمة الختم أبدًا
+    // (الخادم يرفضها أيضًا كطبقة حماية إضافية)
+    let firstSkillId = pvpState.oppFirstSkillId;
+
     let usedCandidates = pvpState.oppUsedSkillIds
     .map(id => pvpState.skillCache[id])
-    .filter(s => s && !(pvpState.oppSealedSkillIds || []).includes(s.id));
+    .filter(s => s && s.id !== firstSkillId && !(pvpState.oppSealedSkillIds || []).includes(s.id));
 
     // دفاع الخصم مهارة أساسية: يبقى خيارًا للختم دائمًا حتى لو لم يستخدمه
     // في هذه المباراة بعد (مطابقة لمنطق الخادم pvp_seal_or_unseal_skill)
     let defenseCandidates = (pvpState.oppDefenseSkillIds || [])
     .map(id => pvpState.skillCache[id])
-    .filter(s => s && !(pvpState.oppSealedSkillIds || []).includes(s.id));
+    .filter(s => s && s.id !== firstSkillId && !(pvpState.oppSealedSkillIds || []).includes(s.id));
 
     let candidates = [];
     let seenIds = {};

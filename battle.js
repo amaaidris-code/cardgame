@@ -2846,7 +2846,7 @@ async function enemyAct(){
         s.type === "special" && s.effect === "unseal" && !isSkillSealed(enemy, s) && isSkillReady(enemy, s));
 
     let sealablePlayerSkills =
-    battle.playerUsedSkills.filter(s => !isSkillSealed(battle.player, s));
+    battle.playerUsedSkills.filter(s => !isSkillSealed(battle.player, s) && Number(s.slot) !== 1);
 
     // مثل اتجاه اللاعب: مهارة دفاع اللاعب تبقى قابلة للختم من الخصم دائمًا
     // حتى لو لم يستخدمها في هذا النزال بعد (الدفاع مهارة أساسية)
@@ -2854,6 +2854,7 @@ async function enemyAct(){
     battle.player.skills.find(s => s.type === "defense");
 
     if(playerDefenseSkill
+    && Number(playerDefenseSkill.slot) !== 1
     && !isSkillSealed(battle.player, playerDefenseSkill)
     && !sealablePlayerSkills.find(s => s.id === playerDefenseSkill.id)){
 
@@ -2983,13 +2984,14 @@ function enemyUseSealOrUnseal(skill){
     if(skill.effect === "seal"){
 
         let sealable =
-        battle.playerUsedSkills.filter(s => !isSkillSealed(battle.player, s));
+        battle.playerUsedSkills.filter(s => !isSkillSealed(battle.player, s) && Number(s.slot) !== 1);
 
         // دفاع اللاعب قابل للختم دائمًا (مهارة أساسية) حتى لو لم يستخدمه بعد
         let playerDefenseSkill =
         battle.player.skills.find(s => s.type === "defense");
 
         if(playerDefenseSkill
+        && Number(playerDefenseSkill.slot) !== 1
         && !isSkillSealed(battle.player, playerDefenseSkill)
         && !sealable.find(s => s.id === playerDefenseSkill.id)){
 
@@ -4417,7 +4419,31 @@ function retroReflectNow(caster, skill){
 
     let reflectDmg = Math.max(1, Math.floor(snapshot.dmgDealt * reflectMult));
 
+    let attHpBefore = attacker.hp;
+
     attacker.hp = Math.max(0, attacker.hp - reflectDmg);
+
+    // الضربة المُنعكسة من انعكاس عادي تصير ضربةً عاديةً قابلة للصدّ على المهاجم:
+    // تُسجَّل في لقطة آخر ضربة عنده (غير مُستهلكة وغير "لا تُصدّ") حتى يتمكن
+    // (لاعبًا كان أو خصمًا) من استخدام الدفاع وإلغائها واسترجاع صحته.
+    // أما الانعكاس "لا يُصدّ" فلا يترك ضربةً قابلةً للصدّ (consumed=true)
+    let unblockableReflect = !!(skill.params && skill.params.unblockable_reflect);
+
+    attacker.lastHitSnapshot = {
+
+        hpBefore: attHpBefore,
+
+        dmgDealt: reflectDmg,
+
+        consumed: unblockableReflect,
+
+        unblockable: unblockableReflect,
+
+        reflectable: false,
+
+        attackerLifestealHeal: 0
+
+    };
 
     return reflectDmg;
 
@@ -5875,12 +5901,13 @@ function openSealMenu(sealSkill){
     // الخصم التي تبقى قابلة للختم دائمًا حتى لو لم يستخدمها في أي نزال،
     // فالدفاع مهارة أساسية لدى أي مقاتل ويجب أن يبقى ممكنًا منعُه
     let sealableSkills =
-    battle.enemyUsedSkills.filter(s => !isSkillSealed(battle.enemy, s));
+    battle.enemyUsedSkills.filter(s => !isSkillSealed(battle.enemy, s) && Number(s.slot) !== 1);
 
     let enemyDefenseSkill =
     battle.enemy.skills.find(s => s.type === "defense");
 
     if(enemyDefenseSkill
+    && Number(enemyDefenseSkill.slot) !== 1
     && !isSkillSealed(battle.enemy, enemyDefenseSkill)
     && !sealableSkills.find(s => s.id === enemyDefenseSkill.id)){
 
