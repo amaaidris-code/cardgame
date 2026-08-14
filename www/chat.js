@@ -205,19 +205,6 @@ const Chat = (function(){
         }
     }
 
-    function appendMessage(m){
-        const box = document.getElementById("chat-messages");
-        let existing = [];
-        if(box && box.querySelector(".chat-empty") === null){
-            const nodes = box.querySelectorAll(".chat-msg");
-            for(const n of nodes){
-                existing.push(parseDomMessage(n));
-            }
-        }
-        existing.push(m);
-        return existing;
-    }
-
     // ============ الإيموجي ============
     function toggleChatEmojiPanel(){
         const panel = document.getElementById("chat-emoji-panel");
