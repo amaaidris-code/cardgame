@@ -1706,17 +1706,23 @@ function pvpRenderWeaponBox(){
     if(!container || !pvpWeapon) return;
     let w = pvpWeapon;
     let broken = (w.durability_current || 0) <= 0;
+    let duce = (w.durability_current || 0) + " / " + (w.max_durability || 0);
     let skills = Array.isArray(w.skills) ? w.skills : [];
+    let skillBtns = skills.map(s => `<button class="weapon-skill-btn" data-skill-id="${s.id}" style="--wcolor:${s.color || '#ffffff'};" ${broken?'disabled':''} onclick="pvpUseWeaponSkill('${s.id}')">${escapeHtml(s.name || 'مهارة')}</button>`).join("");
     let box = document.createElement("div");
     box.id = "pvp-weapon-box";
     box.className = "weapon-box";
     box.innerHTML = `
-        <button class="weapon-toggle" style="--wcolor:${w.glow_color || '#e8b93f'};" onclick="togglePvpWeaponSkills()">
-            ⚔️ <span id="pvp-weapon-duce">${escapeHtml(broken ? "مكسور 💥" : ((w.durability_current||0) + " / " + (w.max_durability||0)))}</span>
-        </button>
-        <div class="weapon-skills" id="pvp-weapon-skills" style="display:none;">
-            <div class="weapon-name">${escapeHtml(w.name || 'سلاح')}</div>
-            ${skills.map(s => `<button class="weapon-skill-btn" data-skill-id="${s.id}" style="--wcolor:${s.color || '#ffffff'};" onclick="pvpUseWeaponSkill('${s.id}')">${escapeHtml(s.name || 'مهارة')}</button>`).join("")}
+        <div class="weapon-header" style="--wcolor:${w.glow_color || '#e8b93f'};">
+            ${w.image ? `<img class="weapon-image" src="${escapeHtml(w.image)}" alt="">` : `<span class="weapon-image weapon-image-ph">⚔️</span>`}
+            <div class="weapon-meta">
+                <div class="weapon-name">${escapeHtml(w.name || 'سلاح')}</div>
+                <div class="weapon-duce" id="pvp-weapon-duce">${escapeHtml(broken ? "مكسور 💥" : duce)}</div>
+            </div>
+            <button class="weapon-toggle" onclick="togglePvpWeaponSkills()" title="إظهار/إخفاء مهارات السلاح">▶</button>
+        </div>
+        <div class="weapon-skills" id="pvp-weapon-skills">
+            ${skillBtns.length ? skillBtns : '<div class="weapon-name">لا مهارات</div>'}
         </div>`;
     container.appendChild(box);
 }
@@ -1733,6 +1739,7 @@ async function pvpUseWeaponSkill(skillId){
     }).single();
     if(error){ alert(error.message || "تعذر تنفيذ الحركة"); pvpRefreshState(false); return; }
     if(pvpWeapon) pvpWeapon.durability_current = Math.max(0, (pvpWeapon.durability_current || 0) - 1);
+    pvpRenderWeaponBox();
     pvpRefreshState(false);
 }
 

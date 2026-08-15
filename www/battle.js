@@ -1149,11 +1149,15 @@ function renderPveWeapon(){
     box.id = "pve-weapon-box";
     box.className = "weapon-box";
     box.innerHTML = `
-        <button class="weapon-toggle" style="--wcolor:${w.glow_color || '#e8b93f'};" onclick="togglePveWeaponSkills()">
-            ⚔️ <span id="pve-weapon-duce">${escapeHtml(broken ? "مكسور 💥" : duce)}</span>
-        </button>
-        <div class="weapon-skills" id="pve-weapon-skills" style="display:none;">
-            <div class="weapon-name">${escapeHtml(w.name || 'سلاح')}</div>
+        <div class="weapon-header" style="--wcolor:${w.glow_color || '#e8b93f'};">
+            ${w.image ? `<img class="weapon-image" src="${escapeHtml(w.image)}" alt="">` : `<span class="weapon-image weapon-image-ph">⚔️</span>`}
+            <div class="weapon-meta">
+                <div class="weapon-name">${escapeHtml(w.name || 'سلاح')}</div>
+                <div class="weapon-duce" id="pve-weapon-duce">${escapeHtml(broken ? "مكسور 💥" : duce)}</div>
+            </div>
+            <button class="weapon-toggle" onclick="togglePveWeaponSkills()" title="إظهار/إخفاء مهارات السلاح">▶</button>
+        </div>
+        <div class="weapon-skills" id="pve-weapon-skills">
             ${skillBtns.length ? skillBtns : '<div class="weapon-name">لا مهارات</div>'}
         </div>`;
     container.appendChild(box);

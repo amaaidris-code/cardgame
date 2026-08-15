@@ -3623,19 +3623,48 @@ border-color: rgba(232,185,63,0.35);
     margin-top: 8px;
     width: 100%;
 }
-.weapon-toggle{
-    width: 100%;
+.weapon-header{
+    display: flex;
+    align-items: center;
+    gap: 10px;
     padding: 8px 10px;
-    border: 1px solid color-mix(in srgb, var(--gold,#e8b93f) 55%, transparent);
+    border: 1px solid color-mix(in srgb, var(--wcolor, var(--gold, #e8b93f)) 55%, transparent);
     border-radius: var(--radius-md);
     background: linear-gradient(160deg, var(--bg-panel-2), var(--bg-panel));
-    color: var(--text);
-    font-weight: bold;
-    cursor: pointer;
     box-shadow: 0 0 12px rgba(0,0,0,0.3);
 }
-.weapon-toggle:hover{
-    border-color: var(--gold, #e8b93f);
+.weapon-image{
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 1px solid var(--line-soft);
+    flex-shrink: 0;
+}
+.weapon-image-ph{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.3);
+    font-size: 22px;
+}
+.weapon-meta{
+    flex: 1 1 auto;
+    min-width: 0;
+}
+.weapon-duce{
+    font-size: 12px;
+    color: var(--wcolor, var(--gold, #e8b93f));
+}
+.weapon-toggle{
+    flex-shrink: 0;
+    padding: 4px 10px;
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius-md);
+    background: rgba(0,0,0,0.3);
+    color: var(--text);
+    cursor: pointer;
+    font-weight: bold;
 }
 .weapon-skills{
     margin-top: 6px;
@@ -3654,6 +3683,12 @@ border-color: rgba(232,185,63,0.35);
     color: var(--text);
     text-align: center;
     padding-bottom: 4px;
+}
+.weapon-header .weapon-name{
+    width: auto;
+    text-align: right;
+    padding-bottom: 0;
+    font-size: 15px;
 }
 .weapon-skill-btn{
     flex: 1 1 auto;
