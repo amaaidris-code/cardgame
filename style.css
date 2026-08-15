@@ -3601,6 +3601,23 @@ border-color: rgba(232,185,63,0.35);
     color: var(--gold, #e8b93f);
 }
 
+/* شارة عدد طلبات المهارات المعلقة على زر المهارات */
+.admin-tab-badge{
+    display: inline-block;
+    min-width: 18px;
+    height: 18px;
+    line-height: 18px;
+    padding: 0 5px;
+    margin-right: 4px;
+    border-radius: 9px;
+    background: #ff3c3c;
+    color: #fff;
+    font-size: 12px;
+    font-weight: bold;
+    text-align: center;
+    vertical-align: middle;
+}
+
 .admin-tab{ display: none; }
 .admin-tab.active{ display: block; }
 

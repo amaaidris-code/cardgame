@@ -306,6 +306,8 @@ function openScreen(screenId){
     loadAdminUpgradeConfig();
 
     loadAdminSkillRules();
+
+    updateSkillOrderBadge();
     
     showAdminTab("admin-tab-home");
     
@@ -3089,6 +3091,27 @@ async function loadAdminSkillRules(){
     }
 }
 
+// يُحدّث شارة عدد طلبات المهارات المعلقة على زر "المهارات" في لوحة الإدارة
+async function updateSkillOrderBadge(){
+    let badge = document.getElementById("admin-skill-order-count");
+    if(!badge) return;
+    let admin_token = localStorage.getItem("admin_token");
+    if(!admin_token){ badge.style.display = "none"; return; }
+    try{
+        let {data:reqs, error} = await supabaseClient.rpc("admin_list_skill_requests", { p_admin_token: admin_token });
+        if(error) throw error;
+        let pending = (reqs || []).filter(r => r.status === "pending").length;
+        badge.textContent = pending;
+        badge.style.display = pending > 0 ? "inline-block" : "none";
+    }catch(e){
+        console.error(e);
+        badge.style.display = "none";
+    }
+}
+
+// تحديث دوري للشارة كي تظهر الطلبات الجديدة دون إعادة فتح اللوحة
+setInterval(updateSkillOrderBadge, 20000);
+
 // يحوّل اختيار نوع المهارة إلى المعامل effect المطلوب لإنشاء المهارة
 function typeChoiceToEffect(choice){
     switch(choice){
@@ -3184,6 +3207,7 @@ async function approveSkillRequest(requestId){
     }catch(e){ /* تجاهل */ }
 
     loadAdminSkillRules();
+    updateSkillOrderBadge();
 }
 
 // رفض طلب مهارة
@@ -3196,6 +3220,7 @@ async function denySkillRequest(requestId){
     if(error){ alert(error.message); return; }
     alert("تم رفض الطلب");
     loadAdminSkillRules();
+    updateSkillOrderBadge();
 }
 
 
@@ -3846,6 +3871,7 @@ async function loadAdminNotifications(){
 async function openSkillRequestFromNotification(requestId){
     showAdminTab("admin-tab-rules");
     await loadAdminSkillRules();
+    updateSkillOrderBadge();
     let card = document.getElementById("sk-req-card-" + requestId);
     if(card){
         card.scrollIntoView({ behavior:"smooth", block:"center" });
