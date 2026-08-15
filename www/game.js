@@ -4710,6 +4710,14 @@ function skillTypeChoiceToFields(typeChoice){
 
         effect = "reflect";
 
+    } else if(typeChoice === "unblockable_reflect"){
+
+        type = "special";
+
+        effect = "reflect";
+
+        unblockable = true;
+
     } else if(typeChoice === "seal"){
 
         type = "special";
@@ -4781,6 +4789,8 @@ function skillTypeChoiceToFields(typeChoice){
 // قائمة النوع، لعرض قائمة النوع في نموذج التعديل على قيمتها الحالية
 function skillFieldsToTypeChoice(skill){
 
+    if(skill.unblockable && skill.effect === "reflect") return "unblockable_reflect";
+
     if(skill.unblockable) return "unblockable";
 
     if(skill.effect === "steal") return "steal";
@@ -4835,6 +4845,7 @@ function skillTypeOptionsHtml(selected){
         ["freeze", "🧊 تجميد (شلل دور كامل)"],
         ["lifesteal", "🩸 امتصاص (شفاء بقدر الضرر)"],
         ["reflect", "🔁 انعكاس (المرة القادمة يعكس المهاجمُ عليه هجومَه السابق)"],
+        ["unblockable_reflect", "💥🔁 انعكاس لا يُصد (يعكس الضربة ولا يمكن صدّها أو امتصاصها كدرع)"],
         ["seal", "🔒 ختم (منع مهارة استخدمها الخصم حتى نهاية النزال)"],
         ["unseal", "🔓 فك الختم (إزالة ختم عن مهارة من مهاراتك)"],
         ["consecutive_turns", "⚡ أدوار متتالية (مهارة تعطيك أدوارًا إضافية متتالية)"],
@@ -4853,6 +4864,33 @@ function skillTypeOptionsHtml(selected){
 
 }
 
+// نص نوع المهارة لاختصار عرضه في بطاقات الجرع
+function potionSkillTypeLabel(choice){
+    const map = {
+        attack: "هجوم عادي",
+        defense: "دفاع",
+        steal: "مفترس",
+        copy: "نسخ",
+        control: "سيطرة",
+        unblockable: "ضربة لا تُصد",
+        freeze: "تجميد",
+        lifesteal: "امتصاص",
+        reflect: "انعكاس",
+        unblockable_reflect: "انعكاس لا يُصد",
+        seal: "ختم",
+        unseal: "فك الختم",
+        consecutive_turns: "أدوار متتالية",
+        absorb_atk: "امتصاص → قوة",
+        absorb_hp: "امتصاص → صحة",
+        hp_boost: "استرجاع الصحة",
+        atk_boost: "رفع القوة",
+        poison: "سُم",
+        delay_cooldown: "تأجيل التهدئة",
+        shadow: "الظل"
+    };
+    return map[choice] || choice || "—";
+}
+
 
 function skillTypeLabel(skill){
 
@@ -4869,6 +4907,8 @@ function skillTypeLabel(skill){
     if(skill.effect === "lifesteal") return "امتصاص";
 
     if(skill.effect === "reflect") return "انعكاس";
+
+    if(skill.unblockable && skill.effect === "reflect") return "انعكاس لا يُصد";
 
     if(skill.effect === "seal") return "ختم";
 
@@ -6336,14 +6376,7 @@ async function loadAdminPotions(){
 async function loadPotionSkillsSelect(admin_token){
     let sel = document.getElementById("admin-potion-effect-skill");
     if(!sel) return;
-    try{
-        let {data:list, error} = await supabaseClient.rpc("admin_list_all_skills", { p_admin_token: admin_token });
-        if(error) throw error;
-        cannedPotionSkills = Array.isArray(list) ? list : [];
-        let options = '<option value="">— اختر مهارة —</option>' + cannedPotionSkills.map(s =>
-            `<option value="${s.id}">${escapeAttr(s.name || "مهارة")} (${escapeAttr(s.type || "")})</option>`).join("");
-        sel.innerHTML = options;
-    }catch(e){ console.error(e); }
+    sel.innerHTML = '<option value="">— اختر نوع المهارة —</option>' + skillTypeOptionsHtml("");
 }
 
 function renderAdminPotionCards(list, emptyMessage){
@@ -6352,10 +6385,11 @@ function renderAdminPotionCards(list, emptyMessage){
         let stock = p.infinite ? "♾️ لا محدود" : ("📦 " + (p.stock == null ? 0 : p.stock) + " جرعة");
         let sold = (p.sold || 0) > 0 ? (" · مُلك " + p.sold) : "";
         let eff = potionEffectTypeLabel(p.effect_type, p.effect_value);
-        // أضف اسم المهارة المدمجة لو وُجدت
+        // أضف نوع المهارة المدمجة لو وُجدت
         if(p.effect_type === "skill"){
-            let sk = cannedPotionSkills.find(s => s.id === p.effect_skill_id);
-            if(sk) eff += " («" + (sk.name || "مهارة") + "»)";
+            if(p.effect_skill_type){
+                eff += " («" + potionSkillTypeLabel(p.effect_skill_type) + "»)";
+            }
         }
         return `
             <div class="admin-card" style="margin-bottom:8px; padding:12px; border-left:4px solid ${escapeAttr(p.glow_color || '#22c55e')};">
@@ -6391,7 +6425,7 @@ async function addPotion(){
     let admin_token = localStorage.getItem("admin_token");
     let {error} = await supabaseClient.rpc("admin_add_potion", {
         p_admin_token: admin_token, p_name: name, p_description: desc, p_image: image,
-        p_effect_type: effectType, p_effect_value: effectValue, p_effect_skill_id: effectSkill || null,
+        p_effect_type: effectType, p_effect_value: effectValue, p_effect_skill_id: null, p_effect_skill_type: effectSkill || null,
         p_price: price, p_stock: stock, p_infinite: infinite, p_glow_color: glow
     });
     if(error){ alert(error.message); return; }
@@ -6445,10 +6479,10 @@ function renderPotionEditModal(p){
             <label>🔢 قيمة التأثير
                 <input id="edit-potion-effect-value" type="number" min="0" value="${p.effect_value||0}">
             </label>
-            <label>🗡️ المهارة المدمجة
+            <label>🗡️ نوع المهارة المدمجة
                 <select id="edit-potion-effect-skill">
-                    ${'<option value="">— اختر مهارة —</option>' + cannedPotionSkills.map(s =>
-                        `<option value="${s.id}" ${p.effect_skill_id===s.id?'selected':''}>${escapeAttr(s.name||'مهارة')} (${escapeAttr(s.type||'')})</option>`).join("")}
+                    <option value="">— اختر نوع المهارة —</option>
+                    ${skillTypeOptionsHtml(p.effect_skill_type || "")}
                 </select>
             </label>
             <label>💰 السعر
@@ -6487,7 +6521,7 @@ async function savePotionEdit(potionId){
     let admin_token = localStorage.getItem("admin_token");
     let {error} = await supabaseClient.rpc("admin_save_potion", {
         p_admin_token: admin_token, p_potion_id: potionId, p_name: name, p_description: desc, p_image: image,
-        p_effect_type: effectType, p_effect_value: effectValue, p_effect_skill_id: effectSkill || null,
+        p_effect_type: effectType, p_effect_value: effectValue, p_effect_skill_id: null, p_effect_skill_type: effectSkill || null,
         p_price: price, p_stock: stock, p_infinite: infinite, p_glow_color: glow
     });
     if(error){ alert(error.message); return; }

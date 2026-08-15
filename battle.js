@@ -771,6 +771,32 @@ function isNewBuffEffect(effect){
 
 }
 
+// يبني حقول مهارة صناعية من نوع الجرعة المختار (يطابق public.potion_skill_fields)
+function potionSkillFields(typeChoice, value){
+    switch(typeChoice){
+        case "defense": return { type: "defense", effect: null, unblockable: false, params: { amount: value } };
+        case "steal": return { type: "special", effect: "steal", unblockable: false, params: {} };
+        case "copy": return { type: "special", effect: "copy", unblockable: false, params: {} };
+        case "control": return { type: "special", effect: "control", unblockable: false, params: {} };
+        case "unblockable": return { type: "special", effect: null, unblockable: true, params: { amount: value } };
+        case "freeze": return { type: "special", effect: "freeze", unblockable: false, params: { amount: value } };
+        case "lifesteal": return { type: "special", effect: "lifesteal", unblockable: false, params: { amount: value } };
+        case "reflect": return { type: "special", effect: "reflect", unblockable: false, params: { reflect_mult: value || 1 } };
+        case "unblockable_reflect": return { type: "special", effect: "reflect", unblockable: true, params: { reflect_mult: value || 1, unblockable_reflect: true } };
+        case "seal": return { type: "special", effect: "seal", unblockable: false, params: {} };
+        case "unseal": return { type: "special", effect: "unseal", unblockable: false, params: {} };
+        case "consecutive_turns": return { type: "special", effect: "consecutive_turns", unblockable: false, params: { extra_turns: value || 1 } };
+        case "absorb_atk": return { type: "special", effect: "absorb_atk", unblockable: false, params: { amount: value || 1 } };
+        case "absorb_hp": return { type: "special", effect: "absorb_hp", unblockable: false, params: { amount: value || 1 } };
+        case "hp_boost": return { type: "special", effect: "hp_boost", unblockable: false, params: { amount: value } };
+        case "atk_boost": return { type: "special", effect: "atk_boost", unblockable: false, params: { amount: value } };
+        case "poison": return { type: "special", effect: "poison", unblockable: false, params: { poison_damage: value, poison_turns: value } };
+        case "delay_cooldown": return { type: "special", effect: "delay_cooldown", unblockable: false, params: {} };
+        case "shadow": return { type: "special", effect: "shadow", unblockable: false, params: {} };
+        default: return { type: "attack", effect: null, unblockable: false, params: { amount: value } };
+    }
+}
+
 
 // قيمة مفعول مهارة: تُقرأ من skill.params (إن وُجدت) وإلا من رقم المهارة
 // نفسه (skill.damage) كمقابل احتياطي — مطابق لمنطق السيرفر الذي يقرأ
@@ -1239,16 +1265,108 @@ function applyPotionEffect(fighter, potion, opp){
             break;
         case "skill": {
             let skill = potion.skill;
-            if(skill){
-                if(typeof handleSkillClick === "function"){
-                    handleSkillClick(skill);
-                }
+            if(potion.effect_skill_type){
+                // مهارة صناعية من نوع الجرعة + قيمتها
+                let f = typeof potionSkillFields === "function"
+                    ? potionSkillFields(potion.effect_skill_type, value)
+                    : { type: "attack", effect: null, unblockable: false, params: {} };
+                skill = Object.assign({}, f, {
+                    id: "potion-skill-" + (potion.potion_id || "x"),
+                    name: potion.name || "جرعة",
+                    damage: value,
+                    cooldown: 0
+                });
             }
+            applyPotionSkillPvE(fighter, opp, skill, potion.effect_skill_type);
             break;
         }
     }
     updateBattleScreen();
     renderFighterStatusBadgesIfAny("pve");
+}
+
+// يطبّق مهارة جرعة صناعية على المقاتل دون أن يستهلك الدور إطلاقًا.
+// يمرّ الأنواع الضررية عبر resolveAction (نفس منطق الهجوم، لكن trackUsed=false
+// فلا يُسجَّل استخدام ولا تنتهي الجولة ولا تُحسب تهدئة). الأنواع الذاتية
+// (باف/دفاع/انعكاس/امتصاص/تجميد/سمّ/أدوار متتالية) تُطبَّق مباشرة.
+function applyPotionSkillPvE(fighter, opp, skill, typeChoice){
+    if(!skill) return;
+    let value = Number(skill.damage || 0);
+    let params = skill.params || {};
+    let target = null;
+
+    switch(skill.effect){
+        case "hp_boost":
+            fighter.hp = Math.min(fighter.maxHp, fighter.hp + Math.max(1, skillParamAmount(skill, "amount", value || 1)));
+            addBattleLog(`❤️ ${fighter.name} استرجَع ${Math.max(1, skillParamAmount(skill, "amount", value || 1))} صحة`);
+            break;
+        case "atk_boost":
+            fighter.tempAtk = (fighter.tempAtk || 0) + Math.max(1, skillParamAmount(skill, "amount", value || 1));
+            addBattleLog(`⚔️ ${fighter.name} رفَعَ قوته المؤقتة بمقدار ${Math.max(1, skillParamAmount(skill, "amount", value || 1))}`);
+            break;
+        case "consecutive_turns":
+            fighter.extraTurns = (fighter.extraTurns || 0) + Math.max(1, skillParamAmount(skill, "extra_turns", value || 1));
+            addBattleLog(`⚡ ${fighter.name} كسبَ ${Math.max(1, skillParamAmount(skill, "extra_turns", value || 1))} دورًا متتاليًا إضافيًا`);
+            break;
+        case "absorb_atk":
+        case "absorb_hp": {
+            let amount = Math.max(1, value || 1);
+            fighter.absorbMode = (skill.effect === "absorb_atk") ? "atk" : "hp";
+            fighter.absorbHits = (fighter.absorbHits || 0) + amount;
+            addBattleLog(skill.effect === "absorb_atk" ? `🧲 ${fighter.name} ينشط درع امتصاص → قوة (${amount} ضربة)` : `🩵 ${fighter.name} ينشط درع امتصاص → صحة (${amount} ضربة)`);
+            break;
+        }
+        case "reflect": {
+            let mult = Math.max(1, skillParamAmount(skill, "reflect_mult", value || 1));
+            fighter.reflectMult = mult;
+            fighter.reflectUnblockable = !!skill.unblockable || !!params.unblockable_reflect;
+            addBattleLog(`🔁 ${fighter.name} فعّل انعكاس ${fighter.reflectUnblockable ? "لا يُصدّ " : ""}بمضاعف ×${mult}`);
+            break;
+        }
+        case "freeze":
+            target = opp;
+            target.frozenTurns = (target.frozenTurns || 0) + Math.max(1, value || 1);
+            addBattleLog(`🧊 ${target.name} متجمد ${Math.max(1, value || 1)} دور`);
+            renderFighterStatusBadgesIfAny("pve");
+            break;
+        case "poison":
+            target = opp;
+            target.poisonDamage = Math.max(1, skillParamAmount(skill, "poison_damage", value || 1));
+            target.poisonTurns = (target.poisonTurns || 0) + Math.max(0, (skillParamAmount(skill, "poison_turns", value || 1)) - 1);
+            addBattleLog(`☠️ ${target.name} مسموم! ضرر ${target.poisonDamage} لفترات`);
+            break;
+        case "steal":
+        case "copy":
+        case "control":
+        case "seal":
+        case "unseal":
+        case "delay_cooldown":
+        case "shadow":
+            // هذه الأنواع تحتاج اختيار هدف/مهارة (قوائم) — لا يمكن تفعيلها تلقائيًا من الجرعة
+            addBattleLog(`⚠️ نوع المهارة «${potionSkillTypeLabel(typeChoice)}» يحتاج اختيار هدف يدوي ولا يعمل من الجرعة`);
+            showBattleEffectBanner?.(battle.prefix, "هذا النوع يحتاج قائمة اختيار هدف", "info");
+            break;
+        default:
+            // هجوم/لا تُصد/امتصاص ضرر: عبر resolveAction بدون استهلاك دور
+            if(skill.type === "defense"){
+                fighter.defending = true;
+                fighter.shieldCharges = Math.max(1, value || 1);
+                addBattleLog(`🛡️ ${fighter.name} دافع (تحمّل ${Math.max(1, value || 1)} ضربة)`);
+            } else {
+                let beforeHp = opp.hp;
+                resolveAction(fighter, opp, skill, false);
+                let dealt = beforeHp - opp.hp;
+                if(dealt > 0){
+                    addBattleLog(skill.unblockable ? `💥 ${fighter.name} ضرب بضربة لا تُصد! (${dealt} ضرر)` : `⚔️ ${fighter.name} هاجم (${dealt} ضرر)`);
+                }
+            }
+            break;
+    }
+    updateBattleScreen();
+    renderFighterStatusBadgesIfAny("pve");
+    if(checkBattleEnd && typeof checkBattleEnd === "function" && opp.hp <= 0){
+        checkBattleEnd();
+    }
 }
 
 function renderFighterStatusBadgesIfAny(prefix){
