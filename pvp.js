@@ -548,6 +548,12 @@ function pvpApplyMatchStateToScreen(data){
     document.getElementById("pvp-enemy-name").textContent = oppName || "الخصم";
     updateHpDisplay("pvp-player", myHp, myMaxHp);
     updateHpDisplay("pvp-enemy", oppHp, oppMaxHp);
+    pvpState.myCharImage = myImage;
+    // عند تفعيل عرض "السلاح" نحافظ على صورة/اسم السلاح بعد كل تحديث
+    if(pvpWeaponView && pvpWeapon){
+        if(pvpWeapon.image) setFighterImage(document.getElementById("pvp-player-image"), pvpWeapon.image);
+        document.getElementById("pvp-player-name-battle").textContent = "⚔️ " + (pvpWeapon.name || "سلاح");
+    }
 }
 
 // نسخة مبسّطة من تصادم البطاقات في battle.js (بدون سباق، فقط سينمائية)
@@ -950,6 +956,12 @@ async function pvpRefreshState(isFirstLoad){
     updateHpDisplay("pvp-player", myHp, myMaxHp);
     updateHpDisplay("pvp-enemy", oppHp, oppMaxHp);
 
+    // عند تفعيل عرض "السلاح" نحافظ على صورة/اسم السلاح بعد كل تحديث
+    if(pvpWeaponView && pvpWeapon){
+        if(pvpWeapon.image) setFighterImage(document.getElementById("pvp-player-image"), pvpWeapon.image);
+        document.getElementById("pvp-player-name-battle").textContent = "⚔️ " + (pvpWeapon.name || "سلاح");
+    }
+
     pvpRenderStatusBadges(data);
 
     pvpState.myUsedSkillIds = myUsedIds;
@@ -1299,6 +1311,12 @@ function renderPVPSkillButtons(){
     if(!pagesEl) return;
 
     let container = pagesEl.closest(".skills-container");
+
+    // وضع عرض "السلاح": نعرض مهارات السلاح وخلفياته بدل مهارات الشخصية
+    if(pvpWeaponView && pvpWeapon){
+        renderPvpWeaponSkillButtons(pagesEl, container);
+        return;
+    }
 
     // نحافظ على رقم الصفحة الحالية عبر إعادات الرسم المتكررة (تهدئة، دور...)
     let currentIndex = Number(pagesEl.dataset.activePage || 0);
@@ -1685,9 +1703,12 @@ async function pvpUseSkill(skillId){
 // سلاح اللاعب (PvP): زر بجانب مهاراتك، استخدامه ينقص المتانة ويستدعيه السيرفر
 // ========================================
 let pvpWeapon = null;
+let pvpWeaponView = false;
+let pvpWeaponBgs = {};
 
 async function pvpLoadWeapon(){
     pvpWeapon = null;
+    pvpWeaponView = false;
     let token = pvpGetToken();
     if(!token) return;
     try{
@@ -1695,6 +1716,7 @@ async function pvpLoadWeapon(){
         if(data && data[0]) pvpWeapon = data[0];
     }catch(e){ pvpWeapon = null; }
     pvpRenderWeaponBox();
+    renderPvpWeaponIcon();
     pvpSetSkillsEnabled(pvpState.myTurn);
 }
 
@@ -1732,6 +1754,110 @@ function togglePvpWeaponSkills(){
     if(el) el.style.display = (el.style.display === 'none' ? 'block' : 'none');
 }
 
+// يرسم مهارات السلاح ضمن شريط مهارات اللاعب في وضع عرض "السلاح" (PvP)
+function renderPvpWeaponSkillButtons(pagesEl, container){
+    let skills = Array.isArray(pvpWeapon.skills) ? pvpWeapon.skills : [];
+    let pagesOfSkills = chunkSkills(skills, SKILLS_PER_PAGE);
+    let currentIndex = Number(pagesEl.dataset.activePage || 0);
+    currentIndex = Math.max(0, Math.min(currentIndex, pagesOfSkills.length - 1));
+
+    pagesEl.innerHTML = "";
+
+    pagesOfSkills.forEach((skillsChunk, i) => {
+        let pageDiv = document.createElement("div");
+        pageDiv.className = "skills-page" + (i === currentIndex ? " active" : "");
+
+        let bg = (pvpWeaponBgs || {})[i];
+        if(bg && bg.url){
+            pageDiv.classList.add("skill-page-bg");
+            pageDiv.style.backgroundImage = "url('" + bg.url.replace(/'/g, "\\'") + "')";
+        }
+        if(bg && Number(bg.scale) > 0 && Number(bg.scale) !== 1){
+            pageDiv.style.setProperty("--skill-scale", Number(bg.scale));
+        }
+
+        skillsChunk.forEach(skill => {
+            let btn = document.createElement("button");
+            btn.innerHTML = `<span class="skill-name">${escapeHtml(skill.name)}</span>`;
+            let color = skill.color || '#ffffff';
+            if(/^#[0-9A-Fa-f]{6}$/.test(color)) btn.querySelector(".skill-name").style.color = color;
+            let sc = skill.stroke_color;
+            let sw = skill.stroke_width;
+            if(Number(sw) > 0){
+                let sColor = (sc && /^#[0-9A-Fa-f]{6}$/.test(sc)) ? sc : '#000000';
+                btn.querySelector(".skill-name").style.webkitTextStroke = (Number(sw)||0) + "px " + sColor;
+                btn.querySelector(".skill-name").style.paintOrder = "stroke fill";
+            }
+            let broken = (pvpWeapon.durability_current || 0) <= 0;
+            btn.disabled = broken;
+            if(broken) btn.classList.add("skill-locked");
+            btn.onclick = () => pvpUseWeaponSkill(skill.id);
+            pageDiv.appendChild(btn);
+        });
+
+        pagesEl.appendChild(pageDiv);
+    });
+
+    pagesEl.dataset.activePage = String(currentIndex);
+
+    let dotsEl = container ? container.querySelector(".skill-dots") : null;
+    if(dotsEl){
+        if(pagesOfSkills.length <= 1){
+            dotsEl.style.display = "none";
+        } else {
+            dotsEl.style.display = "";
+            dotsEl.innerHTML = "";
+            pagesOfSkills.forEach((_, i) => {
+                let dot = document.createElement("span");
+                if(i === currentIndex) dot.classList.add("active");
+                dot.onclick = () => goToSkillsPage("pvp", i);
+                dotsEl.appendChild(dot);
+            });
+        }
+    }
+}
+
+// أيقونة السلاح في معركة PvP: عند الضغط يتغير عرض البطاقة إلى السلاح
+async function renderPvpWeaponIcon(){
+    let icon = document.getElementById("pvp-weapon-icon");
+    if(!icon) return;
+    icon.style.display = "none";
+    if(!pvpWeapon) return;
+
+    try{
+        let { data } = await supabaseClient.rpc("get_weapon_skill_page_backgrounds", { p_weapon_id: pvpWeapon.weapon_id });
+        pvpWeaponBgs = {};
+        (Array.isArray(data) ? data : []).forEach(row => {
+            pvpWeaponBgs[row.page_index] = { url: row.image_url || "", scale: Number(row.skill_scale) > 0 ? Number(row.skill_scale) : 1 };
+        });
+    }catch(e){ pvpWeaponBgs = {}; }
+
+    let inWeapon = !!pvpWeaponView;
+    let myImg = pvpState.myCharImage || "";
+    let imgSrc = inWeapon ? myImg : (pvpWeapon.image || "");
+    icon.innerHTML = imgSrc
+        ? `<img src="${escapeHtml(imgSrc)}" alt="">`
+        : (inWeapon ? "🃏" : "⚔️");
+    icon.style.display = "inline-flex";
+}
+
+function pvpToggleWeaponView(){
+    if(!pvpWeapon) return;
+    pvpWeaponView = !pvpWeaponView;
+
+    if(pvpWeaponView){
+        let box = document.getElementById("pvp-weapon-box");
+        if(box) box.style.display = "none";
+    } else {
+        let box = document.getElementById("pvp-weapon-box");
+        if(box) box.style.display = "";
+    }
+
+    renderPvpWeaponIcon();
+    renderPVPSkillButtons();
+    pvpRefreshState(false);
+}
+
 async function pvpUseWeaponSkill(skillId){
     pvpSetSkillsEnabled(false);
     let { data, error } = await supabaseClient.rpc("pvp_use_weapon_skill", {
@@ -1740,6 +1866,7 @@ async function pvpUseWeaponSkill(skillId){
     if(error){ alert(error.message || "تعذر تنفيذ الحركة"); pvpRefreshState(false); return; }
     if(pvpWeapon) pvpWeapon.durability_current = Math.max(0, (pvpWeapon.durability_current || 0) - 1);
     pvpRenderWeaponBox();
+    if(pvpWeaponView) renderPVPSkillButtons();
     pvpRefreshState(false);
 }
 

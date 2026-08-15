@@ -1124,6 +1124,7 @@ async function startPVEBattle(monsterId){
 
 async function loadPveWeapon(){
     battle.weapon = null;
+    battle.weaponView = false;
     let token = localStorage.getItem("player_token");
     if(!token) return;
     try{
@@ -1131,6 +1132,7 @@ async function loadPveWeapon(){
         if(data && data[0]) battle.weapon = data[0];
     }catch(e){ battle.weapon = null; }
     renderPveWeapon();
+    renderPveWeaponIcon();
 }
 
 function renderPveWeapon(){
@@ -1189,6 +1191,7 @@ async function useWeaponSkill(skill){
     }
     handleSkillClick(skill);
     renderPveWeapon();
+    if(battle.weaponView) renderWeaponSkillButtons("pve");
 }
 
 
@@ -2179,6 +2182,13 @@ function renderSkillButtons(prefix){
 
     if(!pagesEl) return;
 
+    // إذا كان عرض وضع "السلاح" مفعّلًا (icon بدل شخصية اللاعب)،
+    // نعرض مهارات السلاح وخلفياته بدل مهارات الشخصية
+    if(battle.weaponView){
+        renderWeaponSkillButtons(prefix);
+        return;
+    }
+
     let container = pagesEl.closest(".skills-container");
 
     // نحافظ على رقم الصفحة الحالية عبر إعادات الرسم المتكررة (تهدئة، دور...)
@@ -2312,6 +2322,136 @@ function renderSkillButtons(prefix){
     }
 
 }
+
+
+
+function weaponBackgroundFor(pageIndex){
+    let bgs = battle.weaponBgs || {};
+    let row = bgs[pageIndex];
+    return row ? (row.url || "") : "";
+}
+
+function weaponScrollFor(pageIndex){
+    let bgs = battle.weaponBgs || {};
+    let row = bgs[pageIndex];
+    return row && Number(row.scale) > 0 ? Number(row.scale) : 1;
+}
+
+// يبني زر مهارة سلاح بنفس مظهر أزرار مهارات الشخصية، لكن استخدامه
+// يمر عبر مسار استهلاك متانة السلاح (useWeaponSkillFromBattle)
+function buildWeaponSkillButton(skill){
+    let btn = buildSkillButton(skill);
+    btn.onclick = () => useWeaponSkillFromBattle(skill.id);
+    return btn;
+}
+
+// يرسم مهارات السلاح ضمن شريط المهارات (بدل مهارات الشخصية) مع خلفيات
+// صفحات السلاح وألوانها، بنفس آلية صفحات مهارات الشخصية
+function renderWeaponSkillButtons(prefix){
+
+    let pagesEl = document.getElementById(prefix + "-player-skills-pages");
+    if(!pagesEl) return;
+    if(!battle.weapon || !Array.isArray(battle.weapon.skills)) return;
+
+    let container = pagesEl.closest(".skills-container");
+    let allSkills = battle.weapon.skills;
+    let pagesOfSkills = chunkSkills(allSkills, SKILLS_PER_PAGE);
+    let currentIndex = Number(pagesEl.dataset.activePage || 0);
+    currentIndex = Math.max(0, Math.min(currentIndex, pagesOfSkills.length - 1));
+
+    pagesEl.innerHTML = "";
+
+    pagesOfSkills.forEach((skillsChunk, i) => {
+        let pageDiv = document.createElement("div");
+        pageDiv.className = "skills-page" + (i === currentIndex ? " active" : "");
+
+        let pageBg = weaponBackgroundFor(i);
+        if(pageBg){
+            pageDiv.classList.add("skill-page-bg");
+            pageDiv.style.backgroundImage = "url('" + pageBg.replace(/'/g, "\\'") + "')";
+        }
+
+        let pageScale = weaponScrollFor(i);
+        if(pageScale > 0 && pageScale !== 1){
+            pageDiv.style.setProperty("--skill-scale", pageScale);
+        }
+
+        skillsChunk.forEach(skill => {
+            pageDiv.appendChild(buildWeaponSkillButton(skill));
+        });
+
+        pagesEl.appendChild(pageDiv);
+    });
+
+    pagesEl.dataset.activePage = String(currentIndex);
+
+    let dotsEl = container ? container.querySelector(".skill-dots") : null;
+    if(dotsEl){
+        if(pagesOfSkills.length <= 1){
+            dotsEl.style.display = "none";
+        } else {
+            dotsEl.style.display = "";
+            dotsEl.innerHTML = "";
+            pagesOfSkills.forEach((_, i) => {
+                let dot = document.createElement("span");
+                if(i === currentIndex) dot.classList.add("active");
+                dot.onclick = () => goToSkillsPage(prefix, i);
+                dotsEl.appendChild(dot);
+            });
+        }
+    }
+}
+
+// أيقونة السلاح في معركة PvE: تُظهر صورة السلاح، وعند الضغط يتحول عرض
+// المعركة إلى السلاح (صورة + مهارات + خلفيات)، وتصبح الأيقونة صورة الشخصية
+// للعودة عند الضغط مرة أخرى
+async function renderPveWeaponIcon(){
+    let icon = document.getElementById("pve-weapon-icon");
+    if(!icon) return;
+    icon.style.display = "none";
+    if(!battle.weapon) return;
+
+    // جلب خلفيات صفحات مهارات السلاح من الخادم (كل 4 مهارات = صفحة)
+    try{
+        let { data } = await supabaseClient.rpc("get_weapon_skill_page_backgrounds", { p_weapon_id: battle.weapon.weapon_id });
+        battle.weaponBgs = {};
+        (Array.isArray(data) ? data : []).forEach(row => {
+            battle.weaponBgs[row.page_index] = { url: row.image_url || "", scale: Number(row.skill_scale) > 0 ? Number(row.skill_scale) : 1 };
+        });
+    }catch(e){ battle.weaponBgs = {}; }
+
+    let inWeapon = !!battle.weaponView;
+    let imgSrc = inWeapon ? (battle.player.image || "") : (battle.weapon.image || "");
+    icon.innerHTML = imgSrc
+        ? `<img src="${escapeHtml(imgSrc)}" alt="">`
+        : (inWeapon ? "🃏" : "⚔️");
+    icon.style.display = "inline-flex";
+}
+
+function pveToggleWeaponView(){
+    if(!battle.weapon) return;
+    battle.weaponView = !battle.weaponView;
+
+    let img = document.getElementById("pve-player-image");
+    let name = document.getElementById("pve-player-name-battle");
+
+    if(battle.weaponView){
+        if(img && battle.weapon.image) img.src = battle.weapon.image;
+        if(name) name.textContent = "⚔️ " + (battle.weapon.name || "سلاح");
+        // نخفي الصندوق الموسّع للأسلحة داخل وضع الأيقونة
+        let box = document.getElementById("pve-weapon-box");
+        if(box) box.style.display = "none";
+    } else {
+        if(img && battle.player.image) img.src = battle.player.image;
+        if(name) name.textContent = battle.player.name;
+        let box = document.getElementById("pve-weapon-box");
+        if(box) box.style.display = "";
+    }
+
+    renderPveWeaponIcon();
+    renderSkillButtons("pve");
+}
+
 
 
 

@@ -6664,7 +6664,8 @@ async function unequipWeapon(){
     let token = localStorage.getItem("player_token");
     let {error} = await supabaseClient.rpc("set_active_weapon", { p_token: token, p_player_weapon_id: null });
     if(error){ alert(error.message); return; }
-    loadShop();
+    alert("تم إلغاء تجهيز السلاح");
+    loadCollection();
 }
 
 // عارض أسلحة اللاعب في قسم "مجموعتي" مع التفاصيل والتجهيز/الإلغاء
