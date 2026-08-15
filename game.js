@@ -3845,6 +3845,8 @@ async function loadAdminNotifications(){
 
     }
 
+    box.innerHTML = notifs.map(n => {
+
     let approveBtn = n.ref_request_id
         ? `<button class="admin-btn" onclick="openSkillRequestFromNotification('${n.ref_request_id}')">🗡️ اعتماد/مراجعة الطلب</button>`
         : (n.is_read ? "" : `<button class="admin-btn" onclick="markNotificationRead('${n.notification_id}')">✓ كمُقروء</button>`);
