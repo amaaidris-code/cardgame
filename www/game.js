@@ -4246,6 +4246,12 @@ function skillTypeChoiceToFields(typeChoice){
 
         effect = "copy";
 
+    } else if(typeChoice === "control"){
+
+        type = "special";
+
+        effect = "control";
+
     } else if(typeChoice === "unblockable"){
 
         type = "special";
