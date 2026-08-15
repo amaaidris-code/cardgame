@@ -1110,6 +1110,9 @@ async function startPVEBattle(monsterId){
 
     loadPveWeapon();
 
+    battle.potionUsedThisTurn = false;
+    renderPotionBar("pve");
+
     hideBattleResult("pve");
 
 
@@ -1151,6 +1154,110 @@ async function loadPveWeapon(){
     renderPveWeapon();
     renderPveWeaponIcon();
 }
+
+// ========================================
+// نظام الجرع في المعارك (PvE)
+// جرعة واحدة لكل دور (بلا حدود أدوار)، لا تستهلك الدور، وتطبيقها محلي
+// لأن معركة PvE كلها عميلية. الخصم يتم عبر RPC use_potion الذي يخصمها.
+// ========================================
+
+let battlePotionCache = [];
+
+async function loadBattlePotionsFromServer(){
+    let token = localStorage.getItem("player_token");
+    if(!token) return [];
+    try{
+        let { data, error } = await supabaseClient.rpc("get_my_potions", { p_token: token });
+        if(error) throw error;
+        battlePotionCache = Array.isArray(data) ? data : [];
+    }catch(e){ return battlePotionCache; }
+    return battlePotionCache;
+}
+
+// يعيد صورة/اسم الجرعة وأيقونتها ومعرّفها مع الكمية
+function potionIconHtml(p, disabled){
+    let borderColor = (p.glow_color && /^#[0-9A-Fa-f]{6}$/.test(p.glow_color)) ? p.glow_color : "#22c55e";
+    let img = p.image
+        ? `<img src="${escapeHtml(p.image)}" alt="">`
+        : `<span style="font-size:18px;">🧪</span>`;
+    return `<button class="potion-btn" style="--pcolor:${borderColor};" ${disabled ? "disabled" : ""} onclick="usePvePotion('${p.potion_id}')" title="${escapeHtml(p.name || 'جرعة')}">
+        ${img}
+        <span class="potion-qty">${p.quantity}</span>
+    </button>`;
+}
+
+async function renderPotionBar(prefix){
+    let bar = document.getElementById(prefix + "-potion-bar");
+    if(!bar) return;
+    // فقط في دور اللاعب يمكنه استخدام جرعة
+    let isPlayerTurn = !battle.finished && battle.turnOwner === "player";
+    let usedInTurn = !!battle.potionUsedThisTurn;
+    let potions = await loadBattlePotionsFromServer();
+    if(potions.length === 0){ bar.innerHTML = ""; return; }
+    bar.innerHTML = potions.map(p =>
+        potionIconHtml(p, !isPlayerTurn || usedInTurn)
+    ).join("");
+}
+
+async function usePvePotion(potionId){
+    if(battle.finished) return;
+    if(battle.turnOwner !== "player"){ alert("ليس دورك الآن"); return; }
+    if(battle.potionUsedThisTurn){ alert("استخدمت جرعة في هذا الدور بالفعل"); return; }
+    let token = localStorage.getItem("player_token");
+    let { data, error } = await supabaseClient.rpc("use_potion", { p_token: token, p_potion_id: potionId });
+    let potion = (Array.isArray(data) && data.length) ? data[0] : null;
+    if(error || !potion){ alert((error && error.message) || "لا تملك هذه الجرعة"); return; }
+
+    battle.potionUsedThisTurn = true;
+
+    applyPotionEffect(battle.player, potion, battle.enemy);
+
+    addBattleLog(`🧪 استخدمت جرعة «${potion.name || 'جرعة'}»!`);
+    renderPotionBar("pve");
+    renderSkillButtons("pve");
+}
+
+// يطبّق تأثير الجرعة على المقاتل محليًا (PvE). لا يستهلك الدور إطلاقًا.
+function applyPotionEffect(fighter, potion, opp){
+    let type = potion.effect_type;
+    let value = Number(potion.effect_value || 0);
+    switch(type){
+        case "heal":
+            fighter.hp = Math.min(fighter.maxHp, fighter.hp + value);
+            break;
+        case "heal_percent":
+            fighter.hp = Math.min(fighter.maxHp, fighter.hp + Math.round(fighter.maxHp * value / 100));
+            break;
+        case "reset_cooldown":
+            fighter.cooldownUsedAt = {};
+            break;
+        case "atk_boost":
+            fighter.tempAtk = (fighter.tempAtk || 0) + value;
+            break;
+        case "shield":
+            fighter.tempHp = (fighter.tempHp || 0) + value;
+            break;
+        case "skill": {
+            let skill = potion.skill;
+            if(skill){
+                if(typeof handleSkillClick === "function"){
+                    handleSkillClick(skill);
+                }
+            }
+            break;
+        }
+    }
+    updateBattleScreen();
+    renderFighterStatusBadgesIfAny("pve");
+}
+
+function renderFighterStatusBadgesIfAny(prefix){
+    if(typeof renderFighterStatusBadges === "function"){
+        renderFighterStatusBadges(prefix);
+    }
+}
+
+
 
 function renderPveWeapon(){
     let container = document.querySelector('#pve-battle-screen .player-card .skills-container');
@@ -1997,6 +2104,11 @@ function processTurn(){
         enemyAct();
 
     } else {
+
+        // بداية دور اللاعب: يُسمح له باستخدام جرعة واحدة هذا الدور
+        battle.potionUsedThisTurn = false;
+
+        renderPotionBar("pve");
 
         startTurnTimer();
 

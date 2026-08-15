@@ -990,6 +990,9 @@ async function pvpRefreshState(isFirstLoad){
     pvpSetSkillsEnabled((myTurn || myHp <= 0) && data.status === "active");
     pvpApplySealedBadges();
 
+    // شريط الجرع: متاح فقط في دوري، وحالته تُحدَّث عبر استعلام خفيف
+    renderPvpPotionBar(myTurn && data.status === "active");
+
     pvpUpdateTurnTimer(data.status === "active" ? data.turn_deadline : null);
 
     if(!(myTurn && data.status === "active")){
@@ -1892,6 +1895,64 @@ async function pvpUseWeaponSkill(skillId){
     if(pvpWeapon) pvpWeapon.durability_current = Math.max(0, (pvpWeapon.durability_current || 0) - 1);
     pvpRenderWeaponBox();
     if(pvpWeaponView) renderPVPSkillButtons();
+    pvpRefreshState(false);
+}
+
+// ========================================
+// الجرع في PvP: جرعة واحدة لكل دور دون استهلاك الدور — التفعيل موثوق
+// من السيرفر (pvp_use_potion) الذي يخصم ويطبّق ويبقي دورك معك.
+// ========================================
+
+let pvpPotionCache = [];
+
+async function pvpLoadMyPotions(){
+    let token = pvpGetToken();
+    if(!token) return [];
+    try{
+        let { data, error } = await supabaseClient.rpc("get_my_potions", { p_token: token });
+        if(error) throw error;
+        pvpPotionCache = Array.isArray(data) ? data : [];
+    }catch(e){ return pvpPotionCache; }
+    return pvpPotionCache;
+}
+
+function renderPvpPotionBar(enabled){
+    let bar = document.getElementById("pvp-potion-bar");
+    if(!bar) return;
+    if(!pvpState.matchId || pvpState.finished){
+        bar.innerHTML = "";
+        return;
+    }
+    let potions = pvpPotionCache || [];
+    if(potions.length === 0){
+        // حمّل الجرع مرة واحدة في بداية النزال
+        pvpLoadMyPotions().then(() => {
+            if(pvpPotionCache.length) renderPvpPotionBarInternal(enabled);
+        });
+        return;
+    }
+    renderPvpPotionBarInternal(enabled);
+}
+
+function renderPvpPotionBarInternal(enabled){
+    let bar = document.getElementById("pvp-potion-bar");
+    if(!bar) return;
+    let potions = pvpPotionCache || [];
+    let color = p => (p.glow_color && /^#[0-9A-Fa-f]{6}$/.test(p.glow_color)) ? p.glow_color : "#22c55e";
+    let img = p => p.image ? `<img src="${escapeHtml(p.image)}" alt="">` : `<span style="font-size:18px;">🧪</span>`;
+    bar.innerHTML = potions.map(p => `
+        <button class="potion-btn" style="--pcolor:${color(p)};" ${enabled ? "" : "disabled"} onclick="usePvpPotion('${p.potion_id}')" title="${escapeHtml(p.name || 'جرعة')}">
+            ${img(p)}
+            <span class="potion-qty">${p.quantity}</span>
+        </button>`).join("");
+}
+
+async function usePvpPotion(potionId){
+    let { data, error } = await supabaseClient.rpc("pvp_use_potion", {
+        p_token: pvpGetToken(), p_match_id: pvpState.matchId, p_potion_id: potionId
+    }).single();
+    if(error){ alert(error.message || "تعذر استخدام الجرعة"); }
+    await pvpLoadMyPotions();
     pvpRefreshState(false);
 }
 

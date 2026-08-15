@@ -290,6 +290,7 @@ function openScreen(screenId){
         if(screenId === "shop-screen"){
 
             loadShop();
+            loadShopPotions();
 
         }
 
@@ -359,6 +360,7 @@ function showAdminTab(tabId){
 
     if(tabId === "admin-tab-notifications") loadAdminNotifications();
     if(tabId === "admin-tab-weapons") loadAdminWeapons();
+    if(tabId === "admin-tab-potions") loadAdminPotions();
 
     if(tabId === "admin-tab-rules") loadAdminSkillRules();
 
@@ -6290,7 +6292,282 @@ async function deleteWeapon(id){
     loadAdminWeapons();
 }
 
-async function openEditWeaponModal(weaponId){
+// رفع صورة جرعة (يستخدم نفس مخزن صور الشخصيات وآلية الرفع)
+function uploadPotionImage(fileInputId, textInputId, statusId, cropOptions){
+    return uploadCharacterImage(fileInputId, textInputId, statusId, cropOptions);
+}
+
+// ========================================
+// لوحة إدارة الجرع
+// ========================================
+let currentEditPotionId = null;
+let currentEditPotion = null;
+let cannedPotionSkills = [];
+
+function potionEffectTypeLabel(t, value){
+    switch(t){
+        case "heal":          return "💚 شفاء " + (value || 0);
+        case "heal_percent":  return "💚 شفاء " + (value || 0) + "٪ من الصحة القصوى";
+        case "reset_cooldown":return "⏱️ إعادة تهدئة كل المهارات";
+        case "atk_boost":     return "⚔️ قوة هجوم +" + (value || 0);
+        case "shield":        return "🛡️ درع امتصاص +" + (value || 0);
+        case "skill":         return "🗡️ مهارة مدمجة";
+        default: return t;
+    }
+}
+
+async function loadAdminPotions(){
+    let box = document.getElementById("admin-potions-content");
+    if(!box) return;
+    box.innerHTML = "جاري تحميل الجرع...";
+    let admin_token = localStorage.getItem("admin_token");
+    if(!admin_token){ box.innerHTML = "يجب تسجيل دخول الأدمن أولاً."; return; }
+    try{
+        let {data:list, error} = await supabaseClient.rpc("admin_list_potions", { p_admin_token: admin_token });
+        if(error) throw error;
+        box.innerHTML = renderAdminPotionCards(list || [], "لا توجد جرع بعد. أضف جرعتك الأولى.");
+        await loadPotionSkillsSelect(admin_token);
+    }catch(e){
+        console.error(e);
+        box.innerHTML = "حدث خطأ في تحميل الجرع";
+    }
+}
+
+async function loadPotionSkillsSelect(admin_token){
+    let sel = document.getElementById("admin-potion-effect-skill");
+    if(!sel) return;
+    try{
+        let {data:list, error} = await supabaseClient.rpc("admin_list_all_skills", { p_admin_token: admin_token });
+        if(error) throw error;
+        cannedPotionSkills = Array.isArray(list) ? list : [];
+        let options = '<option value="">— اختر مهارة —</option>' + cannedPotionSkills.map(s =>
+            `<option value="${s.id}">${escapeAttr(s.name || "مهارة")} (${escapeAttr(s.type || "")})</option>`).join("");
+        sel.innerHTML = options;
+    }catch(e){ console.error(e); }
+}
+
+function renderAdminPotionCards(list, emptyMessage){
+    if(!list || list.length === 0) return '<p class="admin-hint">' + escapeAttr(emptyMessage) + '</p>';
+    return list.map(p => {
+        let stock = p.infinite ? "♾️ لا محدود" : ("📦 " + (p.stock == null ? 0 : p.stock) + " جرعة");
+        let sold = (p.sold || 0) > 0 ? (" · مُلك " + p.sold) : "";
+        let eff = potionEffectTypeLabel(p.effect_type, p.effect_value);
+        // أضف اسم المهارة المدمجة لو وُجدت
+        if(p.effect_type === "skill"){
+            let sk = cannedPotionSkills.find(s => s.id === p.effect_skill_id);
+            if(sk) eff += " («" + (sk.name || "مهارة") + "»)";
+        }
+        return `
+            <div class="admin-card" style="margin-bottom:8px; padding:12px; border-left:4px solid ${escapeAttr(p.glow_color || '#22c55e')};">
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:space-between;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        ${p.image ? `<img src="${escapeAttr(p.image)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">` : `<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:8px;">🧪</div>`}
+                        <div>
+                            <strong>${escapeAttr(p.name || "بلا اسم")}</strong>
+                            <div class="admin-hint" style="font-size:12px;">💰 ${p.price || 0} 🪙 · ${escapeAttr(stock)}${sold}<br>${escapeAttr(eff)}</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        <button class="admin-btn" onclick="openEditPotionModal('${p.id}')">✏️ تحرير</button>
+                        <button class="admin-btn" onclick="deletePotion('${p.id}')">🗑️ حذف</button>
+                    </div>
+                </div>
+            </div>`;
+    }).join("");
+}
+
+async function addPotion(){
+    let name = (document.getElementById("admin-potion-name") || {}).value; name = name ? name.trim() : "";
+    if(name === ""){ alert("اكتب اسم الجرعة"); return; }
+    let desc = (document.getElementById("admin-potion-description") || {}).value.trim();
+    let image = (document.getElementById("admin-potion-image") || {}).value.trim();
+    let effectType = (document.getElementById("admin-potion-effect-type") || {}).value || "heal";
+    let effectValue = Number((document.getElementById("admin-potion-effect-value") || {}).value) || 0;
+    let effectSkill = (document.getElementById("admin-potion-effect-skill") || {}).value || null;
+    let price = Number((document.getElementById("admin-potion-price") || {}).value) || 0;
+    let stock = Number((document.getElementById("admin-potion-stock") || {}).value) || 0;
+    let infinite = (document.getElementById("admin-potion-infinite") || {}).checked;
+    let glow = (document.getElementById("admin-potion-glow-color") || {}).value || "#22c55e";
+    let admin_token = localStorage.getItem("admin_token");
+    let {error} = await supabaseClient.rpc("admin_add_potion", {
+        p_admin_token: admin_token, p_name: name, p_description: desc, p_image: image,
+        p_effect_type: effectType, p_effect_value: effectValue, p_effect_skill_id: effectSkill || null,
+        p_price: price, p_stock: stock, p_infinite: infinite, p_glow_color: glow
+    });
+    if(error){ alert(error.message); return; }
+    alert("تمت إضافة الجرعة");
+    ["admin-potion-name","admin-potion-description","admin-potion-image","admin-potion-effect-value","admin-potion-price","admin-potion-stock"].forEach(i => { let el = document.getElementById(i); if(el) el.value = ""; });
+    let inf = document.getElementById("admin-potion-infinite"); if(inf) inf.checked = false;
+    loadAdminPotions();
+}
+
+async function deletePotion(id){
+    if(!confirm("هل تريد حذف الجرعة؟")) return;
+    let admin_token = localStorage.getItem("admin_token");
+    let {error} = await supabaseClient.rpc("admin_delete_potion", { p_admin_token: admin_token, p_potion_id: id });
+    if(error){ alert(error.message); return; }
+    alert("تم حذف الجرعة");
+    loadAdminPotions();
+}
+
+async function openEditPotionModal(potionId){
+    let admin_token = localStorage.getItem("admin_token");
+    let { data: p, error } = await supabaseClient.rpc("admin_get_potion", { p_admin_token: admin_token, p_potion_id: potionId });
+    p = (Array.isArray(p) && p.length) ? p[0] : null;
+    if(error || !p){ alert("تعذر تحميل الجرعة"); return; }
+    currentEditPotionId = potionId;
+    currentEditPotion = p;
+    renderPotionEditModal(p);
+}
+
+function renderPotionEditModal(p){
+    let overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.id = "potion-edit-overlay";
+    overlay.innerHTML = `
+        <div class="modal-card" style="max-width:520px; border-left:4px solid ${escapeAttr(p.glow_color || '#22c55e')};">
+            <h3>✏️ تحرير الجرعة</h3>
+            <input id="edit-potion-name" type="text" value="${escapeAttr(p.name || '')}" placeholder="اسم الجرعة">
+            <input id="edit-potion-description" type="text" value="${escapeAttr(p.description || '')}" placeholder="وصف قصير">
+            <input id="edit-potion-image" type="text" value="${escapeAttr(p.image || '')}" placeholder="رابط صورة الجرعة">
+            <input id="edit-potion-image-file" type="file" accept="image/*" onchange="uploadPotionImage('edit-potion-image-file','edit-potion-image','edit-potion-img-status',{aspectRatio:1,crop:true})">
+            <p id="edit-potion-img-status" class="upload-status"></p>
+            <label>✨ نوع التأثير
+                <select id="edit-potion-effect-type">
+                    <option value="heal" ${p.effect_type==='heal'?'selected':''}>شفاء كمية ثابتة</option>
+                    <option value="heal_percent" ${p.effect_type==='heal_percent'?'selected':''}>شفاء نسبة من الصحة القصوى</option>
+                    <option value="reset_cooldown" ${p.effect_type==='reset_cooldown'?'selected':''}>إعادة تهدئة كل المهارات</option>
+                    <option value="atk_boost" ${p.effect_type==='atk_boost'?'selected':''}>قوة هجوم مؤقتة</option>
+                    <option value="shield" ${p.effect_type==='shield'?'selected':''}>درع امتصاص</option>
+                    <option value="skill" ${p.effect_type==='skill'?'selected':''}>مهارة مدمجة</option>
+                </select>
+            </label>
+            <label>🔢 قيمة التأثير
+                <input id="edit-potion-effect-value" type="number" min="0" value="${p.effect_value||0}">
+            </label>
+            <label>🗡️ المهارة المدمجة
+                <select id="edit-potion-effect-skill">
+                    ${'<option value="">— اختر مهارة —</option>' + cannedPotionSkills.map(s =>
+                        `<option value="${s.id}" ${p.effect_skill_id===s.id?'selected':''}>${escapeAttr(s.name||'مهارة')} (${escapeAttr(s.type||'')})</option>`).join("")}
+                </select>
+            </label>
+            <label>💰 السعر
+                <input id="edit-potion-price" type="number" min="0" value="${p.price||0}">
+            </label>
+            <label>📦 عدد الجرعات
+                <input id="edit-potion-stock" type="number" min="0" value="${p.stock || 0}">
+            </label>
+            <label class="admin-checkbox-label">
+                <input id="edit-potion-infinite" type="checkbox" ${p.infinite?'checked':''}> ♾️ لا محدودة
+            </label>
+            <label class="admin-color-row">🎨 لون التوهج
+                <input id="edit-potion-glow-color" type="color" value="${escapeAttr(p.glow_color || '#22c55e')}">
+            </label>
+            <div style="display:flex; gap:8px; margin-top:12px;">
+                <button onclick="savePotionEdit('${p.id}')">حفظ</button>
+                <button onclick="document.getElementById('potion-edit-overlay').remove()">إغلاق</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", e => { if(e.target === overlay) overlay.remove(); });
+}
+
+async function savePotionEdit(potionId){
+    let name = (document.getElementById("edit-potion-name") || {}).value; name = name ? name.trim() : "";
+    if(name === ""){ alert("اكتب اسم الجرعة"); return; }
+    let desc = (document.getElementById("edit-potion-description") || {}).value.trim();
+    let image = (document.getElementById("edit-potion-image") || {}).value.trim();
+    let effectType = (document.getElementById("edit-potion-effect-type") || {}).value || "heal";
+    let effectValue = Number((document.getElementById("edit-potion-effect-value") || {}).value) || 0;
+    let effectSkill = (document.getElementById("edit-potion-effect-skill") || {}).value || null;
+    let price = Number((document.getElementById("edit-potion-price") || {}).value) || 0;
+    let stock = Number((document.getElementById("edit-potion-stock") || {}).value) || 0;
+    let infinite = (document.getElementById("edit-potion-infinite") || {}).checked;
+    let glow = (document.getElementById("edit-potion-glow-color") || {}).value || "#22c55e";
+    let admin_token = localStorage.getItem("admin_token");
+    let {error} = await supabaseClient.rpc("admin_save_potion", {
+        p_admin_token: admin_token, p_potion_id: potionId, p_name: name, p_description: desc, p_image: image,
+        p_effect_type: effectType, p_effect_value: effectValue, p_effect_skill_id: effectSkill || null,
+        p_price: price, p_stock: stock, p_infinite: infinite, p_glow_color: glow
+    });
+    if(error){ alert(error.message); return; }
+    alert("تم حفظ الجرعة");
+    document.getElementById("potion-edit-overlay").remove();
+    loadAdminPotions();
+}
+
+// ========================================
+// متجر الجرع (شراء بأي كمية + عرض جرعاتي)
+// ========================================
+async function loadShopPotions(){
+    let listBox = document.getElementById("shop-potions-list");
+    let mineBox = document.getElementById("shop-my-potions");
+    if(listBox) listBox.innerHTML = "جاري التحميل...";
+    if(mineBox) mineBox.innerHTML = "جاري التحميل...";
+    let token = localStorage.getItem("player_token");
+    try{
+        if(token && listBox){
+            let {data:list, error} = await supabaseClient.rpc("shop_list_potions", { p_token: token });
+            if(error) throw error;
+            let items = Array.isArray(list) ? list : [];
+            if(!items.length) listBox.innerHTML = '<p class="admin-hint">لا توجد جرع متاحة للشراء الآن.</p>';
+            else listBox.innerHTML = items.map(p => {
+                let stockInfo = p.infinite ? "♾️ متوفرة دائمًا" : ("متبقي: " + p.stock + " جرعة");
+                let eff = potionEffectTypeLabel(p.effect_type, p.effect_value);
+                return `
+                    <div class="admin-card" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:space-between; border-left:4px solid ${escapeAttr(p.glow_color || '#22c55e')};">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            ${p.image ? `<img src="${escapeAttr(p.image)}" style="width:52px;height:52px;object-fit:cover;border-radius:8px;">` : `<div style="width:52px;height:52px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:8px;">🧪</div>`}
+                            <div>
+                                <strong>${escapeAttr(p.name || "")}</strong>
+                                <div class="admin-hint" style="font-size:12px;">${escapeAttr(p.description || "")}</div>
+                                <div class="admin-hint" style="font-size:12px;">💰 ${p.price || 0} 🪙 · ${escapeAttr(eff)} · ${escapeAttr(stockInfo)}</div>
+                            </div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <input id="buy-potion-qty-${p.id}" type="number" min="1" value="1" style="width:64px; text-align:center;" title="الكمية">
+                            <button onclick="buyPotion('${p.id}')">شراء</button>
+                        </div>
+                    </div>`;
+            }).join("");
+        }
+    }catch(e){ console.error(e); if(listBox) listBox.innerHTML = "حدث خطأ في تحميل المتجر"; }
+
+    try{
+        if(token && mineBox){
+            let {data:list, error} = await supabaseClient.rpc("get_my_potions", { p_token: token });
+            if(error) throw error;
+            let items = Array.isArray(list) ? list : [];
+            if(!items.length) mineBox.innerHTML = '<p class="admin-hint">لا تملك أي جرعة بعد. اشتري من الأعلى.</p>';
+            else mineBox.innerHTML = items.map(p => {
+                let eff = potionEffectTypeLabel(p.effect_type, p.effect_value);
+                return `
+                    <div class="admin-card" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:space-between; border-left:4px solid ${escapeAttr(p.glow_color || '#22c55e')};">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            ${p.image ? `<img src="${escapeAttr(p.image)}" style="width:40px;height:40px;object-fit:cover;border-radius:8px;">` : `<div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:8px;">🧪</div>`}
+                            <div>
+                                <strong>${escapeAttr(p.name || "")} × ${p.quantity}</strong>
+                                <div class="admin-hint" style="font-size:12px;">${escapeAttr(eff)}</div>
+                            </div>
+                        </div>
+                    </div>`;
+            }).join("");
+        }
+    }catch(e){ console.error(e); if(mineBox) mineBox.innerHTML = "حدث خطأ في تحميل جرعاتك"; }
+}
+
+async function buyPotion(potionId){
+    let token = localStorage.getItem("player_token");
+    let qtyInput = document.getElementById("buy-potion-qty-" + potionId);
+    let qty = qtyInput ? (Number(qtyInput.value) || 1) : 1;
+    let {error} = await supabaseClient.rpc("shop_buy_potion", { p_token: token, p_potion_id: potionId, p_quantity: qty });
+    if(error){ alert(error.message); return; }
+    alert("تم شراء " + qty + " جرعة");
+    updatePlayerInfo();
+    loadShopPotions();
+}
+
+async function openScreen(screenId){
     let admin_token = localStorage.getItem("admin_token");
     let { data: w, error } = await supabaseClient.rpc("admin_get_weapon", { p_admin_token: admin_token, p_weapon_id: weaponId });
     w = (Array.isArray(w) && w.length) ? w[0] : null;
