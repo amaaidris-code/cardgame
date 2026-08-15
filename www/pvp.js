@@ -510,6 +510,7 @@ async function pvpEnterReadyPhase(matchId, _unused){
     ensureLogBox("pvp");
     renderPVPSkillButtons();
     pvpSetSkillsEnabled(false);
+    pvpLoadWeapon();
 
     pvpApplyMatchStateToScreen(data);
 
@@ -1632,6 +1633,15 @@ function pvpSetSkillsEnabled(enabled){
         let sealed = skill ? (pvpState.mySealedSkillIds || []).includes(skill.id) : false;
         btn.classList.toggle("skill-locked", !enabled || onCooldown || sealed);
     });
+
+    // أزرار سلاح اللاعب: يُعطَّل وقت دور الخصم أو عند كسر السلاح
+    let wBox = document.getElementById("pvp-weapon-box");
+    if(wBox){
+        let broken = pvpWeapon ? ((pvpWeapon.durability_current || 0) <= 0) : false;
+        wBox.querySelectorAll(".weapon-skill-btn").forEach(btn => {
+            btn.classList.toggle("skill-locked", !enabled || broken);
+        });
+    }
 }
 
 // ========================================
@@ -1668,6 +1678,61 @@ async function pvpUseSkill(skillId){
         return;
     }
 
+    pvpRefreshState(false);
+}
+
+// ========================================
+// سلاح اللاعب (PvP): زر بجانب مهاراتك، استخدامه ينقص المتانة ويستدعيه السيرفر
+// ========================================
+let pvpWeapon = null;
+
+async function pvpLoadWeapon(){
+    pvpWeapon = null;
+    let token = pvpGetToken();
+    if(!token) return;
+    try{
+        let { data } = await supabaseClient.rpc("get_my_active_weapon", { p_token: token });
+        if(data && data[0]) pvpWeapon = data[0];
+    }catch(e){ pvpWeapon = null; }
+    pvpRenderWeaponBox();
+    pvpSetSkillsEnabled(pvpState.myTurn);
+}
+
+function pvpRenderWeaponBox(){
+    let container = document.querySelector('#pvp-battle-screen .player-card .skills-container') ||
+                    (document.getElementById("pvp-player-skills-pages") || {}).closest ? (document.getElementById("pvp-player-skills-pages").closest(".skills-container")) : null;
+    let existing = document.getElementById("pvp-weapon-box");
+    if(existing) existing.remove();
+    if(!container || !pvpWeapon) return;
+    let w = pvpWeapon;
+    let broken = (w.durability_current || 0) <= 0;
+    let skills = Array.isArray(w.skills) ? w.skills : [];
+    let box = document.createElement("div");
+    box.id = "pvp-weapon-box";
+    box.className = "weapon-box";
+    box.innerHTML = `
+        <button class="weapon-toggle" style="--wcolor:${w.glow_color || '#e8b93f'};" onclick="togglePvpWeaponSkills()">
+            ⚔️ <span id="pvp-weapon-duce">${escapeHtml(broken ? "مكسور 💥" : ((w.durability_current||0) + " / " + (w.max_durability||0)))}</span>
+        </button>
+        <div class="weapon-skills" id="pvp-weapon-skills" style="display:none;">
+            <div class="weapon-name">${escapeHtml(w.name || 'سلاح')}</div>
+            ${skills.map(s => `<button class="weapon-skill-btn" data-skill-id="${s.id}" style="--wcolor:${s.color || '#ffffff'};" onclick="pvpUseWeaponSkill('${s.id}')">${escapeHtml(s.name || 'مهارة')}</button>`).join("")}
+        </div>`;
+    container.appendChild(box);
+}
+
+function togglePvpWeaponSkills(){
+    let el = document.getElementById("pvp-weapon-skills");
+    if(el) el.style.display = (el.style.display === 'none' ? 'block' : 'none');
+}
+
+async function pvpUseWeaponSkill(skillId){
+    pvpSetSkillsEnabled(false);
+    let { data, error } = await supabaseClient.rpc("pvp_use_weapon_skill", {
+        p_token: pvpGetToken(), p_match_id: pvpState.matchId, p_skill_id: skillId
+    }).single();
+    if(error){ alert(error.message || "تعذر تنفيذ الحركة"); pvpRefreshState(false); return; }
+    if(pvpWeapon) pvpWeapon.durability_current = Math.max(0, (pvpWeapon.durability_current || 0) - 1);
     pvpRefreshState(false);
 }
 

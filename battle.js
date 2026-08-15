@@ -1108,11 +1108,83 @@ async function startPVEBattle(monsterId){
 
     renderUsedSkillsUI("pve");
 
+    loadPveWeapon();
+
     hideBattleResult("pve");
 
 
     await runIntroSequence("pve");
 
+}
+
+
+// ========================================
+// سلاح اللاعب (PvE): زر بجانب مهاراتك، استخدامه ينقص المتانة ويستهلك الدور
+// ========================================
+
+async function loadPveWeapon(){
+    battle.weapon = null;
+    let token = localStorage.getItem("player_token");
+    if(!token) return;
+    try{
+        let { data } = await supabaseClient.rpc("get_my_active_weapon", { p_token: token });
+        if(data && data[0]) battle.weapon = data[0];
+    }catch(e){ battle.weapon = null; }
+    renderPveWeapon();
+}
+
+function renderPveWeapon(){
+    let container = document.querySelector('#pve-battle-screen .player-card .skills-container');
+    let existing = document.getElementById('pve-weapon-box');
+    if(existing) existing.remove();
+    if(!container || !battle.weapon) return;
+    let w = battle.weapon;
+    let broken = (w.durability_current || 0) <= 0;
+    let duce = (w.durability_current || 0) + " / " + (w.max_durability || 0);
+    let skills = Array.isArray(w.skills) ? w.skills : [];
+    let skillBtns = skills.map(s =>
+        `<button class="weapon-skill-btn" style="--wcolor:${s.color || '#ffffff'};" ${broken?'disabled':''} onclick="useWeaponSkillFromBattle('${s.id}')">${escapeHtml(s.name || 'مهارة')}</button>`
+    ).join("");
+    let box = document.createElement('div');
+    box.id = "pve-weapon-box";
+    box.className = "weapon-box";
+    box.innerHTML = `
+        <button class="weapon-toggle" style="--wcolor:${w.glow_color || '#e8b93f'};" onclick="togglePveWeaponSkills()">
+            ⚔️ <span id="pve-weapon-duce">${escapeHtml(broken ? "مكسور 💥" : duce)}</span>
+        </button>
+        <div class="weapon-skills" id="pve-weapon-skills" style="display:none;">
+            <div class="weapon-name">${escapeHtml(w.name || 'سلاح')}</div>
+            ${skillBtns.length ? skillBtns : '<div class="weapon-name">لا مهارات</div>'}
+        </div>`;
+    container.appendChild(box);
+}
+
+function togglePveWeaponSkills(){
+    let el = document.getElementById('pve-weapon-skills');
+    if(el) el.style.display = (el.style.display === 'none' ? 'block' : 'none');
+}
+
+function useWeaponSkillFromBattle(skillId){
+    if(!battle.weapon) return;
+    let skills = Array.isArray(battle.weapon.skills) ? battle.weapon.skills : [];
+    let skill = skills.find(s => s.id === skillId);
+    if(skill) useWeaponSkill(skill);
+}
+
+async function useWeaponSkill(skill){
+    if(battle.finished || !battle.weapon) return;
+    if(battle.turnOwner !== "player"){ alert("ليس دورك الآن"); return; }
+    if((battle.weapon.durability_current || 0) <= 0){ alert("السلاح مكسور 💥 ولا يمكن استخدامه"); return; }
+    // مهارات تُفتح قوائم جانبية (لا تستهلك الدور مباشرة) لا تُنقص المتانة هنا
+    let menuEffects = ["steal", "copy", "control", "seal", "unseal", "delay_cooldown", "shadow"];
+    if(!menuEffects.includes(skill.effect)){
+        try{
+            let { data: nd, error } = await supabaseClient.rpc("weapon_use_durability", { p_token: localStorage.getItem("player_token") });
+            if(!error) battle.weapon.durability_current = nd;
+        }catch(e){}
+    }
+    handleSkillClick(skill);
+    renderPveWeapon();
 }
 
 

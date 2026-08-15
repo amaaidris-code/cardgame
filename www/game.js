@@ -287,6 +287,13 @@ function openScreen(screenId){
         }
 
 
+        if(screenId === "shop-screen"){
+
+            loadShop();
+
+        }
+
+
         if (screenId === "admin-panel-screen") {
     
     loadAdminStats();
@@ -308,9 +315,11 @@ function openScreen(screenId){
     loadAdminSkillRules();
 
     updateSkillOrderBadge();
+
+    loadAdminWeapons();
     
     showAdminTab("admin-tab-home");
-    
+
 }
 
 
@@ -349,6 +358,7 @@ function showAdminTab(tabId){
     if(selectedBtn) selectedBtn.classList.add("active");
 
     if(tabId === "admin-tab-notifications") loadAdminNotifications();
+    if(tabId === "admin-tab-weapons") loadAdminWeapons();
 
     if(tabId === "admin-tab-rules") loadAdminSkillRules();
 
@@ -2604,6 +2614,29 @@ if(charError || !character){
             (quote.next_cost > 0 ? (quote.next_cost + " 🪙") : "مجانًا");
     }
 
+    // مكافأة المستوى القادم: none / normal / unique
+    currentUpgradeReward = quote ? (quote.next_reward || "none") : "none";
+
+    let rewardHtml = "";
+    if(quote && !quote.at_max && quote.next_reward === "normal"){
+        rewardHtml = `
+            <div class="empty-card upgrade-reward" style="margin-top:10px;">
+                <p>🎯 هذا المستوى يمنحك مهارة جديدة — اختر نوعها:</p>
+                <label style="display:block; margin:4px 0;">
+                    <input type="radio" name="reward-skill-type" value="attack" checked> ⚔️ هجوم عادي
+                </label>
+                <label style="display:block; margin:4px 0;">
+                    <input type="radio" name="reward-skill-type" value="defense"> 🛡️ دفاع
+                </label>
+                <p class="admin-hint">سيُرسل طلب للأدمن لتصميم المهارة، وستصلك تلقائيًا بعد اعتمادها.</p>
+            </div>`;
+    }else if(quote && !quote.at_max && quote.next_reward === "unique"){
+        rewardHtml = `
+            <div class="empty-card upgrade-reward" style="margin-top:10px;">
+                <p>✨ هذا المستوى يمنحك مهارة فريدة — سيقوم الأدمن بتصميمها لك، وستصلك تلقائيًا بعد اعتمادها.</p>
+            </div>`;
+    }
+
     box.innerHTML = `
 
 
@@ -2639,6 +2672,7 @@ if(charError || !character){
     💰 تكلفة الترقية القادمة:
     ${costDisplay}
 
+    ${rewardHtml}
 
     `;
 
@@ -2666,6 +2700,9 @@ if(charError || !character){
 
 // توزيع الـ200 نقطة بين HP وATK عند كل تطوير (بدفعات 50، ولا تقل صفة عن 50)
 let upgradeSplit = { hp: 100, atk: 100 };
+
+// نوع مكافأة المستوى القادم (none/normal/unique) — يُقرأ من استعلام التطوير
+let currentUpgradeReward = "none";
 
 // يحدّث العرض الرقمي وعلامة المجموع في شاشة التطوير
 function updateSplitUI(){
@@ -2714,6 +2751,13 @@ async function upgradeCharacter(){
     let hpGain = Number(upgradeSplit.hp || 100);
     let atkGain = Number(upgradeSplit.atk || 100);
 
+    // نوع المهارة التي يختارها اللاعب إن كانت مكافأة المستوى القادم "مهارة عادية"
+    let skillType = null;
+    if(currentUpgradeReward === "normal"){
+        let sel = document.querySelector('input[name="reward-skill-type"]:checked');
+        skillType = sel ? sel.value : "attack";
+    }
+
     if(hpGain + atkGain !== 200){
         alert("يجب أن يكون مجموع النقاط 200 تمامًا");
         return;
@@ -2734,7 +2778,8 @@ async function upgradeCharacter(){
 
         p_token: upgrade_token,
         p_hp_gain: hpGain,
-        p_atk_gain: atkGain
+        p_atk_gain: atkGain,
+        p_skill_type: skillType
 
     });
 
@@ -2752,8 +2797,6 @@ async function upgradeCharacter(){
     alert(
     "تم تطوير الشخصية"
     );
-
-
 
     loadUpgradeScreen();
 
@@ -2962,6 +3005,7 @@ async function refreshAdminViews(){
     // إلغاء كاش قائمة الوحوش حتى يظهر الوحش الجديد فورًا في قسم PvE
     GameCache.clear("monster_list");
     loadMonsterList();
+    loadAdminWeapons();
 }
 
 
@@ -3138,7 +3182,7 @@ function typeChoiceToEffect(choice){
     }
 }
 
-// يعرض بطاقة لطلب مهارة معلق مع نموذج الموافقة
+// يعرض بطاقة لطلب مهارة معلّق مع نموذج الموافقة
 function renderSkillRequestCard(r){
     let isNormal = r.reward_type === "normal";
     let lockedType = r.skill_type === "defense" ? "defense" : "attack";
@@ -5431,7 +5475,7 @@ async function saveCharacterEdit(characterId){
 
     closeEditCharacterModal();
 
-    loadAdminPanel();
+    refreshAdminViews();
 
 }
 
@@ -6152,6 +6196,332 @@ async function addMyCharacter(){
     refreshAdminViews();
 
 }
+
+
+// ========================================
+// نظام الأسلحة — لوحة الإدارة
+// ========================================
+
+let currentEditWeaponId = null;
+let currentEditWeapon = null;
+let currentEditWeaponSkills = [];
+
+// رفع صورة سلاح (يستخدم نفس مخزن صور الشخصيات وآلية الرفع)
+function uploadWeaponImage(fileInputId, textInputId, statusId, cropOptions){
+    return uploadCharacterImage(fileInputId, textInputId, statusId, cropOptions);
+}
+
+async function loadAdminWeapons(){
+    let box = document.getElementById("admin-weapons-content");
+    if(!box) return;
+    box.innerHTML = "جاري تحميل الأسلحة...";
+    let admin_token = localStorage.getItem("admin_token");
+    if(!admin_token){ box.innerHTML = "يجب تسجيل دخول الأدمن أولاً."; return; }
+    try{
+        let {data:list, error} = await supabaseClient.rpc("admin_list_weapons", { p_admin_token: admin_token });
+        if(error) throw error;
+        box.innerHTML = renderAdminWeaponCards(list || [], "لا توجد أسلحة بعد. أضف سلاحك الأول.");
+    }catch(e){
+        console.error(e);
+        box.innerHTML = "حدث خطأ في تحميل الأسلحة";
+    }
+}
+
+function escapeAttr(s){
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+}
+
+function renderAdminWeaponCards(list, emptyMessage){
+    if(!list || list.length === 0) return '<p class="admin-hint">' + escapeAttr(emptyMessage) + '</p>';
+    return list.map(w => {
+        let stock = w.infinite ? "♾️ لا محدود" : ("📦 " + (w.stock == null ? 0 : w.stock) + " نسخة");
+        let sold = (w.sold || 0) > 0 ? (" · تم بيع " + w.sold) : "";
+        return `
+            <div class="admin-card" style="margin-bottom:8px; padding:12px; border-left:4px solid ${escapeAttr(w.glow_color || '#e8b93f')};">
+                <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; justify-content:space-between;">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        ${w.image ? `<img src="${escapeAttr(w.image)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">` : `<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:8px;">⚔️</div>`}
+                        <div>
+                            <strong>${escapeAttr(w.name || "بلا اسم")}</strong>
+                            <div class="admin-hint" style="font-size:12px;">💰 ${w.price || 0} 🪙 · 🛡️ متانة ${w.max_durability || 0} · ${stock}${sold}</div>
+                        </div>
+                    </div>
+                    <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                        <button class="admin-btn" onclick="openEditWeaponModal('${w.id}')">✏️ تحرير</button>
+                        <button class="admin-btn" onclick="deleteWeapon('${w.id}')">🗑️ حذف</button>
+                    </div>
+                </div>
+            </div>`;
+    }).join("");
+}
+
+async function addWeapon(){
+    let name = (document.getElementById("admin-weapon-name") || {}).value; name = name ? name.trim() : "";
+    if(name === ""){ alert("اكتب اسم السلاح"); return; }
+    let desc = document.getElementById("admin-weapon-description").value.trim();
+    let image = document.getElementById("admin-weapon-image").value.trim();
+    let skillCard = document.getElementById("admin-weapon-skillcard").value.trim();
+    let price = Number(document.getElementById("admin-weapon-price").value) || 0;
+    let durability = Number(document.getElementById("admin-weapon-durability").value) || 0;
+    let stock = Number(document.getElementById("admin-weapon-stock").value) || 0;
+    let infinite = document.getElementById("admin-weapon-infinite").checked;
+    let glow = (document.getElementById("admin-weapon-glow-color") || {}).value || "#e8b93f";
+    let admin_token = localStorage.getItem("admin_token");
+    let {error} = await supabaseClient.rpc("admin_add_weapon", {
+        p_admin_token: admin_token, p_name: name, p_description: desc, p_image: image,
+        p_skill_card_image: skillCard, p_price: price, p_max_durability: durability,
+        p_stock: stock, p_infinite: infinite, p_glow_color: glow
+    });
+    if(error){ alert(error.message); return; }
+    alert("تمت إضافة السلاح");
+    ["admin-weapon-name","admin-weapon-description","admin-weapon-image","admin-weapon-skillcard","admin-weapon-price","admin-weapon-durability","admin-weapon-stock"].forEach(i => { let el = document.getElementById(i); if(el) el.value = ""; });
+    let inf = document.getElementById("admin-weapon-infinite"); if(inf) inf.checked = false;
+    loadAdminWeapons();
+}
+
+async function deleteWeapon(id){
+    if(!confirm("هل تريد حذف السلاح؟")) return;
+    let admin_token = localStorage.getItem("admin_token");
+    let {error} = await supabaseClient.rpc("admin_delete_weapon", { p_admin_token: admin_token, p_weapon_id: id });
+    if(error){ alert(error.message); return; }
+    alert("تم حذف السلاح");
+    loadAdminWeapons();
+}
+
+async function openEditWeaponModal(weaponId){
+    let admin_token = localStorage.getItem("admin_token");
+    let { data: w, error } = await supabaseClient.rpc("admin_get_weapon", { p_admin_token: admin_token, p_weapon_id: weaponId });
+    w = (Array.isArray(w) && w.length) ? w[0] : null;
+    if(error || !w){ alert("تعذر تحميل السلاح"); return; }
+    currentEditWeaponId = weaponId;
+    currentEditWeapon = w;
+    currentEditWeaponSkills = Array.isArray(w.skills) ? w.skills : [];
+    renderWeaponEditModal();
+}
+
+function renderWeaponEditModal(){
+    let w = currentEditWeapon;
+    let skillRows = currentEditWeaponSkills.map(s => `
+        <div class="admin-card" style="padding:10px; margin-bottom:8px; border-left:4px solid ${escapeAttr(s.color || '#3b82ff')};">
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <input class="edit-wskill-input" data-id="${s.id}" data-f="name" value="${escapeAttr(s.name || '')}" placeholder="اسم المهارة" style="flex:1;min-width:120px;">
+                <select class="edit-wskill-input" data-id="${s.id}" data-f="type">
+                    ${["attack","defense","special","unblockable","control","poison","shadow"].map(t => `<option value="${t}" ${s.type===t?"selected":""}>${escapeAttr(t)}</option>`).join("")}
+                </select>
+                <input class="edit-wskill-input" data-id="${s.id}" data-f="damage" type="number" value="${s.damage ?? 0}" placeholder="الضرر" style="width:80px;">
+                <input class="edit-wskill-input" data-id="${s.id}" data-f="cooldown" type="number" value="${s.cooldown ?? 0}" placeholder="التهدئة" style="width:80px;">
+            </div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
+                <input class="edit-wskill-input" data-id="${s.id}" data-f="effect" value="${escapeAttr(s.effect || '')}" placeholder="التأثير (مثال: lifesteal, poison, freeze)" style="flex:1;min-width:140px;">
+                <input class="edit-wskill-input" data-id="${s.id}" data-f="description" value="${escapeAttr(s.description || '')}" placeholder="الوصف" style="flex:1;min-width:140px;">
+            </div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:6px;">
+                <input class="edit-wskill-input" data-id="${s.id}" data-f="params" value="${escapeAttr(JSON.stringify(s.params && Object.keys(s.params).length ? s.params : {}))}" placeholder="معاملات JSON (اختياري)" style="flex:1;min-width:140px;">
+                <input class="edit-wskill-input" data-id="${s.id}" data-f="color" type="color" value="${escapeAttr(s.color || '#3b82ff')}">
+                <label class="admin-checkbox-label"><input class="edit-wskill-input" data-id="${s.id}" data-f="unblockable" type="checkbox" ${s.unblockable?"checked":""}> لا تُصدّ</label>
+                <input class="edit-wskill-input" data-id="${s.id}" data-f="stroke_width" type="number" value="${s.stroke_width ?? 0}" placeholder="سُمك الحد" style="width:90px;">
+                <button class="admin-btn" onclick="saveWeaponSkillEdit('${s.id}')">💾 حفظ</button>
+                <button class="admin-btn" onclick="removeWeaponSkill('${w.id}','${s.id}')">🗑️</button>
+            </div>
+        </div>`).join("");
+
+    let overlay = document.createElement("div");
+    overlay.id = "weapon-edit-modal";
+    overlay.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;";
+    overlay.innerHTML = `
+        <div class="empty-card" style="max-width:720px;width:100%;max-height:90vh;overflow:auto;">
+            <h3 style="margin-top:0;">⚔️ تحرير السلاح: ${escapeAttr(w.name || "")}</h3>
+            <input id="edit-weapon-name" type="text" value="${escapeAttr(w.name || '')}" placeholder="اسم السلاح">
+            <input id="edit-weapon-description" type="text" value="${escapeAttr(w.description || '')}" placeholder="وصف قصير">
+            <input id="edit-weapon-image" type="text" value="${escapeAttr(w.image || '')}" placeholder="رابط صورة السلاح">
+            <input id="edit-weapon-image-file" type="file" accept="image/*" onchange="uploadWeaponImage('edit-weapon-image-file','edit-weapon-image','edit-weapon-img-status',{aspectRatio:1,crop:true})">
+            <p id="edit-weapon-img-status" class="upload-status"></p>
+            <input id="edit-weapon-skillcard" type="text" value="${escapeAttr(w.skill_card_image || '')}" placeholder="رابط خلفية بطاقات مهارات السلاح">
+            <label>💰 السعر <input id="edit-weapon-price" type="number" min="0" value="${w.price || 0}"></label>
+            <label>🛡️ المتانة القصوى <input id="edit-weapon-durability" type="number" min="0" value="${w.max_durability || 0}"></label>
+            <label>📦 عدد النسخ <input id="edit-weapon-stock" type="number" min="0" value="${w.stock ?? 0}"></label>
+            <label class="admin-checkbox-label"><input id="edit-weapon-infinite" type="checkbox" ${w.infinite?"checked":""}> ♾️ نسخ لا محدودة</label>
+            <label class="admin-color-row">🎨 لون التوهج <input id="edit-weapon-glow-color" type="color" value="${escapeAttr(w.glow_color || '#e8b93f')}"></label>
+
+            <hr>
+            <h4>🗡️ مهارات السلاح: <span id="edit-weapon-durability-live">${w.durability ?? 0}</span></h4>
+            <p class="admin-hint">كل استخدام لمهارة من مهارات هذا السلاح ينقص متانته بمقدار 1.</p>
+            <div id="edit-weapon-skill-list">${skillRows || '<p class="admin-hint">لا توجد مهارات بعد.</p>'}</div>
+
+            <hr>
+            <h4>➕ إضافة مهارة</h4>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <input id="new-wskill-name" placeholder="اسم المهارة" style="flex:1;min-width:110px;">
+                <select id="new-wskill-type">
+                    ${["attack","defense","special","unblockable","control","poison","shadow"].map(t => `<option value="${t}">${t}</option>`).join("")}
+                </select>
+                <input id="new-wskill-damage" type="number" placeholder="الضرر" style="width:80px;">
+                <input id="new-wskill-cooldown" type="number" placeholder="التهدئة" style="width:80px;">
+                <input id="new-wskill-effect" placeholder="التأثير" style="flex:1;min-width:100px;">
+                <input id="new-wskill-desc" placeholder="الوصف" style="flex:1;min-width:100px;">
+                <button class="admin-btn" onclick="addWeaponSkill('${w.id}')">➕ إضافة</button>
+            </div>
+
+            <div style="display:flex; gap:8px; margin-top:12px;">
+                <button onclick="saveWeaponEdit('${w.id}')">💾 حفظ السلاح</button>
+                <button onclick="document.getElementById('weapon-edit-modal').remove()">إغلاق</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+}
+
+function collectWeaponSkill(id){
+    let obj = { id };
+    document.querySelectorAll('.edit-wskill-input[data-id="' + id + '"]').forEach(el => {
+        let f = el.getAttribute("data-f");
+        if(el.type === "checkbox") obj[f] = el.checked;
+        else if(f === "damage" || f === "cooldown" || f === "stroke_width") obj[f] = Number(el.value) || 0;
+        else if(f === "params"){ try{ obj[f] = el.value.trim() ? JSON.parse(el.value) : {}; }catch(e){ obj[f] = {}; } }
+        else obj[f] = el.value;
+    });
+    return obj;
+}
+
+async function saveWeaponSkillEdit(skillId){
+    let wId = currentEditWeaponId;
+    let s = collectWeaponSkill(skillId);
+    let admin_token = localStorage.getItem("admin_token");
+    let {error} = await supabaseClient.rpc("admin_update_weapon_skill", {
+        p_admin_token: admin_token, p_weapon_id: wId, p_skill_id: skillId,
+        p_name: s.name || "", p_type: s.type || "attack", p_damage: s.damage || 0,
+        p_cooldown: s.cooldown || 0, p_effect: s.effect, p_unblockable: !!s.unblockable,
+        p_description: s.description, p_color: s.color || "#3b82ff",
+        p_params: s.params || {}, p_stroke_color: s.stroke_color, p_stroke_width: s.stroke_width || 0
+    });
+    if(error){ alert(error.message); return; }
+    alert("تم حفظ المهارة");
+}
+
+async function addWeaponSkill(wId){
+    let name = (document.getElementById("new-wskill-name") || {}).value; name = name ? name.trim() : "";
+    if(name === ""){ alert("اكتب اسم المهارة"); return; }
+    let admin_token = localStorage.getItem("admin_token");
+    let {error} = await supabaseClient.rpc("admin_add_weapon_skill", {
+        p_admin_token: admin_token, p_weapon_id: wId, p_name: name,
+        p_type: document.getElementById("new-wskill-type").value || "attack",
+        p_damage: Number(document.getElementById("new-wskill-damage").value) || 0,
+        p_cooldown: Number(document.getElementById("new-wskill-cooldown").value) || 0,
+        p_effect: document.getElementById("new-wskill-effect").value.trim() || null,
+        p_unblockable: false,
+        p_description: document.getElementById("new-wskill-desc").value.trim() || null,
+        p_color: "#3b82ff", p_params: {}, p_stroke_color: null, p_stroke_width: 0
+    });
+    if(error){ alert(error.message); return; }
+    document.getElementById("weapon-edit-modal").remove();
+    openEditWeaponModal(wId);
+}
+
+async function removeWeaponSkill(wId, skillId){
+    let admin_token = localStorage.getItem("admin_token");
+    let {error} = await supabaseClient.rpc("admin_remove_weapon_skill", { p_admin_token: admin_token, p_weapon_id: wId, p_skill_id: skillId });
+    if(error){ alert(error.message); return; }
+    document.getElementById("weapon-edit-modal").remove();
+    openEditWeaponModal(wId);
+}
+
+async function saveWeaponEdit(wId){
+    let name = document.getElementById("edit-weapon-name").value.trim();
+    if(name === ""){ alert("اكتب اسم السلاح"); return; }
+    let admin_token = localStorage.getItem("admin_token");
+    let {error} = await supabaseClient.rpc("admin_save_weapon", {
+        p_admin_token: admin_token, p_weapon_id: wId, p_name: name,
+        p_description: document.getElementById("edit-weapon-description").value.trim(),
+        p_image: document.getElementById("edit-weapon-image").value.trim(),
+        p_skill_card_image: document.getElementById("edit-weapon-skillcard").value.trim(),
+        p_price: Number(document.getElementById("edit-weapon-price").value) || 0,
+        p_max_durability: Number(document.getElementById("edit-weapon-durability").value) || 0,
+        p_stock: Number(document.getElementById("edit-weapon-stock").value) || 0,
+        p_infinite: document.getElementById("edit-weapon-infinite").checked,
+        p_glow_color: document.getElementById("edit-weapon-glow-color").value || "#e8b93f"
+    });
+    if(error){ alert(error.message); return; }
+    alert("تم حفظ السلاح");
+    document.getElementById("weapon-edit-modal").remove();
+    loadAdminWeapons();
+}
+
+
+// ========================================
+// نظام الأسلحة — المتجر وأسلحتي
+// ========================================
+
+async function loadShop(){
+    let shopBox = document.getElementById("shop-content");
+    let mineBox = document.getElementById("shop-my-weapons");
+    if(shopBox){ shopBox.innerHTML = "جاري تحميل المتجر..."; }
+    if(mineBox){ mineBox.innerHTML = "جاري التحميل..."; }
+    let token = localStorage.getItem("player_token");
+    try{
+        if(token && shopBox){
+            let {data:list, error} = await supabaseClient.rpc("shop_list_weapons", { p_token: token });
+            if(error) throw error;
+            let items = Array.isArray(list) ? list : [];
+            if(!items.length) shopBox.innerHTML = '<p class="admin-hint">لا توجد أسلحة متاحة للشراء الآن.</p>';
+            else shopBox.innerHTML = items.map(w => {
+                let stockInfo = w.infinite ? "♾️ متوفر دائمًا" : ("متبقي: " + w.stock + " نسخة");
+                return `
+                    <div class="admin-card" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:space-between; border-left:4px solid ${escapeAttr(w.glow_color || '#e8b93f')};">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            ${w.image ? `<img src="${escapeAttr(w.image)}" style="width:52px;height:52px;object-fit:cover;border-radius:8px;">` : `<div style="width:52px;height:52px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:8px;">⚔️</div>`}
+                            <div>
+                                <strong>${escapeAttr(w.name || "")}</strong>
+                                <div class="admin-hint" style="font-size:12px;">${escapeAttr(w.description || "")}</div>
+                                <div class="admin-hint" style="font-size:12px;">💰 ${w.price || 0} 🪙 · 🛡️ متانة ${w.max_durability || 0} · ${escapeAttr(stockInfo)}</div>
+                            </div>
+                        </div>
+                        <button onclick="buyWeapon('${w.id}')">شراء</button>
+                    </div>`;
+            }).join("");
+        }
+    }catch(e){ console.error(e); if(shopBox) shopBox.innerHTML = "حدث خطأ في تحميل المتجر"; }
+
+    try{
+        if(token && mineBox){
+            let {data:list, error} = await supabaseClient.rpc("get_my_weapons", { p_token: token });
+            if(error) throw error;
+            let items = Array.isArray(list) ? list : [];
+            if(!items.length) mineBox.innerHTML = '<p class="admin-hint">لا تملك أي سلاح بعد. اشتري من الأعلى.</p>';
+            else mineBox.innerHTML = items.map(w => {
+                let broken = (w.durability_current || 0) <= 0;
+                return `
+                    <div class="admin-card" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:space-between; border-left:4px solid ${escapeAttr(w.glow_color || '#e8b93f')}; ${broken ? 'opacity:0.6;' : ''}">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            ${w.image ? `<img src="${escapeAttr(w.image)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">` : `<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:8px;">⚔️</div>`}
+                            <div>
+                                <strong>${escapeAttr(w.name || "")} ${w.is_active ? "✅" : ""}</strong>
+                                <div class="admin-hint" style="font-size:12px;">🛡️ متانة ${broken ? "مكسور 💥" : (w.durability_current + " / " + w.max_durability)}</div>
+                            </div>
+                        </div>
+                        <button ${w.is_active ? "disabled" : ""} onclick="equipWeapon('${w.pw_id}')">${w.is_active ? "مجهّز حاليًا" : "تجهيز"}</button>
+                    </div>`;
+            }).join("");
+        }
+    }catch(e){ console.error(e); if(mineBox) mineBox.innerHTML = "حدث خطأ في تحميل أسلحتك"; }
+}
+
+async function buyWeapon(weaponId){
+    let token = localStorage.getItem("player_token");
+    let {error} = await supabaseClient.rpc("shop_buy_weapon", { p_token: token, p_weapon_id: weaponId });
+    if(error){ alert(error.message); return; }
+    alert("تم شراء السلاح");
+    updatePlayerInfo();
+    loadShop();
+}
+
+async function equipWeapon(pwId){
+    let token = localStorage.getItem("player_token");
+    let {error} = await supabaseClient.rpc("set_active_weapon", { p_token: token, p_player_weapon_id: pwId });
+    if(error){ alert(error.message); return; }
+    alert("تم تجهيز السلاح");
+    loadShop();
+}
+
+
 // ========================================
 // زر Enter
 // ========================================

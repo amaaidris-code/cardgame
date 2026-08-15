@@ -3601,6 +3601,61 @@ border-color: rgba(232,185,63,0.35);
     color: var(--gold, #e8b93f);
 }
 
+.weapon-box{
+    margin-top: 8px;
+    width: 100%;
+}
+.weapon-toggle{
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--gold,#e8b93f) 55%, transparent);
+    border-radius: var(--radius-md);
+    background: linear-gradient(160deg, var(--bg-panel-2), var(--bg-panel));
+    color: var(--text);
+    font-weight: bold;
+    cursor: pointer;
+    box-shadow: 0 0 12px rgba(0,0,0,0.3);
+}
+.weapon-toggle:hover{
+    border-color: var(--gold, #e8b93f);
+}
+.weapon-skills{
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 8px;
+    background: rgba(0,0,0,0.25);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--line-soft);
+}
+.weapon-name{
+    width: 100%;
+    font-size: 13px;
+    font-weight: bold;
+    color: var(--text);
+    text-align: center;
+    padding-bottom: 4px;
+}
+.weapon-skill-btn{
+    flex: 1 1 auto;
+    min-width: 90px;
+    padding: 8px 10px;
+    border: 1px solid color-mix(in srgb, var(--wcolor, #fff) 45%, transparent);
+    border-radius: var(--radius-md);
+    background: rgba(0,0,0,0.35);
+    color: var(--wcolor, #fff);
+    font-weight: bold;
+    cursor: pointer;
+}
+.weapon-skill-btn.skill-locked{
+    opacity: 0.5;
+    pointer-events: none;
+}
+.weapon-skill-btn:disabled{
+    opacity: 0.5;
+    pointer-events: none;
+}
 /* شارة عدد طلبات المهارات المعلقة على زر المهارات */
 .admin-tab-badge{
     display: inline-block;

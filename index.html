@@ -181,6 +181,62 @@ lang="ar">
 
     <button class="admin-tab-btn" data-admin-tab="admin-tab-notifications" onclick="showAdminTab('admin-tab-notifications')">🔔 الإشعارات</button>
 
+    <button class="admin-tab-btn" data-admin-tab="admin-tab-weapons" onclick="showAdminTab('admin-tab-weapons')">⚔️ الأسلحة</button>
+
+</div>
+
+
+<!-- ===== التبويب: الأسلحة ===== -->
+<div id="admin-tab-weapons" class="admin-tab">
+
+    <div id="admin-weapons-content">
+        جاري تحميل الأسلحة...
+    </div>
+
+    <hr>
+
+    <h3>➕ إضافة سلاح جديد</h3>
+
+    <div class="form-box admin-add-form">
+
+        <input id="admin-weapon-name" type="text" placeholder="اسم السلاح">
+
+        <input id="admin-weapon-description" type="text" placeholder="وصف قصير للسلاح">
+
+        <input id="admin-weapon-image" type="text" placeholder="رابط صورة السلاح (أو ارفع من الجهاز)">
+
+        <input id="admin-weapon-image-file" type="file" accept="image/*" onchange="uploadWeaponImage('admin-weapon-image-file','admin-weapon-image','admin-image-status',{aspectRatio:1,crop:true})">
+
+        <p id="admin-image-status" class="upload-status"></p>
+
+        <input id="admin-weapon-skillcard" type="text" placeholder="رابط خلفية بطاقات مهارات السلاح">
+
+        <label>💰 السعر بـ الذهب
+            <input id="admin-weapon-price" type="number" min="0" placeholder="السعر">
+        </label>
+
+        <label>🛡️ المتانة القصوى
+            <input id="admin-weapon-durability" type="number" min="0" placeholder="المتانة">
+        </label>
+
+        <label>📦 عدد النسخ (0 = مبيعات محدودة حسب الرقم)
+            <input id="admin-weapon-stock" type="number" min="0" placeholder="عدد النسخ المتاحة">
+        </label>
+
+        <label class="admin-checkbox-label">
+            <input id="admin-weapon-infinite" type="checkbox">
+            ♾️ نسخ لا محدودة (يشتريها الجميع دائمًا)
+        </label>
+
+        <label class="admin-color-row">
+            🎨 لون التوهج
+            <input id="admin-weapon-glow-color" type="color" value="#e8b93f">
+        </label>
+
+        <button onclick="addWeapon()">إضافة</button>
+
+    </div>
+
 </div>
 
 
@@ -1374,8 +1430,18 @@ id="pve-player-used-skills">
                 🛒 المتجر
             </h2>
 
-            <div class="empty-card">
-                المتجر قيد التطوير
+            <div id="shop-content" class="empty-card">
+                جاري تحميل المتجر...
+            </div>
+
+            <hr>
+
+            <h2>
+                ⚔️ أسلحتي (اختر سلاحًا ليُستخدم في المعارك)
+            </h2>
+
+            <div id="shop-my-weapons" class="empty-card">
+                جاري التحميل...
             </div>
 
             <button onclick="openScreen('home-screen')">
