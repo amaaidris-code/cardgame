@@ -4508,6 +4508,8 @@ function newSkillNumberFieldLabel(typeChoice){
 
     if(typeChoice === "copy") return "عدد المهارات القابلة للنسخ والاستخدام الفوري";
 
+    if(typeChoice === "control") return "عدد المهارات القابلة للسيطرة والاستخدام الفوري";
+
     if(typeChoice === "defense") return "عدد الضربات الممكن تحمّلها";
 
     if(typeChoice === "freeze") return "عدد أدوار الشلل";
