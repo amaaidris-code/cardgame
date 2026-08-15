@@ -1277,7 +1277,15 @@ function applyPotionEffect(fighter, potion, opp){
                     cooldown: 0
                 });
             }
-            applyPotionSkillPvE(fighter, opp, skill, potion.effect_skill_type);
+            // يمر عبر handleSkillClick نفس توزيع المهارات الحقيقي: كل نوع يفتح
+            // قائمته الخاصة (سرقة/نسخ/سيطرة/ختم/...) أو يُطبَّق بالضبط كالمهارة
+            // الأصلية من هذا النوع. لاحظ أن الجرعة لا تستهلك دورًا بذاتها، لكن
+            // المهارة المدمجة نفسها تتصرف تمامًا كالمهارة الحقيقية (تستهلك
+            // دورًا عند استخدام فعل). استخدم flag لنعطي القوائم إشارة أنها من
+            // جرعة (لا تفرض إعادة تهدئة أصلية).
+            if(typeof handleSkillClick === "function" && skill){
+                handleSkillClick(skill);
+            }
             break;
         }
     }
