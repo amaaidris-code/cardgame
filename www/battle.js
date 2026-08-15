@@ -1156,8 +1156,12 @@ async function loadPveWeapon(){
     battle.weaponView = false;
     let token = localStorage.getItem("player_token");
     let cacheKey = "pve_weapon_cache";
+    // نسخة الكاش مرفوعة لتفادي القيم القديمة المخزّنة من سلاحٍ محذوف
+    let cacheKeyCur = "pve_weapon_cache_v2";
     let cached = null;
-    try{ cached = JSON.parse(localStorage.getItem(cacheKey) || "null"); }catch(e){}
+    try{
+        cached = JSON.parse(localStorage.getItem(cacheKeyCur) || localStorage.getItem(cacheKey) || "null");
+    }catch(e){}
     if(!token){
         if(cached) battle.weapon = cached;
         renderPveWeapon();
@@ -1169,9 +1173,15 @@ async function loadPveWeapon(){
         if(error) throw error;
         if(data && data[0]){
             battle.weapon = data[0];
-            try{ localStorage.setItem(cacheKey, JSON.stringify(data[0])); }catch(e){}
-        } else if(cached){
-            battle.weapon = cached;
+            try{ localStorage.setItem(cacheKeyCur, JSON.stringify(data[0])); }catch(e){}
+        } else {
+            // لا يوجد سلاح فعّال (مثال: حُذف السلاح من لوحة التحكم). نمسح
+            // الكاش القديم لئلا يستمر ظهور سلاحٍ محذوف، ولا نعود للكاش أبدًا.
+            battle.weapon = null;
+            try{
+                localStorage.removeItem(cacheKeyCur);
+                localStorage.removeItem(cacheKey);
+            }catch(e){}
         }
     }catch(e){
         // تُحفظ آخر نسخة معروفة من السلاح حتى لا تختفي الأيقونة عند تجدد التوكن
