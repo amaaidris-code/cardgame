@@ -3129,28 +3129,30 @@ function applyPveBuff(fighter, skill){
 
     if(skill.effect === "absorb_atk"){
 
-        // نجاة من الضربة القاتلة: لو كان المقاتل على صفر وعنده لقطة ضربة غير
-        // مُستهلكة فيستعيد صحته السابقة (يُنقَذ) قبل تجهيز درع الامتصاص
-        let rescued = rescueFighterFromFatalHit(fighter);
+        // الامتصاص الآن استباقي بأثر رجعي مثل الانعكاس والدفاع: يُمتص "آخر
+        // ضربة" أصابت المقاتل ويحوّلها إلى قوة هجومية مؤقتة، بدل أن يكون
+        // درعًا ينتظر الضربة القادمة. إن لم تكن هناك ضربة أخيرة يحتمل امتصاصها
+        // فلا يحدث شيء.
+        let absorbed = retroAbsorbNow(fighter, skill, "atk");
 
-        fighter.absorbMode = "atk";
+        if(absorbed === null){
+            return `لا يوجد ضرر حالٍ ليستوعبه الامتصاص (ليس هناك ضربة أخيرة على ${fighter.name})`;
+        }
 
-        fighter.absorbHits = (fighter.absorbHits || 0) + amount;
-
-        return `${fighter.name} جهّز درع امتصاص! يحوّل أول ${amount} ${amount === 1 ? "ضربة" : "ضربات"} إلى قوة هجومية مؤقتة` + (rescued ? " واستعاد صحته من الضربة القاتلة!" : "");
+        return `${fighter.name} امتصّ آخر ضربة (${absorbed} ضرر) وحوّلها إلى قوة هجومية مؤقتة!`;
 
     }
 
     if(skill.effect === "absorb_hp"){
 
-        // نفس النجاة من الضربة القاتلة قبل تجهيز درع امتصاص الصحة
-        let rescued = rescueFighterFromFatalHit(fighter);
+        // مماثل: يُمتص آخر ضربة ويحوّلها إلى صحة
+        let absorbed = retroAbsorbNow(fighter, skill, "hp");
 
-        fighter.absorbMode = "hp";
+        if(absorbed === null){
+            return `لا يوجد ضرر حالٍ ليستوعبه الامتصاص (ليس هناك ضربة أخيرة على ${fighter.name})`;
+        }
 
-        fighter.absorbHits = (fighter.absorbHits || 0) + amount;
-
-        return `${fighter.name} جهّز درع امتصاص! يحوّل أول ${amount} ${amount === 1 ? "ضربة" : "ضربات"} إلى صحة مؤقتة` + (rescued ? " واستعاد صحته من الضربة القاتلة!" : "");
+        return `${fighter.name} امتصّ آخر ضربة (${absorbed} ضرر) وحوّلها إلى صحة!`;
 
     }
 
@@ -4450,6 +4452,55 @@ function retroReflectNow(caster, skill){
 }
 
 
+// ========================================
+// امتصاص "آخر ضربة" بأثر رجعي (بدل درع للضربة القادمة)
+// ========================================
+// يعمل تمامًا مثل الانعكاس والدفاع: يقرأ fighter.lastHitSnapshot، وإن كانت
+// هناك ضربة أخيرة غير مُستهلكة على المقاتل، تُلغى (تُعاد صحته إلى ما قبلها)
+// ويُحوَّل ضررها إلى قوة (mode="atk") أو صحة (mode="hp"). يستهلك اللقطة.
+// يُرجع مقدار الضرر المُمتص، أو null إن لم تكن هناك ضربة أخيرة قابلة للامتصاص.
+function retroAbsorbNow(fighter, skill, mode){
+
+    let snapshot = fighter.lastHitSnapshot;
+
+    if(!snapshot || snapshot.consumed || (snapshot.dmgDealt || 0) <= 0){
+
+        return null;
+
+    }
+
+    let attacker = (fighter === battle.player) ? battle.enemy : battle.player;
+
+    // إلغاء الضربة: تعيد صحة المستخدم إلى ما قبل آخر ضربة
+    fighter.hp = snapshot.hpBefore;
+
+    if(snapshot.attackerLifestealHeal > 0){
+
+        attacker.hp = Math.max(0, attacker.hp - snapshot.attackerLifestealHeal);
+
+    }
+
+    snapshot.consumed = true;
+
+    let converted = snapshot.dmgDealt;
+
+    if(mode === "atk"){
+
+        fighter.tempAtk = (fighter.tempAtk || 0) + converted;
+
+    } else {
+
+        fighter.hp = (fighter.hp || 0) + converted;
+
+        if(fighter.hp > fighter.maxHp) fighter.maxHp = fighter.hp;
+
+    }
+
+    return converted;
+
+}
+
+
 function playerUseReflect(reflectSkill){
 
     if(battle.turnOwner !== "player") return;
@@ -5134,6 +5185,10 @@ function runControlledSkillsQueue(queue, index, consumesPlayerTurn){
     // تسجيل المهارة المُسيطر عليها فورًا في تهدئة اللاعب، بحيث لا يمكن
     // إعادة السيطرة عليها واستخدامها حتى تنتهي تهدئتها
     battle.player.cooldownUsedAt[targetSkill.id] = battle.player.turnsTaken;
+
+    // المهارة المُسيطر عليها تدخل أيضًا في تهدئة الخصم نفسه: بمجرد سيطرة
+    // اللاعب عليها، لا يستطيع الخصم استخدامها مجددًا حتى تنتهي تهدئتها
+    battle.enemy.cooldownUsedAt[targetSkill.id] = battle.enemy.turnsTaken;
 
     if(!battle.playerUsedSkills.find(s => s.id === targetSkill.id)){
 
