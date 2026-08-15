@@ -5397,3 +5397,113 @@ box-shadow: 0 6px 24px rgba(0,0,0,0.5), 0 0 18px rgba(255,120,0,0.4);
     background:var(--bg-panel-2);
 }
 
+/* ========================================================
+   الأصدقاء والرسائل الخاصة (Friends + Private Chat)
+======================================================== */
+
+.hidden{ display:none !important; }
+
+.friends-tabs{
+    display:flex;
+    gap:8px;
+    justify-content:center;
+    margin:12px 0;
+}
+.friends-tab{
+    padding:8px 16px;
+    border-radius:var(--radius-md);
+    cursor:pointer;
+}
+.friends-tab.active{
+    background:linear-gradient(135deg, #2c6bdb, #1f4fae);
+    border-color:rgba(82,140,255,0.5);
+    color:#fff;
+}
+
+.friends-content{
+    width:100%;
+    max-width:560px;
+    margin:0 auto;
+    text-align:right;
+}
+
+.friends-group-title{
+    color:var(--text-dim);
+    font-size:13px;
+    font-weight:700;
+    margin:12px 4px 6px;
+    text-align:right;
+}
+
+.friend-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 12px;
+    margin-bottom:8px;
+    background:var(--bg-panel);
+    border:1px solid var(--line-soft);
+    border-radius:var(--radius-md);
+}
+.friend-avatar{
+    font-size:20px;
+    flex-shrink:0;
+}
+.friend-meta{
+    flex:1;
+    min-width:0;
+    text-align:right;
+}
+.friend-name{
+    font-weight:700;
+    font-size:15px;
+    word-break:break-word;
+}
+.friend-status{
+    font-size:12px;
+    color:var(--text-dim);
+}
+.friend-actions{
+    display:flex;
+    gap:6px;
+    flex-shrink:0;
+}
+.friend-actions button{
+    font-size:13px;
+    padding:6px 10px;
+    white-space:nowrap;
+}
+.friend-accept-btn{ color:#5ee88a; }
+.friend-decline-btn, .friend-rm-btn{ color:#ff6b6b; }
+.friend-cancel-btn{ color:var(--text-dim); }
+.friend-msg-btn{ font-size:16px; padding:6px 10px; }
+
+.friends-search-row{
+    display:flex;
+    gap:8px;
+    margin-bottom:12px;
+}
+.friends-search-row input[type=text]{
+    flex:1;
+    min-width:0;
+}
+.friends-search-results{
+    text-align:right;
+}
+
+.friends-dm-wrap{
+    width:100%;
+    max-width:560px;
+    margin:0 auto;
+}
+.friends-dm-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:8px;
+    padding:10px;
+}
+.friends-dm-title{
+    font-weight:700;
+}
+

@@ -694,6 +694,11 @@ lang="ar">
 <span id="chat-notify-badge" class="menu-chat-badge" style="display:none;"></span>
 </button>
 
+                <button onclick="Social.open()">
+🤝 الأصدقاء
+<span id="friends-notify-badge" class="menu-chat-badge" style="display:none;"></span>
+</button>
+
                 <button onclick="openScreen('character-profile-screen')">
 👤 شخصيتي
 </button>
@@ -772,6 +777,71 @@ lang="ar">
             </div>
 
             <button onclick="openScreen('home-screen'); stopChat();">
+                ↩ العودة
+            </button>
+
+        </section>
+
+        <!-- ========================= -->
+        <!-- الأصدقاء والرسائل الخاصة -->
+        <!-- ========================= -->
+
+        <section id="friends-screen" class="screen">
+
+            <h2>🤝 الأصدقاء</h2>
+
+            <div class="friends-tabs">
+
+                <button id="tab-friends-list" class="friends-tab active" onclick="Social.switchTab('list')">أصدقائي</button>
+
+                <button id="tab-friends-requests" class="friends-tab" onclick="Social.switchTab('requests')">الطلبات</button>
+
+                <button id="tab-friends-search" class="friends-tab" onclick="Social.switchTab('search')">بحث</button>
+
+            </div>
+
+            <div id="friends-content" class="friends-content">
+
+                <div class="chat-loading">جاري التحميل...</div>
+
+            </div>
+
+            <div id="friends-dm-wrap" class="friends-dm-wrap hidden">
+
+                <div class="friends-dm-header">
+                    <span id="friends-dm-title">محادثة خاصة</span>
+                    <button id="friends-dm-back" onclick="Social.closeDm()">↩ رجوع</button>
+                </div>
+
+                <div id="friends-dm-box" class="chat-box">
+
+                    <div id="friends-dm-messages" class="chat-messages">
+                        <div class="chat-loading">جاري تحميل الرسائل...</div>
+                    </div>
+
+                    <div id="friends-dm-emoji" class="chat-emoji-panel hidden"></div>
+
+                    <div class="chat-input-row">
+
+                        <button class="chat-tool-btn" onclick="Social.toggleEmoji()" title="إيموجي">😊</button>
+
+                        <button class="chat-tool-btn" onclick="Social.pickImage()" title="إرسال صورة">🖼️</button>
+
+                        <input type="file" id="friends-dm-image-file" accept="image/*" style="display:none;" onchange="Social.sendImage(this)">
+
+                        <input id="friends-dm-input" type="text" placeholder="اكتب رسالتك..." autocomplete="off">
+
+                        <button onclick="Social.send()">إرسال</button>
+
+                    </div>
+
+                    <p id="friends-dm-status" class="upload-status"></p>
+
+                </div>
+
+            </div>
+
+            <button onclick="openScreen('home-screen'); Social.stopDmPolling();">
                 ↩ العودة
             </button>
 
@@ -1583,6 +1653,8 @@ id="pve-player-used-skills">
 <div id="global-challenge-banner" class="global-challenge-banner hidden"></div>
 
 <script src="chat.js?v=20260814"></script>
+
+<script src="social.js?v=20260816"></script>
 
 <script src="game.js?v=20260816c"></script>
 
