@@ -3159,8 +3159,9 @@ async function updateSkillOrderBadge(){
         badge.textContent = pending;
         badge.style.display = pending > 0 ? "inline-block" : "none";
     }catch(e){
-        console.error(e);
+        // لا يُطبع أي خطأ هنا؛ هذا استطلاع دوري في الخلفية وقد يكون التوكن منتهيًا
         badge.style.display = "none";
+        return;
     }
 }
 

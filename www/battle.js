@@ -1126,11 +1126,28 @@ async function loadPveWeapon(){
     battle.weapon = null;
     battle.weaponView = false;
     let token = localStorage.getItem("player_token");
-    if(!token) return;
+    let cacheKey = "pve_weapon_cache";
+    let cached = null;
+    try{ cached = JSON.parse(localStorage.getItem(cacheKey) || "null"); }catch(e){}
+    if(!token){
+        if(cached) battle.weapon = cached;
+        renderPveWeapon();
+        renderPveWeaponIcon();
+        return;
+    }
     try{
-        let { data } = await supabaseClient.rpc("get_my_active_weapon", { p_token: token });
-        if(data && data[0]) battle.weapon = data[0];
-    }catch(e){ battle.weapon = null; }
+        let { data, error } = await supabaseClient.rpc("get_my_active_weapon", { p_token: token });
+        if(error) throw error;
+        if(data && data[0]){
+            battle.weapon = data[0];
+            try{ localStorage.setItem(cacheKey, JSON.stringify(data[0])); }catch(e){}
+        } else if(cached){
+            battle.weapon = cached;
+        }
+    }catch(e){
+        // تُحفظ آخر نسخة معروفة من السلاح حتى لا تختفي الأيقونة عند تجدد التوكن
+        if(cached) battle.weapon = cached;
+    }
     renderPveWeapon();
     renderPveWeaponIcon();
 }

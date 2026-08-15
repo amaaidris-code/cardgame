@@ -115,7 +115,7 @@ const Chat = (function(){
 
     // شارة الرسائل تُحدَّث دوريًا حتى عندما تكون الدردشة مغلقة
     setInterval(function(){
-        updateBadge();
+        tickBadge();
     }, 5000);
 
     async function refreshChat(){
