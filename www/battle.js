@@ -4895,7 +4895,7 @@ function openControlMenu(controlSkill){
     // العامة)، وتُعلَّم باستخدام مهارة السيطرة الخاصة باللاعب — أي المهارة
     // التي سبق السيطرة عليها واستخدامها عندك تدخل تهدئة ولا يمكن الاختيار
     // منها مجددًا حتى تنتهي تهدئتها
-    let controllableSkills = battle.enemyUsedSkills;
+    let controllableSkills = battle.enemy.skills || battle.enemyUsedSkills;
 
     let usedListHtml = controllableSkills.length > 0
     ? controllableSkills
