@@ -2584,12 +2584,15 @@ if(charError || !character){
 
     // سعر الترقية القادمة من الذهب + مقدار الرصيد والحد الأقصى للمستوى
     let quote = null;
-    try {
-        let { data: q } = await supabaseClient
-            .rpc("get_player_level_up_quote", { p_token: localStorage.getItem("player_token") })
-            .single();
-        quote = q || null;
-    } catch(e) { quote = null; }
+    let upgradeToken = localStorage.getItem("player_token");
+    if(upgradeToken){
+        try {
+            let { data: q } = await supabaseClient
+                .rpc("get_player_level_up_quote", { p_token: upgradeToken })
+                .single();
+            quote = q || null;
+        } catch(e) { quote = null; }
+    }
 
     let goldDisplay = quote ? ("🪙 الذهب: " + quote.gold) : "";
     let maxLevelDisplay = quote ? ("الحد الأقصى: " + quote.max_level) : "";
