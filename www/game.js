@@ -2357,7 +2357,7 @@ async function loadCharacterProfile(){
 
     await supabaseClient
     .rpc("get_my_active_character", { p_token: localStorage.getItem("player_token") })
-    .single();
+    .maybeSingle();
 
 
     if(charError ||
@@ -2570,7 +2570,7 @@ async function loadUpgradeScreen(){
 
     await supabaseClient
     .rpc("get_my_active_character", { p_token: localStorage.getItem("player_token") })
-    .single();
+    .maybeSingle();
 if(charError || !character){
 
 
@@ -2589,7 +2589,7 @@ if(charError || !character){
         try {
             let { data: q } = await supabaseClient
                 .rpc("get_player_level_up_quote", { p_token: upgradeToken })
-                .single();
+                .maybeSingle();
             quote = q || null;
         } catch(e) { quote = null; }
     }

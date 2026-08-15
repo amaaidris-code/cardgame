@@ -359,7 +359,7 @@ async function getActivePlayerCharacter(){
             let {data:row, error} =
             await supabaseClient
             .rpc("get_my_active_character", { p_token: player_token })
-            .single();
+            .maybeSingle();
 
             if(error || !row) throw error || new Error("no pc");
 
