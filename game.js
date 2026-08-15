@@ -2985,6 +2985,19 @@ async function loadAdminPanel() {
 }
 
 
+// يعيد تحميل كل قوائم الشخصيات المعتمدة على قاعدة البيانات دفعة واحدة
+// بعد أي إضافة أو تعديل أو حذف، حتى لا تضطر إلى الخروج والعودة لترى التغييرات
+async function refreshAdminViews(){
+    loadAdminPanel();
+    loadAdminMyCharacters();
+    loadAvailableCharacters();
+    populateDungeonMonsterSelect();
+    // إلغاء كاش قائمة الوحوش حتى يظهر الوحش الجديد فورًا في قسم PvE
+    GameCache.clear("monster_list");
+    loadMonsterList();
+}
+
+
 // حمّالة تبويب التطوير (تُعبَّأ بالكامل في خطوة نظام التطوير بالذهب)
 async function loadAdminUpgradeConfig(){
     let box = document.getElementById("admin-upgrade-content");
@@ -5451,7 +5464,7 @@ async function saveCharacterEdit(characterId){
 
     closeEditCharacterModal();
 
-    loadAdminPanel();
+    refreshAdminViews();
 
 }
 
@@ -5863,7 +5876,7 @@ async function deleteCharacter(id){
 
 
 
-    loadAdminPanel();
+    refreshAdminViews();
 
 
 
@@ -6089,7 +6102,7 @@ async function addCharacter(){
     document.getElementById("admin-character-glow-locked").checked = false;
 
 
-    loadAdminPanel();
+    refreshAdminViews();
 
 
 }
@@ -6169,7 +6182,7 @@ async function addMyCharacter(){
     document.getElementById("my-char-glow-color").value = "#3b82ff";
     document.getElementById("my-char-glow-locked").checked = false;
 
-    loadAdminMyCharacters();
+    refreshAdminViews();
 
 }
 // ========================================
