@@ -4880,7 +4880,7 @@ function openControlMenu(controlSkill){
 
     closeControlMenu();
 
-    let maxControl = Math.max(1, Number(controlSkill.damage) || 1);
+    let maxControl = Math.max(1, skillParamAmount(controlSkill, "control_count", controlSkill.damage) || 1);
 
     let selectedNames = [];
 

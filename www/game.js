@@ -4804,6 +4804,13 @@ async function addSkillToCharacter(characterId){
 
     let params = parseSkillParams(document.getElementById("new-skill-params"));
 
+    // مهارات السيطرة لا تملك ضررًا (تُدار عبر عدد المهارات القابلة للسيطرة).
+    // يُخزَّن العدد في control_count ضمن المعاملات ويُثبَّت الضرر على صفر.
+    if(typeChoice === "control"){
+        params = Object.assign({}, params, {control_count: damage});
+        damage = 0;
+    }
+
     if(typeChoice === "poison"){
 
         let poisonTurnsInput = document.getElementById("new-skill-poison-turns");
@@ -5134,6 +5141,13 @@ async function saveSkillEdit(skillId){
 
         return;
 
+    }
+
+    // مهارات السيطرة لا تملك ضررًا (تِدار عبر عدد المهارات القابلة للسيطرة).
+    // يُخزَّن العدد في control_count ضمن المعاملات ويُثبَّت الضرر على صفر.
+    if(typeChoice === "control"){
+        params = Object.assign({}, params, {control_count: damage});
+        damage = 0;
     }
 
     let cooldown = Number(cooldownInput.value) || 0;
