@@ -2180,9 +2180,6 @@ async function loadCollection(){
         "لا توجد شخصيات";
 
 
-        return;
-
-
     }
 
 
@@ -2286,6 +2283,7 @@ async function loadCollection(){
     });
 
 
+    renderCollectionWeapons(box);
 
 }
 
@@ -6519,6 +6517,79 @@ async function equipWeapon(pwId){
     if(error){ alert(error.message); return; }
     alert("تم تجهيز السلاح");
     loadShop();
+}
+
+async function unequipWeapon(){
+    let token = localStorage.getItem("player_token");
+    let {error} = await supabaseClient.rpc("set_active_weapon", { p_token: token, p_player_weapon_id: null });
+    if(error){ alert(error.message); return; }
+    loadShop();
+}
+
+// عارض أسلحة اللاعب في قسم "مجموعتي" مع التفاصيل والتجهيز/الإلغاء
+async function renderCollectionWeapons(box){
+    if(!box) box = document.getElementById("my-characters");
+    if(!box) return;
+    let token = localStorage.getItem("player_token");
+    let items = [];
+    if(token){
+        try{
+            let {data, error} = await supabaseClient.rpc("get_my_weapons", { p_token: token });
+            if(!error) items = Array.isArray(data) ? data : [];
+        }catch(e){ items = []; }
+    }
+
+    let wrap = document.createElement("div");
+    wrap.style.marginTop = "16px";
+    wrap.innerHTML = `<h3 style="text-align:center;">⚔️ أسلحتي</h3>`;
+
+    if(items.length === 0){
+        let empty = document.createElement("p");
+        empty.className = "admin-hint";
+        empty.textContent = "لا تملك أي سلاح بعد. اشتري من المتجر 🛒.";
+        wrap.appendChild(empty);
+        box.appendChild(wrap);
+        return;
+    }
+
+    items.forEach(w => {
+        let broken = (w.durability_current || 0) <= 0;
+        let effectiveColor = (w.glow_color && /^#[0-9A-Fa-f]{6}$/.test(w.glow_color)) ? w.glow_color : "#e8b93f";
+        let skills = Array.isArray(w.skills) ? w.skills : [];
+        let skillList = skills.map(s => `
+            <div style="display:flex; justify-content:space-between; gap:6px; padding:4px 0; border-bottom:1px dashed rgba(255,255,255,0.1);">
+                <span style="color:${s.color && /^#[0-9A-Fa-f]{6}$/.test(s.color) ? s.color : '#fff'};">${escapeHtml(s.name || 'مهارة')}</span>
+                <span class="admin-hint">${s.type || ''}${s.damage > 0 ? ' · ' + s.damage + ' ضرر' : ''}${s.cooldown > 0 ? ' · تهدئة ' + s.cooldown : ''}</span>
+            </div>`).join("");
+        let card = document.createElement("div");
+        card.className = "character-card";
+        card.style.borderLeft = "4px solid " + effectiveColor;
+        card.innerHTML = `
+            <div class="character-info">
+                <h3>${escapeHtml(w.name || 'سلاح')}  ${w.is_active ? '✅' : ''}</h3>
+                <div style="display:flex; align-items:center; gap:10px;" >
+                    ${w.image ? `<img src="${escapeHtml(w.image)}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;">` : `<div style="width:56px;height:56px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:8px;">⚔️</div>`}
+                    <div>
+                        <p style="margin:2px 0;">🛡️ المتانة: ${broken ? "مكسور 💥" : (w.durability_current + " / " + w.max_durability)}</p>
+                        <p style="margin:2px 0;">💰 السعر: ${w.price || 0} 🪙</p>
+                    </div>
+                </div>
+                <div style="margin-top:8px;">${skillList || '<p class="admin-hint">لا مهارات.</p>'}</div>
+            </div>
+            <button ${w.is_active ? "disabled" : ""} onclick="equipWeaponItem('${w.pw_id}')">${w.is_active ? "مجهّز حاليًا" : "تجهيز"}</button>
+            ${w.is_active ? `<button onclick="unequipWeapon()">إلغاء التجهيز</button>` : ""}
+        `;
+        wrap.appendChild(card);
+    });
+
+    box.appendChild(wrap);
+}
+
+async function equipWeaponItem(pwId){
+    let token = localStorage.getItem("player_token");
+    let {error} = await supabaseClient.rpc("set_active_weapon", { p_token: token, p_player_weapon_id: pwId });
+    if(error){ alert(error.message); return; }
+    loadCollection();
 }
 
 
