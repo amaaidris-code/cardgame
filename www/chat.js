@@ -24,6 +24,63 @@ const Chat = (function(){
         return localStorage.getItem("player_token");
     }
 
+    // وقت آخر رسالة شاهدناها (نقرأ منها لمعرفة الجديد)
+    function getLastSeen(){
+        return localStorage.getItem("chat_last_seen") || null;
+    }
+
+    function setLastSeen(iso){
+        if(iso) localStorage.setItem("chat_last_seen", iso);
+    }
+
+    function badgeEl(){
+        return document.getElementById("chat-notify-badge");
+    }
+
+    function clearBadge(){
+        const el = badgeEl();
+        if(el) el.style.display = "none";
+    }
+
+    function showBadge(count){
+        const el = badgeEl();
+        if(!el) return;
+        el.textContent = count;
+        el.style.display = count > 0 ? "inline-flex" : "none";
+    }
+
+    // شارة "رسالة جديدة" على زر الدردشة في القائمة الرئيسية، تعمل حتى
+    // عندما تكون الدردشة مغلقة (مثل شارة طلبات المهارات في لوحة الإدارة)
+    async function tickBadge(){
+        const el = badgeEl();
+        if(!el) return;
+
+        const token = getToken();
+        if(!token){ clearBadge(); return; }
+
+        // أثناء فتح الدردشة تُحدَّث كُلما وصلت رسالة جديدة، فلا تظهر شارة
+        if(isChatOpen()){ clearBadge(); return; }
+
+        try{
+            const { data, error } = await supabaseClient.rpc("chat_unread", {
+                p_token: token,
+                p_since: getLastSeen()
+            });
+            if(error) throw error;
+            const row = data && data[0];
+            const unread = row ? Number(row.unread) : 0;
+            // نُحدّث "آخر مشاهدة" بأحدث رسالة فقط إن لم يتبقَّ جديد (لا نسجّل
+            // القراءة قبل أن يفتح اللاعب الدردشة فعليًا)
+            if(unread === 0 && row && row.latest){
+                setLastSeen(row.latest);
+            }
+            showBadge(unread);
+        }catch(e){
+            console.log("chat badge error", e);
+            clearBadge();
+        }
+    }
+
     function isChatOpen(){
         const s = document.getElementById("chat-screen");
         return s && s.classList.contains("active");
@@ -31,6 +88,8 @@ const Chat = (function(){
 
     function openChat(){
         openScreen("chat-screen");
+        // عند فتح الدردشة نُعتبر كل شيء مقروءًا فورًا ونخفي الشارة
+        clearBadge();
         startChat();
     }
 
@@ -53,6 +112,11 @@ const Chat = (function(){
             }
         }, 3000);
     }
+
+    // شارة الرسائل تُحدَّث دوريًا حتى عندما تكون الدردشة مغلقة
+    setInterval(function(){
+        updateBadge();
+    }, 5000);
 
     async function refreshChat(){
         const token = getToken();
@@ -89,6 +153,12 @@ const Chat = (function(){
         const newest = messages[messages.length - 1];
         if(lastMessageId && newest && newest.id === lastMessageId){
             return;
+        }
+
+        // أثناء فتح الدردشة نتقدّم بآخر مشاهدة ونخفي الشارة
+        if(isChatOpen() && newest){
+            setLastSeen(newest.created_at);
+            clearBadge();
         }
 
         let html = "";
@@ -300,7 +370,9 @@ const Chat = (function(){
         sendChatMessage,
         toggleChatEmojiPanel,
         insertEmoji,
-        sendChatImage
+        sendChatImage,
+        updateBadge: tickBadge,
+        clearBadge
     };
 
 })();
@@ -311,3 +383,8 @@ window.sendChatMessage = Chat.sendChatMessage;
 window.toggleChatEmojiPanel = Chat.toggleChatEmojiPanel;
 window.insertEmoji = Chat.insertEmoji;
 window.sendChatImage = Chat.sendChatImage;
+window.updateChatBadge = Chat.updateBadge;
+window.clearChatBadge = Chat.clearBadge;
+
+// تحقّق فوري بعد التحميل: لو كانت الدردشة مغلقة تظهر الشارة مباشرة
+setTimeout(function(){ Chat.updateBadge(); }, 800);
