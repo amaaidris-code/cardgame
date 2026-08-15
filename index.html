@@ -7,7 +7,7 @@
 
     <title>Card Game</title>
 
-    <link rel="stylesheet" href="style.css?v=20260815">
+    <link rel="stylesheet" href="style.css?v=20260815b">
 </head>
 
 <body>
@@ -161,31 +161,127 @@ lang="ar">
 🛠️ لوحة الإدارة
 </h2>
 
-<div id="admin-stats" class="admin-card">
-جاري تحميل الإحصائيات...
+<div class="admin-tab-bar">
+
+    <button class="admin-tab-btn active" data-admin-tab="admin-tab-home" onclick="showAdminTab('admin-tab-home')">🏠 الرئيسية</button>
+
+    <button class="admin-tab-btn" data-admin-tab="admin-tab-characters" onclick="showAdminTab('admin-tab-characters')">🎭 الشخصيات</button>
+
+    <button class="admin-tab-btn" data-admin-tab="admin-tab-monsters" onclick="showAdminTab('admin-tab-monsters')">👹 الوحوش</button>
+
+    <button class="admin-tab-btn" data-admin-tab="admin-tab-private" onclick="showAdminTab('admin-tab-private')">⭐ الشخصيات الخاصة</button>
+
+    <button class="admin-tab-btn" data-admin-tab="admin-tab-dungeons" onclick="showAdminTab('admin-tab-dungeons')">🚪 الزنازين</button>
+
+    <button class="admin-tab-btn" data-admin-tab="admin-tab-upgrade" onclick="showAdminTab('admin-tab-upgrade')">📈 التطوير</button>
+
+    <button class="admin-tab-btn" data-admin-tab="admin-tab-rules" onclick="showAdminTab('admin-tab-rules')">🗡️ المهارات</button>
+
+    <button class="admin-tab-btn" data-admin-tab="admin-tab-players" onclick="showAdminTab('admin-tab-players')">👥 اللاعبون</button>
+
 </div>
 
 
-<hr>
+<!-- ===== التبويب: الرئيسية ===== -->
+<div id="admin-tab-home" class="admin-tab active">
 
-
-<h2>
-الشخصيات
-</h2>
-
-<div id="admin-content">
+    <div id="admin-stats" class="admin-card">
+    جاري تحميل الإحصائيات...
+    </div>
 
 </div>
 
 
-<hr>
+<!-- ===== التبويب: الشخصيات ===== -->
+<div id="admin-tab-characters" class="admin-tab">
+
+    <h3>الشخصيات</h3>
+
+    <div id="admin-content">
+
+    </div>
+
+    <hr>
+
+    <h3>➕ إضافة شخصية / وحش جديد</h3>
+
+    <div class="form-box admin-add-form">
+
+        <input id="admin-character-name" type="text" placeholder="اسم الشخصية">
+
+        <input id="admin-character-anime" type="text" placeholder="اسم الأنمي (أو \"وحوش PvE\" للوحوش)">
+
+        <input id="admin-character-image" type="text" placeholder="رابط صورة الشخصية (أو ارفع من الجهاز)">
+
+        <input id="admin-character-image-file" type="file" accept="image/*" onchange="uploadCharacterImage('admin-character-image-file','admin-character-image','admin-image-status',{aspectRatio:1,crop:true})">
+
+        <p id="admin-image-status" class="upload-status"></p>
+
+        <input id="admin-character-hp" type="number" placeholder="نقاط الحياة">
+
+        <input id="admin-character-atk" type="number" placeholder="قوة الهجوم">
+
+        <input id="admin-power-name" type="text" placeholder="اسم القوة الخاصة">
+
+        <textarea id="admin-power-description" placeholder="وصف القوة الخاصة"></textarea>
+
+        <input id="admin-character-quote" type="text" placeholder="اقتباس الشخصية">
+
+        <label class="admin-checkbox-label">
+            <input id="admin-character-is-monster" type="checkbox">
+            هذا وحش خاص بـ PvE (لن يظهر للاعبين كشخصية يمكن اختيارها)
+        </label>
+
+        <label>جائزة الذهب عند هزيمته في PvE
+            <input id="admin-character-gold-prize" type="number" min="0" placeholder="ذهبية قتال الفردي اليومي">
+        </label>
+
+        <label class="admin-checkbox-label">
+            <input id="admin-character-admin-only" type="checkbox">
+            🔒 شخصية خاصة بي فقط (لن تظهر أبدًا للاعبين، وأقدر ألعب بها بنفسي)
+        </label>
+
+        <label class="admin-color-row">
+            🎨 لون التوهج
+            <input id="admin-character-glow-color" type="color" value="#3b82ff">
+        </label>
+
+        <label class="admin-checkbox-label">
+            <input id="admin-character-glow-locked" type="checkbox">
+            🔒 قفل اللون (يمنع اللاعب من تغييره)
+        </label>
+
+        <button onclick="addCharacter()">إضافة</button>
+
+    </div>
+
+</div>
 
 
-<h2>
-👹 الوحوش (PvE)
-</h2>
+<!-- ===== التبويب: الوحوش ===== -->
+<div id="admin-tab-monsters" class="admin-tab">
 
-<div id="admin-monsters-content">
+    <h3>👹 الوحوش (PvE)</h3>
+
+    <div id="admin-monsters-content">
+
+    </div>
+
+</div>
+
+
+<!-- ===== التبويب: الشخصيات الخاصة ===== -->
+<div id="admin-tab-private" class="admin-tab">
+
+    <h3>⭐ شخصياتي الخاصة</h3>
+
+    <p class="subtitle">
+    شخصيات صممتها لنفسك فقط، لا يراها أي لاعب آخر
+    </p>
+
+    <div id="admin-my-characters-content">
+
+    </div>
 
 </div>
 
@@ -244,110 +340,117 @@ lang="ar">
 </div>
 
 
-<hr>
+<!-- ===== التبويب: الزنازين ===== -->
+<div id="admin-tab-dungeons" class="admin-tab">
 
+    <h3>🚪 الزنازين (Dungeons)</h3>
 
-<h2>
-🚪 الزنازين (Dungeons)
-</h2>
+    <div id="admin-dungeons-content">
 
-<div id="admin-dungeons-content">
-
-</div>
-
-
-<h3>
-➕ إضافة / تعديل زنزانة
-</h3>
-
-<div class="form-box admin-add-form">
-
-    <input id="dungeon-name" type="text" placeholder="اسم الزنزانة">
-
-    <label>التدرّج (الدرجة)
-        <select id="dungeon-grade">
-            <option value="F">F</option>
-            <option value="E">E</option>
-            <option value="D">D</option>
-            <option value="C">C</option>
-            <option value="B">B</option>
-            <option value="A">A</option>
-            <option value="S">S</option>
-            <option value="SS">SS</option>
-            <option value="SSS">SSS</option>
-            <option value="X">X</option>
-        </select>
-    </label>
-
-    <input id="dungeon-gold" type="number" placeholder="جائزة الذهب">
-
-    <input id="dungeon-points" type="number" placeholder="نقاط التطوير">
-
-    <label>طريقة الدخول
-        <select id="dungeon-repeat">
-            <option value="unlimited">غير محدود</option>
-            <option value="daily">مرات محددة يوميًا</option>
-            <option value="total">مرات محددة إجماليًا</option>
-        </select>
-    </label>
-
-    <input id="dungeon-max-attempts" type="number" placeholder="عدد المرات المسموحة (يوميًا/إجماليًا)">
-
-    <label class="admin-checkbox-label">
-        <input id="dungeon-active" type="checkbox" checked>
-        مفعّلة (تظهر للاعبين)
-    </label>
-
-    <label>ترتيب الوحوش (من الأضعف للأقوى)</label>
-
-    <div class="dungeon-monster-picker">
-        <select id="dungeon-monster-select"></select>
-        <button type="button" onclick="addMonsterToDungeonOrder()">➕ إضافة وحش</button>
     </div>
 
-    <div id="dungeon-monster-order"></div>
 
-    <button onclick="saveDungeon()">حفظ الزنزانة</button>
+    <h3>
+    ➕ إضافة / تعديل زنزانة
+    </h3>
 
-    <button onclick="resetDungeonForm()">إلغاء</button>
+    <div class="form-box admin-add-form">
+
+        <input id="dungeon-name" type="text" placeholder="اسم الزنزانة">
+
+        <label>التدرّج (الدرجة)
+            <select id="dungeon-grade">
+                <option value="F">F</option>
+                <option value="E">E</option>
+                <option value="D">D</option>
+                <option value="C">C</option>
+                <option value="B">B</option>
+                <option value="A">A</option>
+                <option value="S">S</option>
+                <option value="SS">SS</option>
+                <option value="SSS">SSS</option>
+                <option value="X">X</option>
+            </select>
+        </label>
+
+        <input id="dungeon-gold" type="number" placeholder="جائزة الذهب">
+
+        <label>طريقة الدخول
+            <select id="dungeon-repeat">
+                <option value="unlimited">غير محدود</option>
+                <option value="daily">مرات محددة يوميًا</option>
+                <option value="total">مرات محددة إجماليًا</option>
+            </select>
+        </label>
+
+        <input id="dungeon-max-attempts" type="number" placeholder="عدد المرات المسموحة (يوميًا/إجماليًا)">
+
+        <label class="admin-checkbox-label">
+            <input id="dungeon-active" type="checkbox" checked>
+            مفعّلة (تظهر للاعبين)
+        </label>
+
+        <label>ترتيب الوحوش (من الأضعف للأقوى)</label>
+
+        <div class="dungeon-monster-picker">
+            <select id="dungeon-monster-select"></select>
+            <button type="button" onclick="addMonsterToDungeonOrder()">➕ إضافة وحش</button>
+        </div>
+
+        <div id="dungeon-monster-order"></div>
+
+        <button onclick="saveDungeon()">حفظ الزنزانة</button>
+
+        <button onclick="resetDungeonForm()">إلغاء</button>
+
+    </div>
 
 </div>
 
 
-<hr>
+<!-- ===== التبويب: التطوير ===== -->
+<div id="admin-tab-upgrade" class="admin-tab">
 
-
-<button onclick="openScreen('admin-my-characters-screen')">
-🎮 شخصياتي الخاصة
-</button>
-
-
-<hr>
-
-
-<h2>
-اللاعبون
-</h2>
-
-<div id="admin-players">
+    <h3>📈 إعدادات التطوير</h3>
+    <div id="admin-upgrade-content">جاري التحميل...</div>
 
 </div>
 
 
-<hr>
+<!-- ===== التبويب: المهارات ===== -->
+<div id="admin-tab-rules" class="admin-tab">
 
-
-<h2>
-طلبات الشخصيات
-</h2>
-
-<div id="admin-requests">
+    <h3>🗡️ قواعد المهارات حسب المستوى</h3>
+    <div id="admin-skill-rules-content">جاري التحميل...</div>
 
 </div>
 
-<button onclick="openScreen('login-screen')">
-    🚪 خروج الإدارة
-</button>
+
+<!-- ===== التبويب: اللاعبون ===== -->
+<div id="admin-tab-players" class="admin-tab">
+
+    <h3>👥 اللاعبون</h3>
+
+    <div id="admin-players">
+
+    </div>
+
+
+    <hr>
+
+
+    <h3>طلبات الشخصيات</h3>
+
+    <div id="admin-requests">
+
+    </div>
+
+</div>
+
+
+<div class="admin-tab-bar admin-tab-bar-bottom">
+    <button onclick="openScreen('login-screen')">🚪 خروج الإدارة</button>
+</div>
 
 </section>
 
@@ -1297,13 +1400,13 @@ id="pve-player-used-skills">
 
 <script src="chat.js?v=20260814"></script>
 
-<script src="game.js?v=20260815b"></script>
+<script src="game.js?v=20260815c"></script>
 
-<script src="battle.js?v=20260815"></script>
+<script src="battle.js?v=20260815b"></script>
 
 <script src="pvp.js?v=20260814"></script>
 
-<script src="dungeon.js?v=20260814"></script>
+<script src="dungeon.js?v=20260815"></script>
 
   </body>
 

@@ -369,7 +369,6 @@ async function getActivePlayerCharacter(){
                 level: row.level,
                 hp: row.hp,
                 atk: row.atk,
-                available_points: row.available_points,
                 characters: {
                     name: row.name,
                     anime: row.anime,
@@ -1058,6 +1057,8 @@ async function startPVEBattle(monsterId){
 
     battle.prefix = "pve";
 
+    battle.monsterId = monsterId;
+
     battle.phase = "idle";
 
     battle.turnOwner = null;
@@ -1179,8 +1180,6 @@ async function startDungeonBattle(dungeon){
     battle.dungeonGrade = dungeon.grade;
 
     battle.dungeonGoldPrize = dungeon.gold_prize || 0;
-
-    battle.dungeonPointsPrize = dungeon.points_prize || 0;
 
     battle.dungeonMonsterIds = (dungeon.monster_ids || []).slice();
 
@@ -6712,7 +6711,7 @@ function showBattleResult(playerWon){
 
             if(line && result && result.status === "success"){
 
-                line.textContent = `🪙 +${result.gold_added} ذهب · ⭐ +${result.points_added} نقطة تطوير`;
+                line.textContent = `🪙 +${result.gold_added} ذهب`;
 
                 if(typeof updatePlayerInfo === "function") updatePlayerInfo();
 
@@ -6770,15 +6769,56 @@ function showBattleResult(playerWon){
     // معركة عادية أو هزيمة في زنزانة
     let title = playerWon ? "🏆 فزت!" : "💀 خسرت";
 
+    let isSoloPve = playerWon && !inDungeon;
+
     overlay.innerHTML = `
 
         <h2>${title}</h2>
+
+        ${isSoloPve ? '<p id="pve-reward-line">جاري تسليم الجائزة...</p>' : ""}
 
         <button id="battle-result-back-btn">${inDungeon ? "العودة إلى البوابات" : "العودة"}</button>
 
     `;
 
     arena.appendChild(overlay);
+
+    // فوز في معركة PvE مفردة: تسليم جائزة الذهب (مع الحد اليومي) من السيرفر
+    if(isSoloPve && battle.monsterId){
+
+        pveClaimReward(battle.monsterId)
+
+        .then(result => {
+
+            let line = document.getElementById("pve-reward-line");
+
+            if(line && result && result.status === "success"){
+
+                let txt = `🪙 +${result.gold_added} ذهب`;
+
+                if(result.remaining > 0) txt += ` · متبقي اليوم ${result.remaining}`;
+
+                line.textContent = txt;
+
+                if(typeof updatePlayerInfo === "function") updatePlayerInfo();
+
+            } else if(line && result && result.error){
+
+                line.textContent = result.error;
+
+            }
+
+        })
+
+        .catch(err => {
+
+            let line = document.getElementById("pve-reward-line");
+
+            if(line) line.textContent = (err && err.message) ? err.message : "تعذر تسليم الجائزة";
+
+        });
+
+    }
 
     overlay
     .querySelector("#battle-result-back-btn")
@@ -6807,8 +6847,6 @@ function clearDungeonState(){
     battle.dungeonGrade = null;
 
     battle.dungeonGoldPrize = 0;
-
-    battle.dungeonPointsPrize = 0;
 
     battle.dungeonMonsterIds = [];
 

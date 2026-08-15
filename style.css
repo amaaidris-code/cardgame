@@ -3573,6 +3573,43 @@ border-color: rgba(232,185,63,0.35);
 ======================================== */
 
 .character-card,
+/* Ø´Ø±ÙŠØ· ØªØ¨ÙˆÙŠØ¨Ø§Øª Ù„ÙˆØ­Ø© Ø§Ù„Ø¥Ø¯Ø§Ø±Ø© */
+.admin-tab-bar{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 14px 0;
+}
+
+.admin-tab-bar button,
+.admin-tab-btn{
+    flex: 1 1 auto;
+    min-width: 100px;
+    padding: 10px 14px;
+    cursor: pointer;
+    border: 1px solid var(--line-soft);
+    border-radius: var(--radius-md);
+    background: linear-gradient(160deg, var(--bg-panel-2), var(--bg-panel));
+    color: var(--text);
+    font-weight: bold;
+    transition: all .2s ease;
+}
+
+.admin-tab-btn.active{
+    border-color: rgba(232,185,63,0.45);
+    box-shadow: 0 0 0 1px rgba(232,185,63,0.25);
+    color: var(--gold, #e8b93f);
+}
+
+.admin-tab{ display: none; }
+.admin-tab.active{ display: block; }
+
+.admin-tab-bar-bottom{
+    margin-top: 18px;
+    border-top: 1px solid var(--line-soft);
+    padding-top: 14px;
+}
+
 .admin-card,
 .form-box,
 .request-character-box{
@@ -5035,7 +5072,7 @@ box-shadow: 0 6px 24px rgba(0,0,0,0.5), 0 0 18px rgba(255,120,0,0.4);
 
 
 /* ========================================================
-   ÇáÏÑÏÔÉ ÇáÚÇãÉ (Chat)
+   ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ (Chat)
 ======================================================== */
 
 .chat-box{

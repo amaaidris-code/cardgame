@@ -300,6 +300,14 @@ function openScreen(screenId){
     loadAdminPlayers();
     
     loadCharacterRequests();
+
+    loadAdminMyCharacters();
+
+    loadAdminUpgradeConfig();
+
+    loadAdminSkillRules();
+    
+    showAdminTab("admin-tab-home");
     
 }
 
@@ -318,6 +326,25 @@ function openScreen(screenId){
 }
 
     }
+
+}
+
+
+// تغيير التبويب النشط داخل لوحة الإدارة
+function showAdminTab(tabId){
+
+    let btns = document.querySelectorAll(".admin-tab-btn");
+    btns.forEach(b => b.classList.remove("active"));
+
+    document.querySelectorAll(".admin-tab").forEach(t => t.classList.remove("active"));
+
+    let tab = document.getElementById(tabId);
+
+    if(tab) tab.classList.add("active");
+
+    let selectedBtn = document.querySelector('.admin-tab-btn[data-admin-tab="' + tabId + '"]');
+
+    if(selectedBtn) selectedBtn.classList.add("active");
 
 }
 
@@ -1223,6 +1250,10 @@ function renderMonsterList(monsters){
 
             <p>❤️ ${monster.hp || 0} &nbsp;·&nbsp; ⚔️ ${monster.atk || 0}</p>
 
+            ${(monster.gold_prize || 0) > 0
+                ? `<p>🪙 الجائزة: ${monster.gold_prize} ذهب · متبقي اليوم: ${monster.remaining_today}</p>`
+                : `<p>لا جائزة ذهب لهذا الوحش</p>`}
+
         </div>
 
         <button>⚔️ قاتل</button>
@@ -1255,9 +1286,9 @@ async function loadMonsterList(){
         async () => {
             let {data:monsters, error} =
             await supabaseClient
-            .from("characters")
-            .select("*")
-            .eq("is_monster", true);
+            .rpc("pve_list_monsters", {
+                p_token: localStorage.getItem("player_token")
+            });
 
             if(error) throw error;
             return monsters;
@@ -2536,9 +2567,7 @@ async function loadUpgradeScreen(){
     await supabaseClient
     .rpc("get_my_active_character", { p_token: localStorage.getItem("player_token") })
     .single();
-
-
-    if(charError || !character){
+if(charError || !character){
 
 
         box.innerHTML =
@@ -2549,10 +2578,22 @@ async function loadUpgradeScreen(){
 
     }
 
+    // سعر الترقية القادمة من الذهب + مقدار الرصيد والحد الأقصى للمستوى
+    let quote = null;
+    try {
+        let { data: q } = await supabaseClient
+            .rpc("get_player_level_up_quote", { p_token: localStorage.getItem("player_token") })
+            .single();
+        quote = q || null;
+    } catch(e) { quote = null; }
 
-
-
-
+    let goldDisplay = quote ? ("🪙 الذهب: " + quote.gold) : "";
+    let maxLevelDisplay = quote ? ("الحد الأقصى: " + quote.max_level) : "";
+    let costDisplay = "—";
+    if(quote){
+        costDisplay = quote.at_max ? "وصلت لأقصى مستوى" :
+            (quote.next_cost > 0 ? (quote.next_cost + " 🪙") : "مجانًا");
+    }
 
     box.innerHTML = `
 
@@ -2570,17 +2611,24 @@ async function loadUpgradeScreen(){
 
     <br>
 
-
-    ⚔️ ATK:
+⚔️ ATK:
     ${character.atk}
 
 
     <br>
 
+    ${goldDisplay}
 
-    🔥 نقاط التطوير:
-    ${character.admin_only ? "لانهائية (شخصية خاصة)" : (character.available_points || 0)}
 
+    <br>
+
+    ${maxLevelDisplay}
+
+
+    <br>
+
+    💰 تكلفة الترقية القادمة:
+    ${costDisplay}
 
 
     `;
@@ -2589,13 +2637,6 @@ async function loadUpgradeScreen(){
     upgradeSplit.hp = 100;
     upgradeSplit.atk = 100;
     updateSplitUI();
-
-    // الشخصيات الخاصة (admin_only) نقاط تطويرها غير محدودة دائمًا
-    let splitBox = document.getElementById("upgrade-split-box");
-    if(splitBox){
-        let hasPoints = character.admin_only || (character.available_points || 0) > 0;
-        splitBox.style.display = hasPoints ? "block" : "none";
-    }
 
 }
 
@@ -2645,10 +2686,8 @@ function splitAdjustAtk(delta){
 async function upgradeCharacter(){
 
 
-    // نستخدم دالة upgrade_player_character الآمنة بدل الكتابة المباشرة
+    // سيُعاد بناء دالة الترقية بالكامل في نظام الترقية بالذهب (الخطوة 4)
     // (جدول player_characters لا يسمح بـ UPDATE عبر RLS للحماية من التلاعب)
-    // نرسل رمز الجلسة، والدالة على الخادم تتحقق بنفسها من الشخصية النشطة
-    // ومن وجود نقاط تطوير متاحة قبل أي تعديل — لا حاجة لقراءة مسبقة هنا
     let upgrade_token = localStorage.getItem("player_token");
 
     if(!upgrade_token){
@@ -2867,8 +2906,7 @@ async function loadAdminPanel() {
             return Object.assign({}, c, {
                 current_level: s.level,
                 current_hp: s.hp,
-                current_atk: s.atk,
-                current_available_points: s.available_points
+                current_atk: s.atk
             });
         });
     }catch(e){
@@ -2889,6 +2927,83 @@ async function loadAdminPanel() {
 
     }
     
+}
+
+
+// حمّالة تبويب التطوير (تُعبَّأ بالكامل في خطوة نظام التطوير بالذهب)
+async function loadAdminUpgradeConfig(){
+    let box = document.getElementById("admin-upgrade-content");
+    if(!box) return;
+    box.innerHTML = "جاري التحميل...";
+    let admin_token = localStorage.getItem("admin_token");
+    try {
+        let { data: config, error: cErr } = await supabaseClient.rpc("admin_get_game_config", { p_admin_token: admin_token });
+        if(cErr) throw cErr;
+        let { data: costs, error: kErr } = await supabaseClient.rpc("admin_get_level_costs", { p_admin_token: admin_token });
+        if(kErr) throw kErr;
+
+        let cfgRows = "";
+        (config || []).forEach(c => {
+            cfgRows += `
+                <div class="admin-player-gold-edit">
+                    <span>${escapeHtml(c.label)}</span>
+                    <input id="cfg-${c.config_key}" type="number" min="0" value="${c.config_value}" style="flex:1;">
+                    <button type="button" onclick="saveGameConfig('${c.config_key}')">💾 حفظ</button>
+                </div>`;
+        });
+
+        let costRows = "";
+        (costs || []).forEach(r => {
+            costRows += `
+                <div class="admin-player-gold-edit">
+                    <span>المستوى ${r.level} ← ${r.level + 1}</span>
+                    <input id="cost-${r.level}" type="number" min="0" value="${r.gold_cost}" style="flex:1;">
+                    <button type="button" onclick="saveLevelCost(${r.level})">💾 حفظ</button>
+                </div>`;
+        });
+
+        box.innerHTML = `
+            <p>إعدادات الترقية بالذهب والحدود اليومية (تُدرَّج بالصعود لكل مستوى). الحقل بمعنى "الذهب المطلوب للصعود من مستوى إلى التالي".</p>
+            <div class="form-box">${cfgRows}</div>
+            <h4>تكلفة الذهب لكل مستوى</h4>
+            <div class="form-box">${costRows}</div>`;
+    } catch(e) {
+        box.innerHTML = "حدث خطأ في تحميل الإعدادات";
+    }
+}
+
+async function saveGameConfig(key){
+    let el = document.getElementById("cfg-" + key);
+    let value = el ? (parseInt(el.value) || 0) : 0;
+    let { error } = await supabaseClient.rpc("admin_set_game_config", {
+        p_admin_token: localStorage.getItem("admin_token"),
+        p_key: key,
+        p_value: value
+    });
+    if(error){ alert(error.message); return; }
+    alert("تم الحفظ");
+    loadAdminUpgradeConfig();
+}
+
+async function saveLevelCost(level){
+    let el = document.getElementById("cost-" + level);
+    let value = el ? (parseInt(el.value) || 0) : 0;
+    let { error } = await supabaseClient.rpc("admin_set_level_cost", {
+        p_admin_token: localStorage.getItem("admin_token"),
+        p_level: level,
+        p_gold_cost: value
+    });
+    if(error){ alert(error.message); return; }
+    alert("تم الحفظ");
+    loadAdminUpgradeConfig();
+}
+
+
+// حمّالة تبويب قواعد المهارات (تُعبَّأ بالكامل في خطوة قواعد المهارات)
+async function loadAdminSkillRules(){
+    let box = document.getElementById("admin-skill-rules-content");
+    if(!box) return;
+    box.innerHTML = "جاري التحميل...";
 }
 
 
@@ -3539,7 +3654,7 @@ async function loadAdminPlayers(){
                 <p class="admin-player-sub">${player.has_character ? "🎴 يملك شخصية" : "بدون شخصية"}</p>
 
                 ${player.character_name
-                    ? `<p class="admin-player-sub">🎭 ${escapeHtml(player.character_name)} · ⭐ LV ${player.char_level || 0} · ❤️ ${player.char_hp || 0} · ⚔️ ${player.char_atk || 0} · 💎 ${player.points || 0}</p>`
+                    ? `<p class="admin-player-sub">🎭 ${escapeHtml(player.character_name)} · ⭐ LV ${player.char_level || 0} · ❤️ ${player.char_hp || 0} · ⚔️ ${player.char_atk || 0}</p>`
                     : ""}
 
             </div>
@@ -3549,10 +3664,6 @@ async function loadAdminPlayers(){
                 <input type="number" id="player-gold-${player.player_id}" value="${player.gold || 0}">
 
                 <button onclick="savePlayerGold('${player.player_id}')">💾 حفظ</button>
-
-                <input type="number" id="player-points-${player.player_id}" value="${player.points || 0}" placeholder="نقاط تطوير" style="margin-top:6px;">
-
-                <button onclick="savePlayerPoints('${player.player_id}')">💎 نقاط</button>
 
                 <button onclick="deletePlayerAdmin('${player.player_id}', '${jsSafeUsername}')" class="admin-danger-btn">🗑️ حذف</button>
 
@@ -3566,50 +3677,6 @@ async function loadAdminPlayers(){
 
 
     box.innerHTML = html;
-
-}
-
-
-async function savePlayerPoints(playerId){
-
-    let input = document.getElementById("player-points-" + playerId);
-
-    let points = Number(input.value);
-
-    if(isNaN(points) || points < 0){
-
-        alert("اكتب رقمًا صحيحًا للنقاط");
-
-        return;
-
-    }
-
-    let admin_token = localStorage.getItem("admin_token");
-
-    let {error} =
-
-    await supabaseClient
-    .rpc("admin_set_player_points", {
-
-        p_admin_token: admin_token,
-
-        p_player_id: playerId,
-
-        p_points: points
-
-    });
-
-    if(error){
-
-        alert(error.message);
-
-        return;
-
-    }
-
-    alert("تم تحديث نقاط التطوير");
-
-    loadAdminPlayers();
 
 }
 
@@ -4092,6 +4159,8 @@ async function openEditCharacterModal(characterId){
                 <textarea id="edit-char-power-desc" placeholder="وصف القوة الخاصة">${character.power_description || ''}</textarea>
 
                 <input id="edit-char-quote" type="text" value="${character.quote || ''}" placeholder="الاقتباس">
+
+                <input id="edit-char-gold-prize" type="number" min="0" value="${character.gold_prize || 0}" placeholder="جائزة الذهب عند هزيمته في PvE">
 
                 <label class="admin-checkbox-label">
                     <input id="edit-char-is-monster" type="checkbox" ${character.is_monster ? "checked" : ""}>
@@ -4968,6 +5037,10 @@ async function saveCharacterEdit(characterId){
 
     let glowLocked = document.getElementById("edit-char-glow-locked").checked;
 
+    let goldEl = document.getElementById("edit-char-gold-prize");
+
+    let goldPrize = goldEl ? (parseInt(goldEl.value) || 0) : 0;
+
 
     if(name === "" || anime === ""){
 
@@ -5017,6 +5090,8 @@ async function saveCharacterEdit(characterId){
         p_quote: quote,
 
         p_is_monster: isMonster,
+
+        p_gold_prize: goldPrize,
 
         p_admin_only: isAdminOnly,
 
@@ -5579,6 +5654,11 @@ async function addCharacter(){
     let glowLocked = glowLockedEl ? glowLockedEl.checked : false;
 
 
+    let goldEl =
+    document.getElementById("admin-character-gold-prize");
+    let goldPrize = goldEl ? (parseInt(goldEl.value) || 0) : 0;
+
+
 
 
 
@@ -5628,6 +5708,8 @@ async function addCharacter(){
         p_quote: quote,
 
         p_is_monster: isMonster,
+
+        p_gold_prize: goldPrize,
 
         p_admin_only: isAdminOnly,
 

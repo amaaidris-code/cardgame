@@ -62,7 +62,7 @@ async function loadGates() {
                 <div class="admin-character-info">
                     <h3>${escapeHtml(d.name)} <span class="dungeon-grade">${escapeHtml(d.grade)}</span></h3>
                     <p class="admin-character-anime">${names.length} وحوش: ${names.join(" → ")}</p>
-                    <p class="admin-character-stats">🪙 ${d.gold_prize} ذهب · ⭐ ${d.points_prize} نقطة تطوير · 🔁 ${repeatLabel}</p>
+                    <p class="admin-character-stats">🪙 ${d.gold_prize} ذهب · 🔁 ${repeatLabel}</p>
                 </div>
                 <div class="admin-character-actions">
                     <button onclick="startDungeon('${d.id}')">🚪 دخول</button>
@@ -94,7 +94,20 @@ async function dungeonClaimReward(dungeonId) {
     });
     if (error) throw error;
     if (data && data.length) return data[0];
-    return { status: "success", gold_added: 0, points_added: 0, remaining: -1 };
+    return { status: "success", gold_added: 0, remaining: -1 };
+}
+
+// تسليم جائزة قتل وحش فردي في PvE (ذهب + حد يومي)
+async function pveClaimReward(monsterId) {
+    let token = dungeonToken();
+    if (!token) throw new Error("يجب تسجيل الدخول");
+    let { data, error } = await supabaseClient.rpc("pve_claim_reward", {
+        p_token: token,
+        p_monster_id: monsterId
+    });
+    if (error) throw error;
+    if (data && data.length) return data[0];
+    return { status: "success", gold_added: 0, remaining: -1 };
 }
 
 // ===== لوحة الإدارة: إدارة الزنازين =====
@@ -117,7 +130,7 @@ async function loadAdminDungeons() {
             <div class="admin-character-card">
                 <div class="admin-character-info">
                     <h3>${escapeHtml(d.name)} <span class="dungeon-grade">${escapeHtml(d.grade)}</span></h3>
-                    <p class="admin-character-stats">🪙 ${d.gold_prize} · ⭐ ${d.points_prize} · 🔁 ${d.repeat_type} (${d.max_attempts})</p>
+                    <p class="admin-character-stats">🪙 ${d.gold_prize} · 🔁 ${d.repeat_type} (${d.max_attempts})</p>
                     <p class="admin-character-owner">${d.monster_ids.length} وحوش ${d.active ? "· مفعّلة" : "· غير مفعّلة"}</p>
                 </div>
                 <div class="admin-character-actions">
@@ -190,7 +203,6 @@ function resetDungeonForm() {
     if (g) g.value = "C";
     let name = document.getElementById("dungeon-name"); if (name) name.value = "";
     let gold = document.getElementById("dungeon-gold"); if (gold) gold.value = "";
-    let points = document.getElementById("dungeon-points"); if (points) points.value = "";
     let repeat = document.getElementById("dungeon-repeat"); if (repeat) repeat.value = "unlimited";
     let maxA = document.getElementById("dungeon-max-attempts"); if (maxA) maxA.value = "";
     let active = document.getElementById("dungeon-active"); if (active) active.checked = true;
@@ -202,7 +214,6 @@ async function saveDungeon() {
     if (!name) { alert("اكتب اسم الزنزانة"); return; }
     let grade = document.getElementById("dungeon-grade").value || "C";
     let gold = parseInt(document.getElementById("dungeon-gold").value) || 0;
-    let points = parseInt(document.getElementById("dungeon-points").value) || 0;
     let repeat = document.getElementById("dungeon-repeat").value || "unlimited";
     let maxAttempts = parseInt(document.getElementById("dungeon-max-attempts").value) || 0;
     let active = document.getElementById("dungeon-active").checked;
@@ -215,7 +226,6 @@ async function saveDungeon() {
                 p_name: name,
                 p_grade: grade,
                 p_gold_prize: gold,
-                p_points_prize: points,
                 p_repeat_type: repeat,
                 p_max_attempts: maxAttempts,
                 p_monster_ids: dungeonMonsterOrder,
@@ -228,7 +238,6 @@ async function saveDungeon() {
                 p_name: name,
                 p_grade: grade,
                 p_gold_prize: gold,
-                p_points_prize: points,
                 p_repeat_type: repeat,
                 p_max_attempts: maxAttempts,
                 p_monster_ids: dungeonMonsterOrder
@@ -255,7 +264,6 @@ async function openEditDungeon(dungeonId) {
     document.getElementById("dungeon-name").value = d.name || "";
     document.getElementById("dungeon-grade").value = d.grade || "C";
     document.getElementById("dungeon-gold").value = d.gold_prize || 0;
-    document.getElementById("dungeon-points").value = d.points_prize || 0;
     document.getElementById("dungeon-repeat").value = d.repeat_type || "unlimited";
     document.getElementById("dungeon-max-attempts").value = d.max_attempts || 0;
     document.getElementById("dungeon-active").checked = !!d.active;
