@@ -2780,9 +2780,10 @@ async function upgradeCharacter(){
     "تم تطوير الشخصية"
     );
 
-
-
     loadUpgradeScreen();
+
+    // تحديث الذهب المعروض في أعلى يسار اللعبة فورًا بعد الترقية
+    updatePlayerInfo();
 
 
 }

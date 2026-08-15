@@ -2749,6 +2749,9 @@ async function upgradeCharacter(){
 
     loadUpgradeScreen();
 
+    // تحديث الذهب المعروض في أعلى يسار اللعبة فورًا بعد الترقية
+    updatePlayerInfo();
+
 
 }
 // ========================================
