@@ -2777,6 +2777,10 @@ async function loadAdminMyCharacters(){
 
     box.innerHTML = renderAdminCharacterCards(list, "لم تصمم أي شخصية خاصة بعد. اذهب للوحة الإدارة الرئيسية وفعّل خانة 🔒 عند الإضافة");
 
+    let screenBox = document.getElementById("admin-my-characters-screen-content");
+
+    if(screenBox && screenBox !== box) screenBox.innerHTML = box.innerHTML;
+
 }
 
 
@@ -4338,6 +4342,8 @@ async function openEditCharacterModal(characterId){
 
     `;
 
+    document.querySelector("#edit-character-modal")?.remove();
+
     document.body.appendChild(modal);
 
     updateNewSkillNumberLabel();
@@ -5844,6 +5850,86 @@ async function addCharacter(){
 
     loadAdminPanel();
 
+
+}
+
+// إضافة شخصية من شاشة "شخصياتي الخاصة" — تستخدم معرّفات فريدة (my-char-*)
+async function addMyCharacter(){
+
+    let name = (document.getElementById("my-char-name") || {}).value;
+    name = name ? name.trim() : "";
+
+    let animeEl = document.getElementById("my-char-anime");
+    let anime = animeEl ? animeEl.value.trim() : "";
+
+    let imageEl = document.getElementById("my-char-image");
+    let image = imageEl ? imageEl.value.trim() : "";
+
+    let hpEl = document.getElementById("my-char-hp");
+    let hp = hpEl ? Number(hpEl.value) : 0;
+
+    let atkEl = document.getElementById("my-char-atk");
+    let atk = atkEl ? Number(atkEl.value) : 0;
+
+    let powerEl = document.getElementById("my-power-name");
+    let power = powerEl ? powerEl.value.trim() : "";
+
+    let descEl = document.getElementById("my-power-description");
+    let description = descEl ? descEl.value.trim() : "";
+
+    let quoteEl = document.getElementById("my-char-quote");
+    let quote = quoteEl ? quoteEl.value.trim() : "";
+
+    let monsterEl = document.getElementById("my-char-is-monster");
+    let isMonster = monsterEl ? monsterEl.checked : false;
+
+    let adminOnlyEl = document.getElementById("my-char-admin-only");
+    let isAdminOnly = adminOnlyEl ? adminOnlyEl.checked : false;
+
+    let glowEl = document.getElementById("my-char-glow-color");
+    let glowColor = glowEl ? glowEl.value : "#3b82ff";
+
+    let glowLockedEl = document.getElementById("my-char-glow-locked");
+    let glowLocked = glowLockedEl ? glowLockedEl.checked : false;
+
+    if(name === "" || anime === ""){ alert("اكتب اسم الشخصية والأنمي"); return; }
+
+    let admin_token = localStorage.getItem("admin_token");
+
+    let {error} = await supabaseClient.rpc("admin_add_character", {
+        p_admin_token: admin_token,
+        p_name: name,
+        p_anime: anime,
+        p_image: image,
+        p_hp: hp || 100,
+        p_atk: atk || 100,
+        p_power_name: power,
+        p_power_description: description,
+        p_quote: quote,
+        p_is_monster: isMonster,
+        p_gold_prize: 0,
+        p_admin_only: isAdminOnly,
+        p_glow_color: glowColor,
+        p_glow_locked: glowLocked,
+        p_bypass_skill_levels: false
+    });
+
+    if(error){ alert(error.message); return; }
+
+    alert("تمت إضافة الشخصية");
+
+    document.getElementById("my-char-name").value = "";
+    document.getElementById("my-char-anime").value = "";
+    document.getElementById("my-char-image").value = "";
+    document.getElementById("my-char-hp").value = "";
+    document.getElementById("my-char-atk").value = "";
+    document.getElementById("my-power-name").value = "";
+    document.getElementById("my-power-description").value = "";
+    document.getElementById("my-char-quote").value = "";
+    document.getElementById("my-char-glow-color").value = "#3b82ff";
+    document.getElementById("my-char-glow-locked").checked = false;
+
+    loadAdminMyCharacters();
 
 }
 // ========================================

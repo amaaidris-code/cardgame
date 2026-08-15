@@ -297,47 +297,47 @@ lang="ar">
 
 <div class="form-box admin-add-form">
 
-    <input id="admin-character-name" type="text" placeholder="اسم الشخصية">
+    <input id="my-char-name" type="text" placeholder="اسم الشخصية">
 
-    <input id="admin-character-anime" type="text" placeholder="اسم الأنمي (أو \"وحوش PvE\" للوحوش)">
+    <input id="my-char-anime" type="text" placeholder="اسم الأنمي (أو \"وحوش PvE\" للوحوش)">
 
-    <input id="admin-character-image" type="text" placeholder="رابط صورة الشخصية (أو ارفع من الجهاز)">
+    <input id="my-char-image" type="text" placeholder="رابط صورة الشخصية (أو ارفع من الجهاز)">
 
-    <input id="admin-character-image-file" type="file" accept="image/*" onchange="uploadCharacterImage('admin-character-image-file','admin-character-image','admin-image-status',{aspectRatio:1,crop:true})">
+    <input id="my-char-image-file" type="file" accept="image/*" onchange="uploadCharacterImage('my-char-image-file','my-char-image','my-char-image-status',{aspectRatio:1,crop:true})">
 
-    <p id="admin-image-status" class="upload-status"></p>
+    <p id="my-char-image-status" class="upload-status"></p>
 
-    <input id="admin-character-hp" type="number" placeholder="نقاط الحياة">
+    <input id="my-char-hp" type="number" placeholder="نقاط الحياة">
 
-    <input id="admin-character-atk" type="number" placeholder="قوة الهجوم">
+    <input id="my-char-atk" type="number" placeholder="قوة الهجوم">
 
-    <input id="admin-power-name" type="text" placeholder="اسم القوة الخاصة">
+    <input id="my-power-name" type="text" placeholder="اسم القوة الخاصة">
 
-    <textarea id="admin-power-description" placeholder="وصف القوة الخاصة"></textarea>
+    <textarea id="my-power-description" placeholder="وصف القوة الخاصة"></textarea>
 
-    <input id="admin-character-quote" type="text" placeholder="اقتباس الشخصية">
+    <input id="my-char-quote" type="text" placeholder="اقتباس الشخصية">
 
     <label class="admin-checkbox-label">
-        <input id="admin-character-is-monster" type="checkbox">
+        <input id="my-char-is-monster" type="checkbox">
         هذا وحش خاص بـ PvE (لن يظهر للاعبين كشخصية يمكن اختيارها)
     </label>
 
     <label class="admin-checkbox-label">
-        <input id="admin-character-admin-only" type="checkbox">
+        <input id="my-char-admin-only" type="checkbox">
         🔒 شخصية خاصة بي فقط (لن تظهر أبدًا للاعبين، وأقدر ألعب بها بنفسي)
     </label>
 
     <label class="admin-color-row">
         🎨 لون التوهج
-        <input id="admin-character-glow-color" type="color" value="#3b82ff">
+        <input id="my-char-glow-color" type="color" value="#3b82ff">
     </label>
 
     <label class="admin-checkbox-label">
-        <input id="admin-character-glow-locked" type="checkbox">
+        <input id="my-char-glow-locked" type="checkbox">
         🔒 قفل اللون (يمنع اللاعب من تغييره)
     </label>
 
-    <button onclick="addCharacter()">إضافة</button>
+    <button onclick="addMyCharacter()">إضافة</button>
 
 </div>
 
@@ -480,7 +480,7 @@ lang="ar">
 شخصيات صممتها لنفسك فقط، لا يراها أي لاعب آخر
 </p>
 
-<div id="admin-my-characters-content">
+<div id="admin-my-characters-screen-content">
 
 </div>
 
@@ -1414,7 +1414,7 @@ id="pve-player-used-skills">
 
 <script src="chat.js?v=20260814"></script>
 
-<script src="game.js?v=20260815d"></script>
+<script src="game.js?v=20260815e"></script>
 
 <script src="battle.js?v=20260815c"></script>
 
