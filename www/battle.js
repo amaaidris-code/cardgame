@@ -369,6 +369,7 @@ async function getActivePlayerCharacter(){
                 level: row.level,
                 hp: row.hp,
                 atk: row.atk,
+                bypass_skill_levels: !!row.bypass_skill_levels,
                 characters: {
                     name: row.name,
                     anime: row.anime,
@@ -437,6 +438,17 @@ async function loadCharacterSkills(character_id){
 
     return result;
 
+}
+
+// تصفية مهارات اللاعب وفق قيود المستوى: تُحجب أي مهارة يزيد مستوى
+// متطلبها عن مستوى الشخصية النشطة، ما لم تكن الشخصية مخوّلة بإلغاء
+// هذه القيود (bypass_skill_levels) من لوحة الإدارة. الوحوش/الخصوم لا تمر
+// عبر هذا الفلتر أبدًا.
+function gateSkillsForLevel(skills, level, bypass){
+    if(!Array.isArray(skills)) return skills || [];
+    if(bypass) return skills;
+    let lvl = Number(level) || 0;
+    return skills.filter(s => !s || !(s.required_level > lvl));
 }
 
 
@@ -1042,6 +1054,22 @@ async function startPVEBattle(monsterId){
 
     }
 
+    // قيود المستوى: احجب مهارات اللاعب التي يتجاوز مستوى احتياجها
+    // مستواه الحالي، ما لم تكن الشخصية مخوّلة بتجاوز القيود.
+    skills = gateSkillsForLevel(skills, pc.level, pc.bypass_skill_levels);
+
+    if(skills.length === 0){
+
+        skills = [
+
+            {id:"default_atk", name:"هجوم عادي", type:"attack", damage:100, cooldown:0, effect:null},
+
+            {id:"default_def", name:"دفاع", type:"defense", damage:0, cooldown:2, effect:null}
+
+        ];
+
+    }
+
     // خلفيات صفحات مهارات اللاعب (يُستخدمها الرسم مباشرة بعد ذلك)
     await loadSkillPageBackgrounds(pc.character_id);
 
@@ -1142,6 +1170,8 @@ async function startDungeonBattle(dungeon){
     }
 
     let skills = await loadCharacterSkills(pc.character_id);
+
+    skills = gateSkillsForLevel(skills, pc.level, pc.bypass_skill_levels);
 
     if(skills.length === 0){
 

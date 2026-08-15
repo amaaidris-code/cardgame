@@ -346,6 +346,8 @@ function showAdminTab(tabId){
 
     if(selectedBtn) selectedBtn.classList.add("active");
 
+    if(tabId === "admin-tab-notifications") loadAdminNotifications();
+
 }
 
 
@@ -3595,6 +3597,68 @@ function confirmCrop(state){
 // إدارة اللاعبين (تعديل الذهب)
 // ========================================
 
+async function loadAdminNotifications(){
+
+    let box =
+    document.getElementById("admin-notifications");
+
+    if(!box) return;
+
+    box.innerHTML = "جاري تحميل الإشعارات...";
+
+    let {data:notifs, error} =
+
+    await supabaseClient
+    .rpc("admin_list_notifications", { p_admin_token: localStorage.getItem("admin_token") });
+
+    if(error){
+
+        console.log(error);
+
+        box.innerHTML = "حدث خطأ في تحميل الإشعارات";
+
+        return;
+
+    }
+
+    if(!notifs || notifs.length === 0){
+
+        box.innerHTML = "لا توجد إشعارات.";
+
+        return;
+
+    }
+
+    box.innerHTML = notifs.map(n => `
+        <div class="admin-card" style="${n.is_read ? 'opacity:0.65;' : ''}">
+            <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px;">
+                <div>
+                    <strong>${escapeHtml(n.message || "")}</strong>
+                    <div class="admin-hint">${n.category || "عام"} · ${new Date(n.created_at).toLocaleString()}</div>
+                </div>
+                ${n.is_read ? "" : `<button class="admin-btn" onclick="markNotificationRead('${n.notification_id}')">✓ كمُقروء</button>`}
+            </div>
+        </div>
+    `).join("");
+
+}
+
+async function markNotificationRead(notificationId){
+
+    let {error} =
+
+    await supabaseClient
+    .rpc("admin_mark_notification_read", {
+        p_admin_token: localStorage.getItem("admin_token"),
+        p_notification_id: notificationId
+    });
+
+    if(error){ alert(error.message); return; }
+
+    loadAdminNotifications();
+
+}
+
 async function loadAdminPlayers(){
 
     let box =
@@ -4080,6 +4144,8 @@ async function openEditCharacterModal(characterId){
 
             <input type="number" id="skill-cooldown-${s.id}" value="${s.cooldown || 0}" placeholder="التهدئة">
 
+            <input type="number" id="skill-level-${s.id}" value="${s.required_level || 0}" min="0" placeholder="أدنى مستوى للاستخدام">
+
             <input type="number" id="skill-poison-turns-${s.id}" value="${(s.params && s.params.poison_turns) || 2}" placeholder="عدد أدوار السُم" style="${s.effect === 'poison' ? '' : 'display:none;'}">
 
             <textarea id="skill-desc-${s.id}" class="admin-skill-desc-input" placeholder="وصف المهارة (يظهر عند الضغط المطوّل)">${escapeHtml(s.description || '')}</textarea>
@@ -4180,6 +4246,11 @@ async function openEditCharacterModal(characterId){
                 <label class="admin-checkbox-label">
                     <input id="edit-char-glow-locked" type="checkbox" ${character.glow_locked ? "checked" : ""}>
                     🔒 قفل اللون (يمنع اللاعب من تغييره)
+                </label>
+
+                <label style="margin-top:8px; display:flex; align-items:center; gap:6px; font-weight:bold;">
+                    <input id="edit-char-bypass-levels" type="checkbox" ${character.bypass_skill_levels ? "checked" : ""}>
+                    🛡️ تجاوز قيود المستوى (يفتح كل المهارات لأصحاب هذه الشخصية دون مستوى)
                 </label>
 
             </div>
@@ -5041,6 +5112,8 @@ async function saveCharacterEdit(characterId){
 
     let goldPrize = goldEl ? (parseInt(goldEl.value) || 0) : 0;
 
+    let bypassLevels = document.getElementById("edit-char-bypass-levels").checked;
+
 
     if(name === "" || anime === ""){
 
@@ -5097,7 +5170,9 @@ async function saveCharacterEdit(characterId){
 
         p_glow_color: glowColor,
 
-        p_glow_locked: glowLocked
+        p_glow_locked: glowLocked,
+
+        p_bypass_skill_levels: bypassLevels
 
     });
 
@@ -5177,6 +5252,8 @@ async function saveSkillEdit(skillId){
 
     let cooldownInput = document.getElementById("skill-cooldown-" + skillId);
 
+    let levelInput = document.getElementById("skill-level-" + skillId);
+
     let descInput = document.getElementById("skill-desc-" + skillId);
 
     let colorInput = document.getElementById("skill-color-" + skillId);
@@ -5234,6 +5311,8 @@ async function saveSkillEdit(skillId){
     }
 
     let cooldown = Number(cooldownInput.value) || 0;
+
+    let requiredLevel = Number(levelInput.value) || 0;
 
     let description = descInput ? descInput.value.trim() : "";
 
@@ -5301,6 +5380,14 @@ async function saveSkillEdit(skillId){
     if(!_silentlySavingSkills) alert("تم حفظ المهارة");
 
     if(currentEditCharacterId) GameCache.clear("character_skills_" + currentEditCharacterId);
+
+    let {error: levelErr} = await supabaseClient.rpc("admin_set_skill_required_level", {
+        p_admin_token: admin_token,
+        p_skill_id: skillId,
+        p_required_level: requiredLevel
+    });
+
+    if(levelErr && !_silentlySavingSkills) alert("حُفظت المهارة لكن تعذّر حفظ المستوى المطلوب: " + levelErr.message);
 
 }
 // ========================================
@@ -5715,13 +5802,11 @@ async function addCharacter(){
 
         p_glow_color: glowColor,
 
-        p_glow_locked: glowLocked
+        p_glow_locked: glowLocked,
+
+        p_bypass_skill_levels: false
 
     });
-
-
-
-
 
 
     if(error){
