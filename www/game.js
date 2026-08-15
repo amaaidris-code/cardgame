@@ -2645,6 +2645,12 @@ if(charError || !character){
     upgradeSplit.atk = 100;
     updateSplitUI();
 
+    // إظهار أدوات توزيع النقاط بين HP وATK حتى يستطيع اللاعب التحكم في التقسيم
+    let splitBox = document.getElementById("upgrade-split-box");
+    if(splitBox){
+        splitBox.style.display = (quote && quote.at_max) ? "none" : "block";
+    }
+
 }
 
 
