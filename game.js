@@ -3141,7 +3141,7 @@ function renderSkillRequestCard(r){
     let damagePh = isNormal ? (lockedType === "defense" ? 0 : 150) : 0;
 
     return `
-    <div class="admin-card" style="margin-bottom:10px;">
+    <div class="admin-card" id="sk-req-card-${r.request_id}" style="margin-bottom:10px;">
         <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
             <strong>مهارة لشخصية: ${escapeHtml(r.character_name || "")}</strong>
             <span class="admin-hint">بواسطة ${escapeHtml(r.username || "")}</span>
@@ -3845,18 +3845,38 @@ async function loadAdminNotifications(){
 
     }
 
-    box.innerHTML = notifs.map(n => `
+    let approveBtn = n.ref_request_id
+        ? `<button class="admin-btn" onclick="openSkillRequestFromNotification('${n.ref_request_id}')">🗡️ اعتماد/مراجعة الطلب</button>`
+        : (n.is_read ? "" : `<button class="admin-btn" onclick="markNotificationRead('${n.notification_id}')">✓ كمُقروء</button>`);
+
+    return `
         <div class="admin-card" style="${n.is_read ? 'opacity:0.65;' : ''}">
             <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px;">
                 <div>
                     <strong>${escapeHtml(n.message || "")}</strong>
                     <div class="admin-hint">${n.category || "عام"} · ${new Date(n.created_at).toLocaleString()}</div>
                 </div>
-                ${n.is_read ? "" : `<button class="admin-btn" onclick="markNotificationRead('${n.notification_id}')">✓ كمُقروء</button>`}
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                    ${approveBtn}
+                    ${(n.is_read || n.ref_request_id) ? "" : `<button class="admin-btn" onclick="markNotificationRead('${n.notification_id}')">✓ كمُقروء</button>`}
+                </div>
             </div>
-        </div>
-    `).join("");
+        </div>`;
+    }).join("");
 
+}
+
+// يفتح تبويب المهارات ويركّز على بطاقة طلب المهارة المحدد لاعتمادها/تعديلها
+async function openSkillRequestFromNotification(requestId){
+    showAdminTab("admin-tab-rules");
+    await loadAdminSkillRules();
+    let card = document.getElementById("sk-req-card-" + requestId);
+    if(card){
+        card.scrollIntoView({ behavior:"smooth", block:"center" });
+        card.style.outline = "2px solid #3b82ff";
+        card.style.outlineOffset = "2px";
+        setTimeout(() => { card.style.outline = ""; }, 4000);
+    }
 }
 
 async function markNotificationRead(notificationId){
