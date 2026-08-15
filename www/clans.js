@@ -43,6 +43,9 @@ const Clans = (function(){
     }
 
     // ---------- main load : my clan or create/search ----------
+    // ---------- main load : my clan(s) or create/search ----------
+    let currentClanId = null;
+
     async function load(){
         const b = box();
         if(!b) return;
@@ -51,14 +54,24 @@ const Clans = (function(){
             const { data, error } = await supabaseClient.rpc("clan_my_clan", { p_token: getToken() });
             if(error) throw error;
             if(!data || !data.length){
+                currentClanId = null;
                 renderNoClan();
             }else{
-                renderClan(data[0]);
+                if(!currentClanId || !data.some(c => String(c.clan_id) === String(currentClanId))){
+                    currentClanId = data[0].clan_id;
+                }
+                const clan = data.find(c => String(c.clan_id) === String(currentClanId)) || data[0];
+                renderClan(clan, data);
                 pollClanChat();
             }
         }catch(e){
             b.innerHTML = '<div class="chat-empty">تعذر تحميل بيانات العصابة</div>';
         }
+    }
+
+    function switchClan(clanId){
+        currentClanId = clanId;
+        load();
     }
 
     // ---------- no clan : tabs (create / join) ----------
@@ -194,7 +207,7 @@ const Clans = (function(){
     async function leaveClan(){
         if(!confirm("هل تريد مغادرة العصابة؟")) return;
         try{
-            const { error } = await supabaseClient.rpc("clan_leave", { p_token: getToken() });
+            const { error } = await supabaseClient.rpc("clan_leave", { p_token: getToken(), p_clan_id: currentClanId });
             if(error) throw error;
             load();
         }catch(e){ alert(e.message || "تعذر المغادرة"); }
@@ -202,7 +215,7 @@ const Clans = (function(){
 
     async function promote(playerId){
         try{
-            const { error } = await supabaseClient.rpc("clan_promote", { p_token: getToken(), p_player_id: playerId });
+            const { error } = await supabaseClient.rpc("clan_promote", { p_token: getToken(), p_clan_id: currentClanId, p_player_id: playerId });
             if(error) throw error;
             load();
         }catch(e){ alert(e.message || e); }
@@ -210,7 +223,7 @@ const Clans = (function(){
 
     async function demote(playerId){
         try{
-            const { error } = await supabaseClient.rpc("clan_demote", { p_token: getToken(), p_player_id: playerId });
+            const { error } = await supabaseClient.rpc("clan_demote", { p_token: getToken(), p_clan_id: currentClanId, p_player_id: playerId });
             if(error) throw error;
             load();
         }catch(e){ alert(e.message || e); }
@@ -219,7 +232,7 @@ const Clans = (function(){
     async function kick(playerId){
         if(!confirm("هل تريد طرد هذا العضو؟")) return;
         try{
-            const { error } = await supabaseClient.rpc("clan_kick", { p_token: getToken(), p_player_id: playerId });
+            const { error } = await supabaseClient.rpc("clan_kick", { p_token: getToken(), p_clan_id: currentClanId, p_player_id: playerId });
             if(error) throw error;
             load();
         }catch(e){ alert(e.message || e); }
@@ -232,7 +245,7 @@ const Clans = (function(){
         const name = cur.trim();
         if(!name){ alert("الاسم لا يمكن أن يكون فارغًا"); return; }
         try{
-            const { error } = await supabaseClient.rpc("clan_update", { p_token: getToken(), p_name: name, p_image_url: null });
+            const { error } = await supabaseClient.rpc("clan_update", { p_token: getToken(), p_clan_id: currentClanId, p_name: name, p_image_url: null });
             if(error) throw error;
             load();
         }catch(e){ alert(e.message || e); }
@@ -259,7 +272,7 @@ const Clans = (function(){
             const { error: upError } = await supabaseClient.storage.from("chat-images").upload(safeName, file, { cacheControl: "3600", upsert: false });
             if(upError) throw upError;
             const { data } = supabaseClient.storage.from("chat-images").getPublicUrl(safeName);
-            const { error } = await supabaseClient.rpc("clan_update", { p_token: token, p_name: null, p_image_url: data.publicUrl });
+            const { error } = await supabaseClient.rpc("clan_update", { p_token: token, p_clan_id: currentClanId, p_name: null, p_image_url: data.publicUrl });
             if(error) throw error;
             fileInput.value = "";
             if(status) status.textContent = "";
@@ -271,7 +284,7 @@ const Clans = (function(){
     }
 
     // ---------- render clan view ----------
-    async function renderClan(clan){
+    async function renderClan(clan, allClans){
         const me = getPlayerId();
         const canEdit = clan.my_role === "leader" || clan.my_role === "admin";
         let membersHtml = "";
@@ -292,7 +305,14 @@ const Clans = (function(){
             </div>` : "";
 
         const b = box();
+        const switchTabs = (allClans && allClans.length > 1) ? `
+            <div class="friends-tabs">
+                ${allClans.map(c => `
+                    <button class="friends-tab ${String(c.clan_id)===String(clan.clan_id)?'active':''}" onclick="Clans.switchClan('${c.clan_id}')">🛡️ ${escapeHtml(c.name)}</button>
+                `).join("")}
+            </div>` : "";
         b.innerHTML = `
+            ${switchTabs}
             <div class="clan-header">
                 ${img}
                 <div class="clan-title">🛡️ ${escapeHtml(clan.name)}</div>
@@ -372,7 +392,7 @@ const Clans = (function(){
         const msgs = document.getElementById("clan-chat-messages");
         if(!msgs) return;
         try{
-            const { data, error } = await supabaseClient.rpc("clan_get_messages", { p_token: getToken() });
+            const { data, error } = await supabaseClient.rpc("clan_get_messages", { p_token: getToken(), p_clan_id: currentClanId });
             if(error) throw error;
             const list = data || [];
             if(!list.length){
@@ -406,7 +426,7 @@ const Clans = (function(){
         if(!text){ if(status) status.textContent = "✍️ اكتب رسالة أولًا"; return; }
         if(status) status.textContent = "⏳ جاري الإرسال...";
         try{
-            const { error } = await supabaseClient.rpc("clan_send_message", { p_token: getToken(), p_message: text, p_image_url: null });
+            const { error } = await supabaseClient.rpc("clan_send_message", { p_token: getToken(), p_clan_id: currentClanId, p_message: text, p_image_url: null });
             if(error) throw error;
             input.value = "";
             if(status) status.textContent = "";
@@ -437,7 +457,7 @@ const Clans = (function(){
             const { error: upError } = await supabaseClient.storage.from("chat-images").upload(safeName, file, { cacheControl: "3600", upsert: false });
             if(upError) throw upError;
             const { data } = supabaseClient.storage.from("chat-images").getPublicUrl(safeName);
-            const { error } = await supabaseClient.rpc("clan_send_message", { p_token: token, p_message: null, p_image_url: data.publicUrl });
+            const { error } = await supabaseClient.rpc("clan_send_message", { p_token: token, p_clan_id: currentClanId, p_message: null, p_image_url: data.publicUrl });
             if(error) throw error;
             fileInput.value = "";
             if(status) status.textContent = "";
@@ -498,6 +518,7 @@ const Clans = (function(){
     return {
         open,
         stopPolling,
+        switchClan,
         switchNoTab,
         createClan,
         doSearch,
