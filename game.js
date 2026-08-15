@@ -2599,6 +2599,29 @@ if(charError || !character){
             (quote.next_cost > 0 ? (quote.next_cost + " 🪙") : "مجانًا");
     }
 
+    // مكافأة المستوى القادم: none / normal / unique
+    currentUpgradeReward = quote ? (quote.next_reward || "none") : "none";
+
+    let rewardHtml = "";
+    if(quote && !quote.at_max && quote.next_reward === "normal"){
+        rewardHtml = `
+            <div class="empty-card upgrade-reward" style="margin-top:10px;">
+                <p>🎯 هذا المستوى يمنحك مهارة جديدة — اختر نوعها:</p>
+                <label style="display:block; margin:4px 0;">
+                    <input type="radio" name="reward-skill-type" value="attack" checked> ⚔️ هجوم عادي
+                </label>
+                <label style="display:block; margin:4px 0;">
+                    <input type="radio" name="reward-skill-type" value="defense"> 🛡️ دفاع
+                </label>
+                <p class="admin-hint">سيُرسل طلب للأدمن لتصميم المهارة، وستصلك تلقائيًا بعد اعتمادها.</p>
+            </div>`;
+    }else if(quote && !quote.at_max && quote.next_reward === "unique"){
+        rewardHtml = `
+            <div class="empty-card upgrade-reward" style="margin-top:10px;">
+                <p>✨ هذا المستوى يمنحك مهارة فريدة — سيقوم الأدمن بتصميمها لك، وستصلك تلقائيًا بعد اعتمادها.</p>
+            </div>`;
+    }
+
     box.innerHTML = `
 
 
@@ -2634,6 +2657,7 @@ if(charError || !character){
     💰 تكلفة الترقية القادمة:
     ${costDisplay}
 
+    ${rewardHtml}
 
     `;
 
@@ -2655,6 +2679,9 @@ if(charError || !character){
 
 // توزيع الـ200 نقطة بين HP وATK عند كل تطوير (بدفعات 50، ولا تقل صفة عن 50)
 let upgradeSplit = { hp: 100, atk: 100 };
+
+// نوع مكافأة المستوى القادم (none/normal/unique) — يُقرأ من استعلام التطوير
+let currentUpgradeReward = "none";
 
 // يحدّث العرض الرقمي وعلامة المجموع في شاشة التطوير
 function updateSplitUI(){
@@ -2703,6 +2730,13 @@ async function upgradeCharacter(){
     let hpGain = Number(upgradeSplit.hp || 100);
     let atkGain = Number(upgradeSplit.atk || 100);
 
+    // نوع المهارة التي يختارها اللاعب إن كانت مكافأة المستوى القادم "مهارة عادية"
+    let skillType = null;
+    if(currentUpgradeReward === "normal"){
+        let sel = document.querySelector('input[name="reward-skill-type"]:checked');
+        skillType = sel ? sel.value : "attack";
+    }
+
     if(hpGain + atkGain !== 200){
         alert("يجب أن يكون مجموع النقاط 200 تمامًا");
         return;
@@ -2723,7 +2757,8 @@ async function upgradeCharacter(){
 
         p_token: upgrade_token,
         p_hp_gain: hpGain,
-        p_atk_gain: atkGain
+        p_atk_gain: atkGain,
+        p_skill_type: skillType
 
     });
 
@@ -2962,18 +2997,28 @@ async function loadAdminUpgradeConfig(){
 
         let costRows = "";
         (costs || []).forEach(r => {
+            let reward = r.skill_reward === "normal" ? "normal" : (r.skill_reward === "unique" ? "unique" : "none");
             costRows += `
                 <div class="admin-player-gold-edit">
                     <span>المستوى ${r.level} ← ${r.level + 1}</span>
-                    <input id="cost-${r.level}" type="number" min="0" value="${r.gold_cost}" style="flex:1;">
-                    <button type="button" onclick="saveLevelCost(${r.level})">💾 حفظ</button>
+                    <input id="cost-${r.level}" type="number" min="0" value="${r.gold_cost}" style="width:120px;">
+                    <label style="display:flex; align-items:center; gap:4px; flex:1;">
+                        مكافأة المهارة
+                        <select id="reward-${r.level}" style="flex:1;">
+                            <option value="none"${reward === "none" ? " selected" : ""}>بدون</option>
+                            <option value="normal"${reward === "normal" ? " selected" : ""}>عادية (اللاعب يختار هجوم/دفاع)</option>
+                            <option value="unique"${reward === "unique" ? " selected" : ""}>فريدة (الأدمن يختار النوع)</option>
+                        </select>
+                    </label>
+                    <button type="button" onclick="saveLevelCost(${r.level})">💾 حفظ الذهب</button>
+                    <button type="button" onclick="saveLevelSkillReward(${r.level})">💾 حفظ المكافأة</button>
                 </div>`;
         });
 
         box.innerHTML = `
-            <p>إعدادات الترقية بالذهب والحدود اليومية (تُدرَّج بالصعود لكل مستوى). الحقل بمعنى "الذهب المطلوب للصعود من مستوى إلى التالي".</p>
+            <p>إعدادات الترقية بالذهب والحدود اليومية (تُدرَّج بالصعود لكل مستوى). الحقل بمعنى "الذهب المطلوب للصعود من مستوى إلى التالي". مكافأة المهارة تحدد ما يستلمه اللاعب عند بلوغ المستوى التالي.</p>
             <div class="form-box">${cfgRows}</div>
-            <h4>تكلفة الذهب لكل مستوى</h4>
+            <h4>تكلفة الذهب ومكافأة المهارة لكل مستوى</h4>
             <div class="form-box">${costRows}</div>`;
     } catch(e) {
         box.innerHTML = "حدث خطأ في تحميل الإعدادات";
@@ -3006,81 +3051,146 @@ async function saveLevelCost(level){
     loadAdminUpgradeConfig();
 }
 
+// يحفظ نوع مكافأة المهارة لمستوى محدد (بدون / عادية / فريدة)
+async function saveLevelSkillReward(level){
+    let el = document.getElementById("reward-" + level);
+    let value = el ? el.value : "none";
+    let { error } = await supabaseClient.rpc("admin_set_level_skill_reward", {
+        p_admin_token: localStorage.getItem("admin_token"),
+        p_level: level,
+        p_skill_reward: value
+    });
+    if(error){ alert(error.message); return; }
+    alert("تم حفظ المكافأة");
+    loadAdminUpgradeConfig();
+}
 
-// تبويب المهارات: يعرض كل مهارات اللعبة مع إمكانية تعديل الحدّ الأدنى للمستوى
-// (مقرون بميزة قيود المستوى). قراءة المهارات متاحة للعموم بتصريحات RLS.
+
+// تبويب المهارات: يعرض طلبات المهارات المعلّقة من اللاعبين ليقرّر
+// الأدمن قبولها (تُنشئ مهارة تُربط بالشخصية تلقائيًا) أو رفضها.
 async function loadAdminSkillRules(){
     let box = document.getElementById("admin-skill-rules-content");
     if(!box) return;
-    box.innerHTML = "جاري تحميل المهارات...";
+    box.innerHTML = "جاري تحميل طلبات المهارات...";
+
+    let admin_token = localStorage.getItem("admin_token");
+    if(!admin_token){
+        box.innerHTML = "يجب تسجيل دخول الأدمن أولاً.";
+        return;
+    }
 
     try{
 
-        let {data:skills, error} =
-        await supabaseClient
-        .from("skills")
-        .select("*")
-        .order("name");
+        let {data:reqs, error} =
+        await supabaseClient.rpc("admin_list_skill_requests", { p_admin_token: admin_token });
 
         if(error) throw error;
 
-        if(!skills || skills.length === 0){
-            box.innerHTML = "لا توجد مهارات بعد.";
+        let all = reqs || [];
+        let pending = all.filter(r => r.status === "pending");
+
+        if(pending.length === 0){
+            box.innerHTML =
+                '<p class="admin-hint">لا توجد طلبات مهارات معلّقة الآن.' +
+                (all.length ? ` تمت معالجة ${all.length} طلب سابقًا.` : "") + '</p>';
             return;
         }
 
         box.innerHTML =
-            '<p class="admin-hint">قائمة بكل مهارات اللعبة. حدّد لأي مهارة أدنى مستوى مطلوب حتى تُتاح لصاحبها (تُحجب المهارات الأقوى حتى يصل اللاعب للمستوى، ما لم تكن الشخصية مخوّلة بتجاوز القيود). باقي خصائص المهارة تُعدّل من بطاقة كل شخصية.</p>' +
-            skills.map(sk => {
-                let choice = skillFieldsToTypeChoice(sk);
-                let typeLabel = "";
-                try{
-                    let opts = skillTypeOptionsHtml(choice);
-                    let m = opts.match(/<option[^>]*value="[^"]*"[^>]*>([\s\S]*?)<\/option>/);
-                    typeLabel = (m && m[1]) || choice;
-                }catch(e){ typeLabel = choice; }
-                return `
-                <div class="admin-card" style="margin-bottom:8px;">
-                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
-                        <strong>${escapeHtml(sk.name || "")}</strong>
-                        <span class="admin-hint">${escapeHtml(typeLabel)}${sk.unblockable ? " · 💥 لا تُصد" : ""}</span>
-                    </div>
-                    <div class="admin-hint">${escapeHtml(sk.description || "")}</div>
-                    <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center; margin-top:4px;">
-                        <span>⚔️ ${Number(sk.damage) || 0}</span>
-                        <span>⏱️ تهدئة ${Number(sk.cooldown) || 0}</span>
-                        <label style="display:flex; align-items:center; gap:6px;">
-                            أدنى مستوى
-                            <input type="number" min="0" id="skill-req-level-${sk.id}" value="${Number(sk.required_level) || 0}" style="width:70px;">
-                        </label>
-                        <button class="admin-btn" onclick="saveSkillRequiredLevel('${sk.id}')">💾 حفظ المستوى</button>
-                    </div>
-                </div>`;
-            }).join("");
+            '<p class="admin-hint">طلبات مهارات معلّقة من اللاعبين. عند الموافقة تُنشأ مهارة جديدة وتُربط بالشخصية تلقائيًا.</p>' +
+            pending.map(renderSkillRequestCard).join("");
 
     }catch(e){
         console.error(e);
-        box.innerHTML = "حدث خطأ في تحميل المهارات";
+        box.innerHTML = "حدث خطأ في تحميل الطلبات";
     }
 }
 
-// يحفظ الحد الأدنى للمستوى لمهارة محددة عبر دالة السيرفر الآمنة
-async function saveSkillRequiredLevel(skillId){
-    let input = document.getElementById("skill-req-level-" + skillId);
-    let requiredLevel = input ? (Number(input.value) || 0) : 0;
-    let admin_token = localStorage.getItem("admin_token");
+// يحوّل اختيار نوع المهارة إلى المعامل effect المطلوب لإنشاء المهارة
+function typeChoiceToEffect(choice){
+    switch(choice){
+        case "attack":
+        case "defense":
+            return null;
+        case "unblockable":
+            return null;
+        default:
+            return choice;
+    }
+}
 
-    let {error} = await supabaseClient.rpc("admin_set_skill_required_level", {
+// يعرض بطاقة لطلب مهارة معلّق مع نموذج الموافقة
+function renderSkillRequestCard(r){
+    let isNormal = r.reward_type === "normal";
+    let lockedType = r.skill_type === "defense" ? "defense" : "attack";
+    let typeSelectHtml = isNormal
+        ? `<span class="admin-hint">${r.skill_type === "defense" ? "🛡️ دفاع" : "⚔️ هجوم عادي"} (مقفل من اختيار اللاعب)</span>`
+        : `<select id="sk-req-type-${r.request_id}">${skillTypeOptionsHtml()}</select>`;
+    let typeLabel = isNormal
+        ? (r.skill_type === "defense" ? "🛡️ دفاع" : "⚔️ هجوم عادي")
+        : r.skill_type || "متقدم";
+    let damagePh = isNormal ? (lockedType === "defense" ? 0 : 150) : 0;
+
+    return `
+    <div class="admin-card" style="margin-bottom:10px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+            <strong>مهارة لشخصية: ${escapeHtml(r.character_name || "")}</strong>
+            <span class="admin-hint">بواسطة ${escapeHtml(r.username || "")}</span>
+        </div>
+        <div class="admin-hint">
+            النوع المطلوب: ${typeLabel} · المستوى ${Number(r.level) || 0} · ${new Date(r.created_at).toLocaleString()}
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:6px;">
+            <input type="text" id="sk-req-name-${r.request_id}" placeholder="اسم المهارة">
+            <input type="number" id="sk-req-damage-${r.request_id}" value="${damagePh}" placeholder="الضرر">
+            <input type="number" id="sk-req-cooldown-${r.request_id}" value="0" placeholder="التهدئة">
+            ${typeSelectHtml}
+            <label style="display:flex; align-items:center; gap:6px;">
+                <input id="sk-req-unblockable-${r.request_id}" type="checkbox">
+                💥 لا تُصد
+            </label>
+        </div>
+        <div style="margin-top:8px;">
+            <button class="admin-btn" onclick="approveSkillRequest('${r.request_id}')">✅ اعتماد</button>
+            <button class="admin-btn" style="background:#7f1d1d;" onclick="denySkillRequest('${r.request_id}')">❌ رفض</button>
+        </div>
+    </div>`;
+}
+
+// اعتماد طلب مهارة: ينشئ المهارة ويربطها بالشخصية
+async function approveSkillRequest(requestId){
+    let admin_token = localStorage.getItem("admin_token");
+    let name = document.getElementById("sk-req-name-" + requestId).value.trim();
+    if(!name){ alert("اكتب اسم المهارة"); return; }
+
+    let damage = Number(document.getElementById("sk-req-damage-" + requestId).value) || 0;
+    let cooldown = Number(document.getElementById("sk-req-cooldown-" + requestId).value) || 0;
+    let typeEl = document.getElementById("sk-req-type-" + requestId);
+    let type = typeEl ? typeEl.value : null;
+    let unblockable = document.getElementById("sk-req-unblockable-" + requestId).checked;
+
+    if(unblockable){
+        type = "attack";
+    }
+
+    let effect = (type === "unblockable") ? null : typeChoiceToEffect(type);
+
+    let {error} = await supabaseClient.rpc("admin_approve_skill_request", {
         p_admin_token: admin_token,
-        p_skill_id: skillId,
-        p_required_level: requiredLevel
+        p_request_id: requestId,
+        p_name: name,
+        p_type: type,
+        p_damage: damage,
+        p_cooldown: cooldown,
+        p_effect: effect,
+        p_unblockable: !!unblockable
     });
 
     if(error){ alert(error.message); return; }
 
-    alert("تم حفظ المستوى المطلوب");
+    alert("تم اعتماد المهارة وربطها بالشخصية");
 
-    // أعد ضبط كل كاشات مهارات الشخصيات كي تُطبق المستويات الجديدة فورًا
+    // أعد ضبط كاشات مهارات الشخصيات كي تُظهر المهارة الجديدة فورًا
     try{
         let keysToRemove = [];
         for(let i = 0; i < localStorage.length; i++){
@@ -3089,6 +3199,20 @@ async function saveSkillRequiredLevel(skillId){
         }
         keysToRemove.forEach(k => localStorage.removeItem(k));
     }catch(e){ /* تجاهل */ }
+
+    loadAdminSkillRules();
+}
+
+// رفض طلب مهارة
+async function denySkillRequest(requestId){
+    let admin_token = localStorage.getItem("admin_token");
+    let {error} = await supabaseClient.rpc("admin_deny_skill_request", {
+        p_admin_token: admin_token,
+        p_request_id: requestId
+    });
+    if(error){ alert(error.message); return; }
+    alert("تم رفض الطلب");
+    loadAdminSkillRules();
 }
 
 
@@ -4227,8 +4351,6 @@ async function openEditCharacterModal(characterId){
 
             <input type="number" id="skill-cooldown-${s.id}" value="${s.cooldown || 0}" placeholder="التهدئة">
 
-            <input type="number" id="skill-level-${s.id}" value="${s.required_level || 0}" min="0" placeholder="أدنى مستوى للاستخدام">
-
             <input type="number" id="skill-poison-turns-${s.id}" value="${(s.params && s.params.poison_turns) || 2}" placeholder="عدد أدوار السُم" style="${s.effect === 'poison' ? '' : 'display:none;'}">
 
             <textarea id="skill-desc-${s.id}" class="admin-skill-desc-input" placeholder="وصف المهارة (يظهر عند الضغط المطوّل)">${escapeHtml(s.description || '')}</textarea>
@@ -4329,11 +4451,6 @@ async function openEditCharacterModal(characterId){
                 <label class="admin-checkbox-label">
                     <input id="edit-char-glow-locked" type="checkbox" ${character.glow_locked ? "checked" : ""}>
                     🔒 قفل اللون (يمنع اللاعب من تغييره)
-                </label>
-
-                <label style="margin-top:8px; display:flex; align-items:center; gap:6px; font-weight:bold;">
-                    <input id="edit-char-bypass-levels" type="checkbox" ${character.bypass_skill_levels ? "checked" : ""}>
-                    🛡️ تجاوز قيود المستوى (يفتح كل المهارات لأصحاب هذه الشخصية دون مستوى)
                 </label>
 
             </div>
@@ -5197,9 +5314,6 @@ async function saveCharacterEdit(characterId){
 
     let goldPrize = goldEl ? (parseInt(goldEl.value) || 0) : 0;
 
-    let bypassLevels = document.getElementById("edit-char-bypass-levels").checked;
-
-
     if(name === "" || anime === ""){
 
         alert("اكتب اسم الشخصية والأنمي");
@@ -5255,9 +5369,7 @@ async function saveCharacterEdit(characterId){
 
         p_glow_color: glowColor,
 
-        p_glow_locked: glowLocked,
-
-        p_bypass_skill_levels: bypassLevels
+        p_glow_locked: glowLocked
 
     });
 
@@ -5337,8 +5449,6 @@ async function saveSkillEdit(skillId){
 
     let cooldownInput = document.getElementById("skill-cooldown-" + skillId);
 
-    let levelInput = document.getElementById("skill-level-" + skillId);
-
     let descInput = document.getElementById("skill-desc-" + skillId);
 
     let colorInput = document.getElementById("skill-color-" + skillId);
@@ -5396,8 +5506,6 @@ async function saveSkillEdit(skillId){
     }
 
     let cooldown = Number(cooldownInput.value) || 0;
-
-    let requiredLevel = Number(levelInput.value) || 0;
 
     let description = descInput ? descInput.value.trim() : "";
 
@@ -5465,14 +5573,6 @@ async function saveSkillEdit(skillId){
     if(!_silentlySavingSkills) alert("تم حفظ المهارة");
 
     if(currentEditCharacterId) GameCache.clear("character_skills_" + currentEditCharacterId);
-
-    let {error: levelErr} = await supabaseClient.rpc("admin_set_skill_required_level", {
-        p_admin_token: admin_token,
-        p_skill_id: skillId,
-        p_required_level: requiredLevel
-    });
-
-    if(levelErr && !_silentlySavingSkills) alert("حُفظت المهارة لكن تعذّر حفظ المستوى المطلوب: " + levelErr.message);
 
 }
 // ========================================
@@ -5887,9 +5987,7 @@ async function addCharacter(){
 
         p_glow_color: glowColor,
 
-        p_glow_locked: glowLocked,
-
-        p_bypass_skill_levels: false
+        p_glow_locked: glowLocked
 
     });
 
@@ -5989,8 +6087,7 @@ async function addMyCharacter(){
         p_gold_prize: 0,
         p_admin_only: isAdminOnly,
         p_glow_color: glowColor,
-        p_glow_locked: glowLocked,
-        p_bypass_skill_levels: false
+        p_glow_locked: glowLocked
     });
 
     if(error){ alert(error.message); return; }

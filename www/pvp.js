@@ -466,7 +466,6 @@ async function pvpEnterReadyPhase(matchId, _unused){
     pvpState.myCharacterName = pc.characters ? pc.characters.name : "";
     pvpState.myCharacterId = pc.character_id;
     pvpState.mySkills = await loadCharacterSkills(pc.character_id);
-    pvpState.mySkills = gateSkillsForLevel(pvpState.mySkills, pc.level, pc.bypass_skill_levels);
     pvpState.mySkills.forEach(s => { pvpState.skillCache[s.id] = s; });
 
     // خلفيات صفحات مهاراتي (تُرسم خلف الأزرار في ساحة المعركة)
