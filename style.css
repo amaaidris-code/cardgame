@@ -5507,3 +5507,71 @@ box-shadow: 0 6px 24px rgba(0,0,0,0.5), 0 0 18px rgba(255,120,0,0.4);
     font-weight:700;
 }
 
+/* ========================================================
+   العصابة (Clans)
+======================================================== */
+
+.clan-header{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:8px;
+    padding:12px;
+    margin-bottom:12px;
+    background:var(--bg-panel);
+    border:1px solid var(--line-soft);
+    border-radius:var(--radius-md);
+}
+.clan-banner{
+    width:100%;
+    max-width:240px;
+    max-height:140px;
+    object-fit:cover;
+    border-radius:var(--radius-md);
+    border:1px solid var(--line-soft);
+}
+.clan-title{
+    font-size:22px;
+    font-weight:800;
+}
+.clan-edit-row{
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    justify-content:center;
+    align-items:center;
+}
+.clan-edit-row button{
+    font-size:13px;
+    padding:6px 10px;
+}
+.clan-chat-title{
+    font-weight:700;
+    margin:12px 0 6px;
+}
+.clans-leave-row{
+    margin:14px 0 6px;
+}
+.clans-leave-row button{
+    font-size:13px;
+    padding:8px 14px;
+}
+.form-box{
+    text-align:right;
+    margin:8px 0 14px;
+}
+.form-box input[type=text],
+.friends-search-row input[type=text],
+#clan-create-name,
+#clan-join-name{
+    width:100%;
+    padding:10px;
+    box-sizing:border-box;
+}
+.friends-search-row{
+    margin-bottom:10px;
+}
+.clans-search-results{
+    text-align:right;
+}
+

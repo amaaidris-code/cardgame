@@ -7,7 +7,7 @@
 
     <title>Card Game</title>
 
-    <link rel="stylesheet" href="style.css?v=20260816a">
+    <link rel="stylesheet" href="style.css?v=20260816b">
 </head>
 
 <body>
@@ -699,6 +699,10 @@ lang="ar">
 <span id="friends-notify-badge" class="menu-chat-badge" style="display:none;"></span>
 </button>
 
+                <button onclick="Clans.open()">
+🛡️ العصابة
+</button>
+
                 <button onclick="openScreen('character-profile-screen')">
 👤 شخصيتي
 </button>
@@ -842,6 +846,26 @@ lang="ar">
             </div>
 
             <button onclick="openScreen('home-screen'); Social.stopDmPolling();">
+                ↩ العودة
+            </button>
+
+        </section>
+
+        <!-- ========================= -->
+        <!-- العصابة (Clans) -->
+        <!-- ========================= -->
+
+        <section id="clans-screen" class="screen">
+
+            <h2>🛡️ العصابة</h2>
+
+            <div id="clans-content" class="friends-content">
+
+                <div class="chat-loading">جاري التحميل...</div>
+
+            </div>
+
+            <button onclick="openScreen('home-screen'); Clans.stopPolling();">
                 ↩ العودة
             </button>
 
@@ -1655,6 +1679,8 @@ id="pve-player-used-skills">
 <script src="chat.js?v=20260814"></script>
 
 <script src="social.js?v=20260816"></script>
+
+<script src="clans.js?v=20260816g"></script>
 
 <script src="game.js?v=20260816c"></script>
 
