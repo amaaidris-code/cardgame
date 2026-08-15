@@ -1791,7 +1791,32 @@ function renderPvpWeaponSkillButtons(pagesEl, container){
             let broken = (pvpWeapon.durability_current || 0) <= 0;
             btn.disabled = broken;
             if(broken) btn.classList.add("skill-locked");
-            btn.onclick = () => pvpUseWeaponSkill(skill.id);
+
+            if(skill.effect === "steal" || skill.effect === "copy" || skill.effect === "control"){
+                let emoji = skill.effect === "steal" ? " 🕵️" : (skill.effect === "copy" ? " 📋" : " 🎛️");
+                btn.querySelector(".skill-name").textContent = skill.name + emoji;
+                if(skill.effect === "copy"){
+                    btn.onclick = () => pvpOpenStealMenu(skill, "copy");
+                } else if(skill.effect === "steal"){
+                    btn.onclick = () => pvpOpenStealMenu(skill, "steal");
+                } else {
+                    btn.onclick = () => pvpOpenControlMenu(skill);
+                }
+            } else if(skill.effect === "seal"){
+                btn.querySelector(".skill-name").textContent = skill.name + " 🔒";
+                btn.onclick = () => pvpOpenSealMenu(skill);
+            } else if(skill.effect === "unseal"){
+                btn.querySelector(".skill-name").textContent = skill.name + " 🔓";
+                btn.onclick = () => pvpOpenUnsealMenu(skill);
+            } else if(skill.effect === "delay_cooldown"){
+                btn.querySelector(".skill-name").textContent = skill.name + " ⏳";
+                btn.onclick = () => pvpOpenDelayMenu(skill);
+            } else if(skill.effect === "shadow"){
+                btn.querySelector(".skill-name").textContent = skill.name + " 🌑";
+                btn.onclick = () => pvpOpenShadowMenu(skill);
+            } else {
+                btn.onclick = () => pvpUseWeaponSkill(skill.id);
+            }
             pageDiv.appendChild(btn);
         });
 
