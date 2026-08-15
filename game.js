@@ -6297,88 +6297,137 @@ async function openEditWeaponModal(weaponId){
     renderWeaponEditModal();
 }
 
-function renderWeaponEditModal(){
+async function renderWeaponEditModal(){
     let w = currentEditWeapon;
-    let skillRows = currentEditWeaponSkills.map(s => `
-        <div class="admin-card" style="padding:10px; margin-bottom:8px; border-left:4px solid ${escapeAttr(s.color || '#3b82ff')};">
-            <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                <input class="edit-wskill-input" data-id="${s.id}" data-f="name" value="${escapeAttr(s.name || '')}" placeholder="اسم المهارة" style="flex:1;min-width:120px;">
-                <select class="edit-wskill-input" data-id="${s.id}" data-f="type">
-                    ${["attack","defense","special","unblockable","control","poison","shadow"].map(t => `<option value="${t}" ${s.type===t?"selected":""}>${escapeAttr(t)}</option>`).join("")}
-                </select>
-                <input class="edit-wskill-input" data-id="${s.id}" data-f="damage" type="number" value="${s.damage ?? 0}" placeholder="الضرر" style="width:80px;">
-                <input class="edit-wskill-input" data-id="${s.id}" data-f="cooldown" type="number" value="${s.cooldown ?? 0}" placeholder="التهدئة" style="width:80px;">
-            </div>
-            <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;">
-                <input class="edit-wskill-input" data-id="${s.id}" data-f="effect" value="${escapeAttr(s.effect || '')}" placeholder="التأثير (مثال: lifesteal, poison, freeze)" style="flex:1;min-width:140px;">
-                <input class="edit-wskill-input" data-id="${s.id}" data-f="description" value="${escapeAttr(s.description || '')}" placeholder="الوصف" style="flex:1;min-width:140px;">
-            </div>
-            <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:6px;">
-                <input class="edit-wskill-input" data-id="${s.id}" data-f="params" value="${escapeAttr(JSON.stringify(s.params && Object.keys(s.params).length ? s.params : {}))}" placeholder="معاملات JSON (اختياري)" style="flex:1;min-width:140px;">
-                <input class="edit-wskill-input" data-id="${s.id}" data-f="color" type="color" value="${escapeAttr(s.color || '#3b82ff')}">
-                <label class="admin-checkbox-label"><input class="edit-wskill-input" data-id="${s.id}" data-f="unblockable" type="checkbox" ${s.unblockable?"checked":""}> لا تُصدّ</label>
-                <input class="edit-wskill-input" data-id="${s.id}" data-f="stroke_width" type="number" value="${s.stroke_width ?? 0}" placeholder="سُمك الحد" style="width:90px;">
-                <button class="admin-btn" onclick="saveWeaponSkillEdit('${s.id}')">💾 حفظ</button>
-                <button class="admin-btn" onclick="removeWeaponSkill('${w.id}','${s.id}')">🗑️</button>
-            </div>
-        </div>`).join("");
+    let skills = currentEditWeaponSkills || [];
+
+    // خلفيات صفحات المهارات الحالية (كل 4 مهارات = صفحة)
+    let pageBgs = await loadWeaponSkillPageBackgrounds(currentEditWeaponId);
+
+    let numPages = Math.max(1, Math.ceil(skills.length / 4));
+
+    let skillRows = skills.map(s => {
+        let pageColor = (s.color && /^#[0-9A-Fa-f]{6}$/.test(s.color)) ? s.color : '#3b82ff';
+        return `
+        <div class="admin-skill-edit-row" style="border-left:4px solid ${escapeAttr(pageColor)};">
+            <input type="text" id="wskill-name-${s.id}" class="admin-skill-name-input" value="${escapeHtml(s.name || '')}" placeholder="اسم المهارة">
+            <select id="wskill-type-${s.id}">${skillTypeOptionsHtml(skillFieldsToTypeChoice(s))}</select>
+            <input type="number" id="wskill-damage-${s.id}" value="${s.damage || 0}" placeholder="الضرر" style="${s.effect === 'shadow' ? 'display:none;' : ''}">
+            <input type="number" id="wskill-cooldown-${s.id}" value="${s.cooldown || 0}" placeholder="التهدئة">
+            <textarea id="wskill-desc-${s.id}" class="admin-skill-desc-input" placeholder="وصف المهارة (يظهر عند الضغط المطوّل)">${escapeHtml(s.description || '')}</textarea>
+            <input type="text" id="wskill-params-${s.id}" class="admin-skill-params-input" value="${escapeHtml(JSON.stringify(s.params || {}))}" placeholder="معاملات JSON — مثل {&quot;amount&quot;:50}">
+            <label class="admin-color-row skill-color-row">🎨 لون اسم المهارة <input type="color" id="wskill-color-${s.id}" value="${escapeAttr(pageColor)}"></label>
+            <label class="admin-color-row skill-color-row">✏️ لون الحد <input type="color" id="wskill-stroke-color-${s.id}" value="${(s.stroke_color && /^#[0-9A-Fa-f]{6}$/.test(s.stroke_color)) ? s.stroke_color : '#000000'}"></label>
+            <label class="admin-color-row skill-color-row">📏 سماكة الحد <input type="number" id="wskill-stroke-width-${s.id}" value="${s.stroke_width || 0}" min="0" max="10" step="0.1" style="width:60px;"></label>
+            <button onclick="saveWeaponSkillEdit('${s.id}')">حفظ</button>
+            <button onclick="removeWeaponSkill('${w.id}','${s.id}')">🗑️</button>
+        </div>`;
+    }).join("");
+
+    let pageBgsHtml = Array.from({length: numPages}, (_, p) => {
+        let pageSkills = skills.slice(p * 4, p * 4 + 4);
+        let firstSkillColor = (pageSkills.length > 0 && pageSkills[0].color && /^#[0-9A-Fa-f]{6}$/.test(pageSkills[0].color))
+            ? pageSkills[0].color : '#3b82ff';
+        return `
+        <div class="admin-skill-edit-row admin-page-bg-row">
+            <span class="admin-page-bg-label">🎨 صفحة ${p + 1}</span>
+            <input type="text" id="wpage-bg-${p}" value="${escapeHtml(pageBgs[p] ? pageBgs[p].url : '')}" placeholder="رابط صورة خلفية هذه الصفحة (اختياري)">
+            <button onclick="saveWeaponSkillPageBackground('${w.id}', ${p})">حفظ</button>
+            <button onclick="clearWeaponSkillPageBackground('${w.id}', ${p})">🗑️</button>
+            <span id="wpage-bg-status-${p}" class="upload-status"></span>
+            <label class="admin-color-row skill-page-color-row" style="margin-top:8px;">🎨 لون مهارات الصفحة <input type="color" id="wpage-color-${p}" value="${firstSkillColor}"></label>
+            <label class="admin-color-row skill-page-color-row">✏️ لون حد مهارات الصفحة <input type="color" id="wpage-stroke-color-${p}" value="${(pageSkills.length > 0 && pageSkills[0].stroke_color && /^#[0-9A-Fa-f]{6}$/.test(pageSkills[0].stroke_color)) ? pageSkills[0].stroke_color : '#000000'}"></label>
+            <label class="admin-color-row skill-page-color-row">📏 سماكة حد مهارات الصفحة <input type="number" id="wpage-stroke-width-${p}" value="${(pageSkills.length > 0) ? (pageSkills[0].stroke_width || 0) : 0}" min="0" max="10" step="0.1" style="width:60px;"></label>
+            <label class="admin-color-row skill-page-color-row">🔍 حجم مهارات الصفحة (1 = عادي، 1.3 = أكبر) <input type="number" id="wpage-scale-${p}" value="${pageBgs[p] && pageBgs[p].scale ? pageBgs[p].scale : 1}" min="0.5" max="3" step="0.1" style="width:70px;" onchange="saveWeaponSkillPageScale('${w.id}', ${p})"></label>
+            <button onclick="applyWeaponPageColor(${p})" class="admin-page-color-apply-btn">تطبيق اللون والحد على جميع المهارات</button>
+            <label class="admin-page-bg-upload">📷 صورة من جهازي <input type="file" id="wpage-bg-file-${p}" accept="image/*" onchange="uploadWeaponPageBackground('${w.id}', ${p})"></label>
+        </div>`;
+    }).join("");
+
+    let skillRowsHtml = skills.length > 0
+        ? '<div class="admin-skills-edit-list">' + skillRows + '</div>'
+        : '<p class="admin-hint">لا توجد مهارات مرتبطة بهذا السلاح.</p>';
 
     let overlay = document.createElement("div");
     overlay.id = "weapon-edit-modal";
-    overlay.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;";
+    overlay.className = "steal-modal";
     overlay.innerHTML = `
-        <div class="empty-card" style="max-width:720px;width:100%;max-height:90vh;overflow:auto;">
-            <h3 style="margin-top:0;">⚔️ تحرير السلاح: ${escapeAttr(w.name || "")}</h3>
-            <input id="edit-weapon-name" type="text" value="${escapeAttr(w.name || '')}" placeholder="اسم السلاح">
-            <input id="edit-weapon-description" type="text" value="${escapeAttr(w.description || '')}" placeholder="وصف قصير">
-            <input id="edit-weapon-image" type="text" value="${escapeAttr(w.image || '')}" placeholder="رابط صورة السلاح">
-            <input id="edit-weapon-image-file" type="file" accept="image/*" onchange="uploadWeaponImage('edit-weapon-image-file','edit-weapon-image','edit-weapon-img-status',{aspectRatio:1,crop:true})">
-            <p id="edit-weapon-img-status" class="upload-status"></p>
-            <input id="edit-weapon-skillcard" type="text" value="${escapeAttr(w.skill_card_image || '')}" placeholder="رابط خلفية بطاقات مهارات السلاح">
-            <label>💰 السعر <input id="edit-weapon-price" type="number" min="0" value="${w.price || 0}"></label>
-            <label>🛡️ المتانة القصوى <input id="edit-weapon-durability" type="number" min="0" value="${w.max_durability || 0}"></label>
-            <label>📦 عدد النسخ <input id="edit-weapon-stock" type="number" min="0" value="${w.stock ?? 0}"></label>
-            <label class="admin-checkbox-label"><input id="edit-weapon-infinite" type="checkbox" ${w.infinite?"checked":""}> ♾️ نسخ لا محدودة</label>
-            <label class="admin-color-row">🎨 لون التوهج <input id="edit-weapon-glow-color" type="color" value="${escapeAttr(w.glow_color || '#e8b93f')}"></label>
-
-            <hr>
-            <h4>🗡️ مهارات السلاح: <span id="edit-weapon-durability-live">${w.durability ?? 0}</span></h4>
-            <p class="admin-hint">كل استخدام لمهارة من مهارات هذا السلاح ينقص متانته بمقدار 1.</p>
-            <div id="edit-weapon-skill-list">${skillRows || '<p class="admin-hint">لا توجد مهارات بعد.</p>'}</div>
-
-            <hr>
-            <h4>➕ إضافة مهارة</h4>
-            <div style="display:flex; gap:6px; flex-wrap:wrap;">
-                <input id="new-wskill-name" placeholder="اسم المهارة" style="flex:1;min-width:110px;">
-                <select id="new-wskill-type">
-                    ${["attack","defense","special","unblockable","control","poison","shadow"].map(t => `<option value="${t}">${t}</option>`).join("")}
-                </select>
-                <input id="new-wskill-damage" type="number" placeholder="الضرر" style="width:80px;">
-                <input id="new-wskill-cooldown" type="number" placeholder="التهدئة" style="width:80px;">
-                <input id="new-wskill-effect" placeholder="التأثير" style="flex:1;min-width:100px;">
-                <input id="new-wskill-desc" placeholder="الوصف" style="flex:1;min-width:100px;">
-                <button class="admin-btn" onclick="addWeaponSkill('${w.id}')">➕ إضافة</button>
+        <div class="steal-modal-box admin-edit-box">
+            <h3>⚔️ تحرير السلاح: ${escapeHtml(w.name || "")}</h3>
+            <div class="form-box">
+                <input id="edit-weapon-name" type="text" value="${escapeHtml(w.name || '')}" placeholder="اسم السلاح">
+                <input id="edit-weapon-description" type="text" value="${escapeHtml(w.description || '')}" placeholder="وصف قصير">
+                <input id="edit-weapon-image" type="text" value="${escapeHtml(w.image || '')}" placeholder="رابط الصورة (أو ارفع من الجهاز)">
+                <input id="edit-weapon-image-file" type="file" accept="image/*" onchange="uploadWeaponImage('edit-weapon-image-file','edit-weapon-image','edit-weapon-img-status',{aspectRatio:1,crop:true})">
+                <p id="edit-weapon-img-status" class="upload-status"></p>
+                <input id="edit-weapon-skillcard" type="text" value="${escapeHtml(w.skill_card_image || '')}" placeholder="رابط خلفية بطاقات المهارات (أو ارفع)">
+                <input id="edit-weapon-skillcard-file" type="file" accept="image/*" onchange="uploadWeaponImage('edit-weapon-skillcard-file','edit-weapon-skillcard','edit-weapon-skillcard-status',{aspectRatio:1,crop:true})">
+                <p id="edit-weapon-skillcard-status" class="upload-status"></p>
+                <label>💰 السعر <input id="edit-weapon-price" type="number" min="0" value="${w.price || 0}"></label>
+                <label>🛡️ المتانة القصوى <input id="edit-weapon-durability" type="number" min="0" value="${w.max_durability || 0}"></label>
+                <label>📦 عدد النسخ <input id="edit-weapon-stock" type="number" min="0" value="${w.stock ?? 0}"></label>
+                <label class="admin-checkbox-label"><input id="edit-weapon-infinite" type="checkbox" ${w.infinite ? "checked" : ""}> ♾️ نسخ لا محدودة</label>
+                <label class="admin-color-row">🎨 لون التوهج <input id="edit-weapon-glow-color" type="color" value="${escapeAttr(w.glow_color || '#e8b93f')}"></label>
             </div>
 
-            <div style="display:flex; gap:8px; margin-top:12px;">
-                <button onclick="saveWeaponEdit('${w.id}')">💾 حفظ السلاح</button>
-                <button onclick="document.getElementById('weapon-edit-modal').remove()">إغلاق</button>
+            <hr>
+            <h4>🗡️ مهارات السلاح</h4>
+            <p class="admin-hint">كل استخدام لمهارة من مهارات هذا السلاح ينقص متانته بمقدار 1.</p>
+            ${skillRowsHtml}
+
+            <hr>
+            <h4>🎨 خلفيات صفحات المهارات</h4>
+            <p class="admin-hint">كل صفحة تعرض حتى 4 مهارات. الرابط يظهر خلف أزرار المهارات. اترك الرابط فارغًا ثم احفظ لإزالة الخلفية.</p>
+            <div class="admin-skills-edit-list">${pageBgsHtml}</div>
+
+            <hr>
+            <h4>➕ إضافة مهارة جديدة</h4>
+            <div class="form-box admin-add-skill-form">
+                <input id="new-wskill-name" type="text" placeholder="اسم المهارة">
+                <select id="new-wskill-type">${skillTypeOptionsHtml("attack")}</select>
+                <input id="new-wskill-damage" type="number" placeholder="الضرر" value="0">
+                <input id="new-wskill-cooldown" type="number" placeholder="التهدئة (بالأدوار)" value="0">
+                <textarea id="new-wskill-desc" placeholder="وصف المهارة (يظهر للاعب عند الضغط المطوّل على الزر)"></textarea>
+                <input id="new-wskill-params" type="text" placeholder="معاملات إضافية بصيغة JSON — مثل {&quot;amount&quot;:50} (اختياري)">
+                <label class="admin-color-row skill-color-row">🎨 لون اسم المهارة <input id="new-wskill-color" type="color" value="#3b82ff"></label>
+                <label class="admin-color-row skill-color-row">✏️ لون الحد <input id="new-wskill-stroke-color" type="color" value="#000000"></label>
+                <label class="admin-color-row skill-color-row">📏 سماكة الحد <input id="new-wskill-stroke-width" type="number" value="0" min="0" max="10" step="0.1" style="width:60px;"></label>
+                <button onclick="addWeaponSkill('${w.id}')">➕ إضافة المهارة</button>
+            </div>
+
+            <div class="steal-modal-buttons">
+                <button id="save-weapon-edit-btn">💾 حفظ التعديلات</button>
+                <button id="cancel-weapon-edit-btn">إلغاء</button>
             </div>
         </div>`;
+    document.querySelector("#weapon-edit-modal")?.remove();
     document.body.appendChild(overlay);
+
+    document.getElementById("cancel-weapon-edit-btn").onclick = () => document.getElementById("weapon-edit-modal").remove();
+    document.getElementById("save-weapon-edit-btn").onclick = () => saveWeaponEdit(w.id);
 }
 
 function collectWeaponSkill(id){
+    let val = sel => (document.getElementById(sel) || {}).value;
+    let num = sel => Number(val(sel)) || 0;
     let obj = { id };
-    document.querySelectorAll('.edit-wskill-input[data-id="' + id + '"]').forEach(el => {
-        let f = el.getAttribute("data-f");
-        if(el.type === "checkbox") obj[f] = el.checked;
-        else if(f === "damage" || f === "cooldown" || f === "stroke_width") obj[f] = Number(el.value) || 0;
-        else if(f === "params"){ try{ obj[f] = el.value.trim() ? JSON.parse(el.value) : {}; }catch(e){ obj[f] = {}; } }
-        else obj[f] = el.value;
-    });
+    obj.name = val("wskill-name-" + id);
+    obj.typeChoice = val("wskill-type-" + id);
+    let f = skillTypeChoiceToFields(obj.typeChoice);
+    obj.type = f.type;
+    obj.effect = f.effect;
+    obj.unblockable = f.unblockable;
+    obj.damage = num("wskill-damage-" + id);
+    obj.cooldown = num("wskill-cooldown-" + id);
+    obj.description = val("wskill-desc-" + id);
+    let paramsRaw = val("wskill-params-" + id);
+    try{ obj.params = paramsRaw.trim() ? JSON.parse(paramsRaw) : {}; }catch(e){ obj.params = {}; }
+    obj.color = val("wskill-color-" + id) || "#3b82ff";
+    obj.stroke_color = val("wskill-stroke-color-" + id);
+    obj.stroke_width = num("wskill-stroke-width-" + id);
     return obj;
 }
+
 
 async function saveWeaponSkillEdit(skillId){
     let wId = currentEditWeaponId;
@@ -6395,21 +6444,28 @@ async function saveWeaponSkillEdit(skillId){
     alert("تم حفظ المهارة");
 }
 
+
 async function addWeaponSkill(wId){
     let name = (document.getElementById("new-wskill-name") || {}).value; name = name ? name.trim() : "";
     if(name === ""){ alert("اكتب اسم المهارة"); return; }
+    let typeChoice = document.getElementById("new-wskill-type").value || "attack";
+    let f = skillTypeChoiceToFields(typeChoice);
+    let color = (document.getElementById("new-wskill-color") || {}).value || "#3b82ff";
+    let strokeColor = (document.getElementById("new-wskill-stroke-color") || {}).value;
+    let strokeWidth = Number((document.getElementById("new-wskill-stroke-width") || {}).value) || 0;
+    let paramsRaw = (document.getElementById("new-wskill-params") || {}).value || "";
     let admin_token = localStorage.getItem("admin_token");
     let {error} = await supabaseClient.rpc("admin_add_weapon_skill", {
         p_admin_token: admin_token, p_weapon_id: wId, p_name: name,
-        p_type: document.getElementById("new-wskill-type").value || "attack",
-        p_damage: Number(document.getElementById("new-wskill-damage").value) || 0,
+        p_type: f.type || "attack", p_damage: Number(document.getElementById("new-wskill-damage").value) || 0,
         p_cooldown: Number(document.getElementById("new-wskill-cooldown").value) || 0,
-        p_effect: document.getElementById("new-wskill-effect").value.trim() || null,
-        p_unblockable: false,
+        p_effect: f.effect, p_unblockable: !!f.unblockable,
         p_description: document.getElementById("new-wskill-desc").value.trim() || null,
-        p_color: "#3b82ff", p_params: {}, p_stroke_color: null, p_stroke_width: 0
+        p_color: color, p_params: (() => { try{ return paramsRaw.trim() ? JSON.parse(paramsRaw) : {}; }catch(e){ return {}; } })(),
+        p_stroke_color: strokeColor, p_stroke_width: strokeWidth
     });
     if(error){ alert(error.message); return; }
+    alert("تمت إضافة المهارة");
     document.getElementById("weapon-edit-modal").remove();
     openEditWeaponModal(wId);
 }
@@ -6447,6 +6503,91 @@ async function saveWeaponEdit(wId){
 // ========================================
 // نظام الأسلحة — المتجر وأسلحتي
 // ========================================
+
+async function loadWeaponSkillPageBackgrounds(weaponId){
+    let admin_token = localStorage.getItem("admin_token");
+    let {data, error} = await supabaseClient.rpc("admin_list_weapon_skill_page_backgrounds", {
+        p_admin_token: admin_token, p_weapon_id: weaponId
+    });
+    if(error || !data) return {};
+    let map = {};
+    data.forEach(row => {
+        map[row.page_index] = {
+            url: row.image_url || "",
+            scale: Number(row.skill_scale) > 0 ? Number(row.skill_scale) : 1
+        };
+    });
+    return map;
+}
+
+async function uploadWeaponPageBackground(weaponId, pageIndex){
+    let fileInput = document.getElementById("wpage-bg-file-" + pageIndex);
+    let file = fileInput ? fileInput.files[0] : null;
+    if(!file) return;
+    await uploadCharacterImage(
+        "wpage-bg-file-" + pageIndex,
+        "wpage-bg-" + pageIndex,
+        "wpage-bg-status-" + pageIndex,
+        { aspectRatio: 1, crop: true }
+    );
+    let input = document.getElementById("wpage-bg-" + pageIndex);
+    if(input && input.value.trim()){
+        await saveWeaponSkillPageBackground(weaponId, pageIndex);
+    }
+    fileInput.value = "";
+}
+
+async function saveWeaponSkillPageBackground(weaponId, pageIndex){
+    let input = document.getElementById("wpage-bg-" + pageIndex);
+    let url = input ? input.value.trim() : "";
+    let admin_token = localStorage.getItem("admin_token");
+    let {error} = await supabaseClient.rpc("admin_set_weapon_skill_page_background", {
+        p_admin_token: admin_token, p_weapon_id: weaponId,
+        p_page_index: pageIndex, p_image_url: url
+    });
+    let status = document.getElementById("wpage-bg-status-" + pageIndex);
+    if(error){ if(status) status.textContent = ""; alert(error.message || "تعذر حفظ الخلفية"); return; }
+    if(status) status.textContent = url ? "✓ حُفظت الخلفية" : "✓ أُزيلت الخلفية";
+}
+
+async function clearWeaponSkillPageBackground(weaponId, pageIndex){
+    let input = document.getElementById("wpage-bg-" + pageIndex);
+    if(input) input.value = "";
+    await saveWeaponSkillPageBackground(weaponId, pageIndex);
+}
+
+async function saveWeaponSkillPageScale(weaponId, pageIndex){
+    let input = document.getElementById("wpage-scale-" + pageIndex);
+    let scale = input ? parseFloat(input.value) : 1;
+    if(!(scale > 0)) scale = 1;
+    let admin_token = localStorage.getItem("admin_token");
+    let {error} = await supabaseClient.rpc("admin_set_weapon_skill_page_scale", {
+        p_admin_token: admin_token, p_weapon_id: weaponId,
+        p_page_index: pageIndex, p_skill_scale: scale
+    });
+    if(error){ alert(error.message || "تعذر حفظ حجم الصفحة"); return; }
+    let status = document.getElementById("wpage-bg-status-" + pageIndex);
+    if(status) status.textContent = "✓ حُفظ الحجم";
+}
+
+function applyWeaponPageColor(pageIndex){
+    const colorInput = document.getElementById("wpage-color-" + pageIndex);
+    if(!colorInput) return;
+    const color = colorInput.value;
+    const strokeColorInput = document.getElementById("wpage-stroke-color-" + pageIndex);
+    const strokeWidthInput = document.getElementById("wpage-stroke-width-" + pageIndex);
+    const strokeColor = strokeColorInput ? strokeColorInput.value : '#000000';
+    const strokeWidth = strokeWidthInput ? Number(strokeWidthInput.value) || 0 : 0;
+    const pageSkills = (currentEditWeaponSkills || []).slice(pageIndex * 4, pageIndex * 4 + 4);
+    pageSkills.forEach(skill => {
+        const cInput = document.getElementById("wskill-color-" + skill.id);
+        if(cInput) cInput.value = color;
+        const sInput = document.getElementById("wskill-stroke-color-" + skill.id);
+        if(sInput) sInput.value = strokeColor;
+        const wInput = document.getElementById("wskill-stroke-width-" + skill.id);
+        if(wInput) wInput.value = strokeWidth;
+    });
+}
 
 async function loadShop(){
     let shopBox = document.getElementById("shop-content");
