@@ -3152,6 +3152,9 @@ async function updateSkillOrderBadge(){
     if(!badge) return;
     let admin_token = localStorage.getItem("admin_token");
     if(!admin_token){ badge.style.display = "none"; return; }
+    // نستدعي RPC فقط إذا كانت لوحة الإدارة مفتوحة فعلًا (وإلا ننتج أخطاء 400 غير مبررة)
+    let adminScreen = document.getElementById("admin-panel-screen");
+    if(!adminScreen || !adminScreen.classList.contains("active")){ return; }
     try{
         let {data:reqs, error} = await supabaseClient.rpc("admin_list_skill_requests", { p_admin_token: admin_token });
         if(error) throw error;
