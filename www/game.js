@@ -2961,7 +2961,13 @@ async function loadAdminUpgradeConfig(){
         });
 
         let costRows = "";
-        (costs || []).forEach(r => {
+        // نعرض المستويات حتى الحد الأقصى فقط، دون حذف أي سجل محفوظ
+        // (تُخزَّن قيم المستويات الأعلى وتعود للظهور لو رُفع الحد لاحقًا).
+        let maxLevel = 50;
+        (config || []).forEach(c => {
+            if(c.config_key === "max_level") maxLevel = Number(c.config_value) || 50;
+        });
+        (costs || []).filter(r => Number(r.level) <= Number(maxLevel)).forEach(r => {
             let reward = r.skill_reward === "normal" ? "normal" : (r.skill_reward === "unique" ? "unique" : "none");
             costRows += `
                 <div class="admin-player-gold-edit">
