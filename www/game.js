@@ -348,6 +348,8 @@ function showAdminTab(tabId){
 
     if(tabId === "admin-tab-notifications") loadAdminNotifications();
 
+    if(tabId === "admin-tab-rules") loadAdminSkillRules();
+
 }
 
 
@@ -3005,11 +3007,88 @@ async function saveLevelCost(level){
 }
 
 
-// حمّالة تبويب قواعد المهارات (تُعبَّأ بالكامل في خطوة قواعد المهارات)
+// تبويب المهارات: يعرض كل مهارات اللعبة مع إمكانية تعديل الحدّ الأدنى للمستوى
+// (مقرون بميزة قيود المستوى). قراءة المهارات متاحة للعموم بتصريحات RLS.
 async function loadAdminSkillRules(){
     let box = document.getElementById("admin-skill-rules-content");
     if(!box) return;
-    box.innerHTML = "جاري التحميل...";
+    box.innerHTML = "جاري تحميل المهارات...";
+
+    try{
+
+        let {data:skills, error} =
+        await supabaseClient
+        .from("skills")
+        .select("*")
+        .order("name");
+
+        if(error) throw error;
+
+        if(!skills || skills.length === 0){
+            box.innerHTML = "لا توجد مهارات بعد.";
+            return;
+        }
+
+        box.innerHTML =
+            '<p class="admin-hint">قائمة بكل مهارات اللعبة. حدّد لأي مهارة أدنى مستوى مطلوب حتى تُتاح لصاحبها (تُحجب المهارات الأقوى حتى يصل اللاعب للمستوى، ما لم تكن الشخصية مخوّلة بتجاوز القيود). باقي خصائص المهارة تُعدّل من بطاقة كل شخصية.</p>' +
+            skills.map(sk => {
+                let choice = skillFieldsToTypeChoice(sk);
+                let typeLabel = "";
+                try{
+                    let opts = skillTypeOptionsHtml(choice);
+                    let m = opts.match(/<option[^>]*value="[^"]*"[^>]*>([\s\S]*?)<\/option>/);
+                    typeLabel = (m && m[1]) || choice;
+                }catch(e){ typeLabel = choice; }
+                return `
+                <div class="admin-card" style="margin-bottom:8px;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+                        <strong>${escapeHtml(sk.name || "")}</strong>
+                        <span class="admin-hint">${escapeHtml(typeLabel)}${sk.unblockable ? " · 💥 لا تُصد" : ""}</span>
+                    </div>
+                    <div class="admin-hint">${escapeHtml(sk.description || "")}</div>
+                    <div style="display:flex; gap:14px; flex-wrap:wrap; align-items:center; margin-top:4px;">
+                        <span>⚔️ ${Number(sk.damage) || 0}</span>
+                        <span>⏱️ تهدئة ${Number(sk.cooldown) || 0}</span>
+                        <label style="display:flex; align-items:center; gap:6px;">
+                            أدنى مستوى
+                            <input type="number" min="0" id="skill-req-level-${sk.id}" value="${Number(sk.required_level) || 0}" style="width:70px;">
+                        </label>
+                        <button class="admin-btn" onclick="saveSkillRequiredLevel('${sk.id}')">💾 حفظ المستوى</button>
+                    </div>
+                </div>`;
+            }).join("");
+
+    }catch(e){
+        console.error(e);
+        box.innerHTML = "حدث خطأ في تحميل المهارات";
+    }
+}
+
+// يحفظ الحد الأدنى للمستوى لمهارة محددة عبر دالة السيرفر الآمنة
+async function saveSkillRequiredLevel(skillId){
+    let input = document.getElementById("skill-req-level-" + skillId);
+    let requiredLevel = input ? (Number(input.value) || 0) : 0;
+    let admin_token = localStorage.getItem("admin_token");
+
+    let {error} = await supabaseClient.rpc("admin_set_skill_required_level", {
+        p_admin_token: admin_token,
+        p_skill_id: skillId,
+        p_required_level: requiredLevel
+    });
+
+    if(error){ alert(error.message); return; }
+
+    alert("تم حفظ المستوى المطلوب");
+
+    // أعد ضبط كل كاشات مهارات الشخصيات كي تُطبق المستويات الجديدة فورًا
+    try{
+        let keysToRemove = [];
+        for(let i = 0; i < localStorage.length; i++){
+            let k = localStorage.key(i);
+            if(k && k.indexOf("character_skills_") !== -1) keysToRemove.push(k);
+        }
+        keysToRemove.forEach(k => localStorage.removeItem(k));
+    }catch(e){ /* تجاهل */ }
 }
 
 
