@@ -1948,10 +1948,333 @@ function renderPvpPotionBarInternal(enabled){
 }
 
 async function usePvpPotion(potionId){
+    let potion = (pvpPotionCache || []).find(p => String(p.potion_id) === String(potionId));
+    // الجرعة بمهارة من نوع "اختيار هدف" (سرقة/نسخ/سيطرة/ختم/فك ختم/تأجيل/ظل)
+    // تتصرف تمامًا كالمهارة الحقيقية: تفتح قائمة الأهداف ثم تنفّذ عبر RPC خاص.
+    if(potion && potion.effect_skill_type && isPvpPotionPickerType(potion.effect_skill_type)){
+        pvpOpenPotionPicker(potion);
+        return;
+    }
     let { data, error } = await supabaseClient.rpc("pvp_use_potion", {
         p_token: pvpGetToken(), p_match_id: pvpState.matchId, p_potion_id: potionId
     }).single();
     if(error){ alert(error.message || "تعذر استخدام الجرعة"); }
+    await pvpLoadMyPotions();
+    pvpRefreshState(false);
+}
+
+// أنواع جرع الاختيار (تحتاج هدفًا حقيقيًا مثل مهارات الاختيار العادية)
+function isPvpPotionPickerType(t){
+    return t === "steal" || t === "copy" || t === "control"
+        || t === "seal" || t === "unseal" || t === "delay_cooldown" || t === "shadow";
+}
+
+// يبني مهارة صناعية من نوع الجرعة (مطابق لمنطق battle.js)
+function pvpPotionSkillFields(typeChoice, value){
+    switch(typeChoice){
+        case "defense": return { type: "defense", effect: null, unblockable: false, params: { amount: value } };
+        case "steal": return { type: "special", effect: "steal", unblockable: false, params: {} };
+        case "copy": return { type: "special", effect: "copy", unblockable: false, params: {} };
+        case "control": return { type: "special", effect: "control", unblockable: false, params: {} };
+        case "unblockable": return { type: "special", effect: null, unblockable: true, params: { amount: value } };
+        case "freeze": return { type: "special", effect: "freeze", unblockable: false, params: { amount: value } };
+        case "lifesteal": return { type: "special", effect: "lifesteal", unblockable: false, params: { amount: value } };
+        case "reflect": return { type: "special", effect: "reflect", unblockable: false, params: { reflect_mult: value || 1 } };
+        case "unblockable_reflect": return { type: "special", effect: "reflect", unblockable: true, params: { reflect_mult: value || 1, unblockable_reflect: true } };
+        case "seal": return { type: "special", effect: "seal", unblockable: false, params: {} };
+        case "unseal": return { type: "special", effect: "unseal", unblockable: false, params: {} };
+        case "consecutive_turns": return { type: "special", effect: "consecutive_turns", unblockable: false, params: { extra_turns: value || 1 } };
+        case "absorb_atk": return { type: "special", effect: "absorb_atk", unblockable: false, params: { amount: value || 1 } };
+        case "absorb_hp": return { type: "special", effect: "absorb_hp", unblockable: false, params: { amount: value || 1 } };
+        case "hp_boost": return { type: "special", effect: "hp_boost", unblockable: false, params: { amount: value } };
+        case "atk_boost": return { type: "special", effect: "atk_boost", unblockable: false, params: { amount: value } };
+        case "poison": return { type: "special", effect: "poison", unblockable: false, params: { poison_damage: value, poison_turns: value } };
+        case "delay_cooldown": return { type: "special", effect: "delay_cooldown", unblockable: false, params: { delay: value } };
+        case "shadow": return { type: "special", effect: "shadow", unblockable: false, params: { shadow_list: [] } };
+        default: return { type: "attack", effect: null, unblockable: false, params: { amount: value } };
+    }
+}
+
+// يفتح قائمة الأهداف المناسبة لجرعة اختيار وفق نوعها
+function pvpOpenPotionPicker(potion){
+    let typeChoice = potion.effect_skill_type;
+    let value = Number(potion.effect_value || 0);
+    let skill = Object.assign({}, pvpPotionSkillFields(typeChoice, value), {
+        id: "potion-skill-" + potion.potion_id,
+        name: potion.name || "جرعة",
+        damage: value,
+        cooldown: 0
+    });
+
+    switch(typeChoice){
+        case "steal": case "copy":
+            pvpOpenPotionStealCopy(potion, skill, typeChoice);
+            break;
+        case "control":
+            pvpOpenPotionControl(potion, skill);
+            break;
+        case "seal": case "unseal":
+            pvpOpenPotionSealUnseal(potion, skill, typeChoice);
+            break;
+        case "delay_cooldown":
+            pvpOpenPotionDelay(potion, skill);
+            break;
+        case "shadow":
+            pvpOpenPotionShadow(potion, skill);
+            break;
+    }
+}
+
+function pvpClosePotionMenu(){
+    let modal = document.getElementById("pvp-steal-modal");
+    if(modal && modal.dataset.modalFor === "potion") modal.remove();
+}
+
+// جرعة سرقة/نسخ: نعرض مهارات الخصم القابلة للسرقة/النسخ
+function pvpOpenPotionStealCopy(potion, abilitySkill, mode){
+    pvpClosePotionMenu();
+    let sourceIds = (mode === "steal")
+        ? [...new Set([...(pvpState.oppRevealedSkillIds || []), ...(pvpState.oppUsedSkillIds || [])])]
+        : (pvpState.oppUsedSkillIds || []);
+    let candidates = sourceIds
+        .map(id => pvpState.skillCache[id])
+        .filter(s => s && !["steal","copy","control","shadow","delay_cooldown"].includes(s.effect));
+    if(candidates.length === 0){
+        alert(mode === "steal" ? "لا توجد مهارة خصم قابلة للسرقة الآن" : "لا توجد مهارة خصم قابلة للنسخ الآن");
+        return;
+    }
+    let modal = document.createElement("div");
+    modal.id = "pvp-steal-modal";
+    modal.className = "steal-modal";
+    modal.dataset.modalFor = "potion";
+    modal.innerHTML = `
+        <div class="steal-modal-box">
+            <h3>${mode === "steal" ? "🫳 جرعة — اختر مهارة خصم لسرقتها" : "📋 جرعة — اختر مهارة خصم لنسخها"}</h3>
+            <div class="steal-options-list" id="pvp-steal-options-list"></div>
+            <div class="steal-modal-buttons">
+                <button id="pvp-steal-cancel-btn">إلغاء</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    let list = modal.querySelector("#pvp-steal-options-list");
+    candidates.forEach(s => {
+        let btn = document.createElement("button");
+        btn.className = "steal-option";
+        btn.textContent = s.name;
+        btn.onclick = () => { pvpClosePotionMenu(); pvpUsePotionTarget(potion.potion_id, s.id); };
+        list.appendChild(btn);
+    });
+    modal.querySelector("#pvp-steal-cancel-btn").onclick = pvpClosePotionMenu;
+}
+
+// جرعة سيطرة
+function pvpOpenPotionControl(potion, abilitySkill){
+    pvpClosePotionMenu();
+    let sourceIds = [...new Set([...(pvpState.oppRevealedSkillIds || []), ...(pvpState.oppUsedSkillIds || [])])];
+    let candidates = sourceIds
+        .map(id => pvpState.skillCache[id])
+        .filter(s => s && !["steal","copy","control","shadow","delay_cooldown"].includes(s.effect));
+    if(candidates.length === 0){ alert("لا توجد مهارة خصم قابلة للسيطرة الآن"); return; }
+    let modal = document.createElement("div");
+    modal.id = "pvp-steal-modal";
+    modal.className = "steal-modal";
+    modal.dataset.modalFor = "potion";
+    modal.innerHTML = `
+        <div class="steal-modal-box">
+            <h3>🎛️ جرعة — اختر مهارة خصم للسيطرة عليها واستخدامها فورًا</h3>
+            <div class="steal-options-list" id="pvp-steal-options-list"></div>
+            <div class="steal-modal-buttons">
+                <button id="pvp-steal-cancel-btn">إلغاء</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    let list = modal.querySelector("#pvp-steal-options-list");
+    candidates.forEach(s => {
+        let btn = document.createElement("button");
+        btn.className = "steal-option";
+        btn.textContent = s.name;
+        btn.onclick = () => { pvpClosePotionMenu(); pvpUsePotionTarget(potion.potion_id, s.id); };
+        list.appendChild(btn);
+    });
+    modal.querySelector("#pvp-steal-cancel-btn").onclick = pvpClosePotionMenu;
+}
+
+// جرعة ختم / فك ختم
+function pvpOpenPotionSealUnseal(potion, abilitySkill, mode){
+    pvpClosePotionMenu();
+    let candidates;
+    if(mode === "seal"){
+        let ids = [...new Set([...(pvpState.oppUsedSkillIds || []), ...(pvpState.oppDefenseSkillIds || [])])];
+        candidates = ids.map(id => pvpState.skillCache[id])
+            .filter(s => s && !(pvpState.oppSealedSkillIds || []).includes(s.id));
+    } else {
+        candidates = (pvpState.mySealedSkillIds || []).map(id => pvpState.skillCache[id]).filter(s => s);
+    }
+    if(candidates.length === 0){
+        alert(mode === "seal" ? "لا توجد مهارة خصم قابلة للختم الآن" : "لا توجد مهارة مختومة لديك لفك ختمها");
+        return;
+    }
+    let modal = document.createElement("div");
+    modal.id = "pvp-steal-modal";
+    modal.className = "steal-modal";
+    modal.dataset.modalFor = "potion";
+    modal.innerHTML = `
+        <div class="steal-modal-box">
+            <h3>${mode === "seal" ? "🔒 جرعة — اختر مهارة خصم لختمها" : "🔓 جرعة — اختر مهارتك المختومة لفك ختمها"}</h3>
+            <div class="steal-options-list" id="pvp-steal-options-list"></div>
+            <div class="steal-modal-buttons">
+                <button id="pvp-steal-cancel-btn">إلغاء</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    let list = modal.querySelector("#pvp-steal-options-list");
+    candidates.forEach(s => {
+        let btn = document.createElement("button");
+        btn.className = "steal-option";
+        btn.textContent = s.name;
+        btn.onclick = () => { pvpClosePotionMenu(); pvpUsePotionTarget(potion.potion_id, s.id); };
+        list.appendChild(btn);
+    });
+    modal.querySelector("#pvp-steal-cancel-btn").onclick = pvpClosePotionMenu;
+}
+
+// جرعة تأجيل تهدئة
+function pvpOpenPotionDelay(potion, abilitySkill){
+    pvpClosePotionMenu();
+    let ids = [...new Set([...(pvpState.oppUsedSkillIds || []), ...(pvpState.oppDefenseSkillIds || [])])];
+    let candidates = ids.map(id => pvpState.skillCache[id])
+        .filter(s => s && s.cooldown > 0 && !(pvpState.oppSealedSkillIds || []).includes(s.id));
+    if(candidates.length === 0){ alert("لا توجد مهارة خصم لها تهدئة لتأجيلها الآن"); return; }
+    let delay = Number(potion.effect_value || 1);
+    let modal = document.createElement("div");
+    modal.id = "pvp-steal-modal";
+    modal.className = "steal-modal";
+    modal.dataset.modalFor = "potion";
+    modal.innerHTML = `
+        <div class="steal-modal-box">
+            <h3>⏳ جرعة — أخّر تهدئة مهارة خصم (+${delay} ${delay === 1 ? "دور" : "أدوار"})</h3>
+            <div class="steal-options-list" id="pvp-steal-options-list"></div>
+            <div class="steal-modal-buttons">
+                <button id="pvp-steal-cancel-btn">إلغاء</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    let list = modal.querySelector("#pvp-steal-options-list");
+    candidates.forEach(s => {
+        let btn = document.createElement("button");
+        btn.className = "steal-option";
+        btn.textContent = s.name;
+        btn.onclick = () => { pvpClosePotionMenu(); pvpUsePotionTarget(potion.potion_id, s.id); };
+        list.appendChild(btn);
+    });
+    modal.querySelector("#pvp-steal-cancel-btn").onclick = pvpClosePotionMenu;
+}
+
+// تنفيذ جرعة اختيار عبر RPC pvp_use_potion_target
+async function pvpUsePotionTarget(potionId, targetSkillId){
+    pvpSetSkillsEnabled(false);
+    let { data, error } = await supabaseClient
+        .rpc("pvp_use_potion_target", {
+            p_token: pvpGetToken(), p_match_id: pvpState.matchId,
+            p_potion_id: potionId, p_target_skill_id: targetSkillId
+        }).single();
+    if(error){ alert(error.message || "تعذر تنفيذ حركة الجرعة"); pvpRefreshState(false); return; }
+    await pvpLoadMyPotions();
+    pvpRefreshState(false);
+}
+
+// جرعة ظل: تفتح قائمة الظل ثم مهارات الشخصية (نفس سير pvpOpenShadowMenu)
+async function pvpOpenPotionShadow(potion, abilitySkill){
+    pvpClosePotionMenu();
+    let { data, error } = await supabaseClient
+        .rpc("pvp_list_shadow_pool", { p_token: pvpGetToken(), p_self_character_id: pvpState.myCharacterId || null });
+    if(error || !data){ alert(error ? (error.message || "تعذر جلب قائمة الظل") : "قائمة الظل فارغة"); return; }
+    let chars = {};
+    data.forEach(row => {
+        if(!chars[row.character_id]){
+            chars[row.character_id] = { id: row.character_id, name: row.character_name || "وحش", image: row.identity_image || "", skills: [] };
+        }
+        if(row.skill_id){
+            chars[row.character_id].skills.push({
+                id: row.skill_id, name: row.skill_name, type: row.skill_type,
+                damage: row.skill_damage, cooldown: row.skill_cooldown, effect: row.skill_effect,
+                unblockable: row.skill_unblockable, color: row.skill_color,
+                description: row.skill_description, params: row.skill_params
+            });
+        }
+    });
+    let charList = Object.values(chars);
+    let listHtml = charList.length > 0
+        ? charList.map(c => `<button class="steal-option shadow-char-option" data-id="${escapeHtml(String(c.id))}">🌑 ${escapeHtml(c.name)}</button>`).join("")
+        : "<p>لا توجد شخصيات مؤهلة في قائمة الظل حاليًا</p>";
+    let modal = document.createElement("div");
+    modal.id = "pvp-steal-modal";
+    modal.className = "steal-modal";
+    modal.dataset.modalFor = "potion";
+    modal.innerHTML = `
+        <div class="steal-modal-box">
+            <h3>🌑 جرعة — استدعِ ظل شخصية واستخدم إحدى مهاراته</h3>
+            <div class="steal-options-list">${listHtml}</div>
+            <div class="steal-modal-buttons">
+                <button id="pvp-steal-cancel-btn">إلغاء</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.querySelectorAll(".shadow-char-option").forEach(btn => {
+        btn.onclick = () => {
+            let charId = btn.dataset.id;
+            let charEntry = chars[charId];
+            pvpClosePotionMenu();
+            pvpOpenPotionShadowSkill(potion, charEntry);
+        };
+    });
+    modal.querySelector("#pvp-steal-cancel-btn").onclick = pvpClosePotionMenu;
+}
+
+function pvpOpenPotionShadowSkill(potion, charEntry){
+    if(!charEntry) return;
+    let usable = charEntry.skills || [];
+    let listHtml = usable.length > 0
+        ? usable.map(s => `<button class="steal-option shadow-skill-option" data-id="${escapeHtml(String(s.id))}">${escapeHtml(s.name)}</button>`).join("")
+        : "<p>لا توجد مهارة صالحة في هذا الظل</p>";
+    let modal = document.createElement("div");
+    modal.id = "pvp-steal-modal";
+    modal.className = "steal-modal";
+    modal.dataset.modalFor = "potion";
+    modal.innerHTML = `
+        <div class="steal-modal-box">
+            <h3>🌑 جرعة — استخدم مهارة من ظل "${escapeHtml(charEntry.name)}"</h3>
+            <div class="steal-options-list">${listHtml}</div>
+            <div class="steal-modal-buttons">
+                <button id="pvp-steal-cancel-btn">إلغاء</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.querySelectorAll(".shadow-skill-option").forEach(btn => {
+        btn.onclick = () => {
+            let skillId = btn.dataset.id;
+            pvpClosePotionMenu();
+            pvpUsePotionShadow(potion.potion_id, charEntry.id, skillId);
+        };
+    });
+    modal.querySelector("#pvp-steal-cancel-btn").onclick = pvpClosePotionMenu;
+}
+
+// تنفيذ جرعة ظل عبر RPC pvp_use_potion_shadow
+async function pvpUsePotionShadow(potionId, charId, skillId){
+    pvpSetSkillsEnabled(false);
+    let { data, error } = await supabaseClient
+        .rpc("pvp_use_potion_shadow", {
+            p_token: pvpGetToken(), p_match_id: pvpState.matchId,
+            p_potion_id: potionId, p_character_id: charId, p_skill_id: skillId
+        }).single();
+    if(error){ alert(error.message || "تعذر تنفيذ حركة الجرعة"); pvpRefreshState(false); return; }
     await pvpLoadMyPotions();
     pvpRefreshState(false);
 }
