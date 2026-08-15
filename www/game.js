@@ -6567,7 +6567,7 @@ async function buyPotion(potionId){
     loadShopPotions();
 }
 
-async function openScreen(screenId){
+async function openEditWeaponModal(weaponId){
     let admin_token = localStorage.getItem("admin_token");
     let { data: w, error } = await supabaseClient.rpc("admin_get_weapon", { p_admin_token: admin_token, p_weapon_id: weaponId });
     w = (Array.isArray(w) && w.length) ? w[0] : null;
