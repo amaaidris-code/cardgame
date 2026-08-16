@@ -6011,3 +6011,90 @@ box-shadow: 0 6px 24px rgba(0,0,0,0.5), 0 0 18px rgba(255,120,0,0.4);
     box-shadow:0 2px 8px rgba(0,0,0,.3);
 }
 
+/* ========================================
+   النوافذ المنبثقة العامة للوحة الإدارة
+   (تحرير مرافق/شخصية/سلاح/جرعة) — كانت تعرض
+   بدون تنسيق فتبدو كأنها "لا تظهر" عند النقر
+   ======================================== */
+.modal-overlay{
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    overflow: auto;
+}
+.modal-card{
+    background: linear-gradient(160deg, #1a2238, #0d1226);
+    border: 1px solid #3b4a6b;
+    border-radius: 14px;
+    padding: 18px;
+    max-width: 560px;
+    width: 100%;
+    max-height: 90vh;
+    overflow: auto;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.7);
+    text-align: right;
+}
+.modal-card h3{
+    margin: 0 0 12px;
+    font-size: 18px;
+    color: #7ab7ff;
+    text-align: center;
+}
+.modal-card h4{
+    margin: 14px 0 8px;
+    font-size: 15px;
+    color: #e8b93f;
+}
+.modal-card input[type="text"],
+.modal-card input[type="number"],
+.modal-card input[type="url"],
+.modal-card select,
+.modal-card textarea{
+    width: 100%;
+    margin: 6px 0;
+    box-sizing: border-box;
+}
+.modal-card button{
+    margin: 4px;
+}
+.modal-buttons{
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+.upload-status{
+    margin: 4px 0;
+    font-size: 12px;
+    color: #9a9aa5;
+    text-align: center;
+}
+.admin-color-row{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+}
+.admin-color-row input[type="color"]{
+    width: 60px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+}
+.admin-checkbox-label{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 6px 0;
+    cursor: pointer;
+}
+
