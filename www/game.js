@@ -8105,12 +8105,13 @@ async function checkForAppUpdate(){
         // الإصدار الأحدث والمطلوب إجبارًا؟ (required = true)
         let isRequired = manifest.required === true || String(manifest.required) === "true";
 
-        // إذا كان هناك إصدار أحدث → اعرض نافذة التحديث فقط إذا كان إلزاميًا
-        if(latestVersion > installedVersion && isRequired){
-            showUpdatePrompt(manifest, installedVersion, latestVersion, true);
-        }else if(latestVersion > installedVersion){
-            // تحديث اختياري: لا نعرض أي رسالة (يُحدَّث تلقائيًا لاحقًا عند الإصدار الإجباري)
-            console.log("يتوفر تحديث اختياري (" + latestVersion + ") - لا حاجة للإلزام");
+        // إذا كان هناك إصدار أحدث → اعرض نافذة التحديث دائمًا.
+        // التحديث الاختياري يعرض رسالة مع زر "لاحقًا"، والإلزامي يعرض زر
+        // تحميل فقط (لا يمكن إغلاقه) — كليهما يذكّر المستخدم بالتحديث في
+        // التطبيق مباشرة دون الحاجة لإعادة تنصيب يدوي
+        if(latestVersion > installedVersion){
+            showUpdatePrompt(manifest, installedVersion, latestVersion, isRequired);
+            console.log("يتوفر تحديث (" + latestVersion + ") إلزامي=" + isRequired);
         }
 
     }catch(e){
