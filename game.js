@@ -951,6 +951,14 @@ async function login(){
     }
 
 
+    // تسجيل جهاز هذا التطبيق لتلقي إشعارات فورية (يعمل داخل APK فقط)
+    if(window.pushModule && window.pushModule.onLogin){
+        try{
+            window.pushModule.onLogin(user.token);
+        }catch(e){}
+    }
+
+
 
     alert("تم تسجيل الدخول");
 
@@ -1804,6 +1812,13 @@ function logout(){
 
         // إنهاء جلسة اللاعب فعليًا في قاعدة البيانات ثم مسحها من هذا الجهاز
         let playerToken = localStorage.getItem("player_token");
+
+        // حذف رمز جهاز الإشعارات من الخادم (يعمل داخل APK فقط)
+        if(window.pushModule && window.pushModule.onLogout && playerToken){
+            try{
+                window.pushModule.onLogout(playerToken);
+            }catch(e){}
+        }
 
         if(playerToken){
 

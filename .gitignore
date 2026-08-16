@@ -8,3 +8,6 @@ android/.gradle/
 android/app/build/
 android/build/
 android/capacitor-cordova-android-plugins/build/
+android/app/google-services.json
+*firebase-adminsdk*.json
+*service-account*.json
