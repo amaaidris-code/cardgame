@@ -7404,27 +7404,9 @@ async function addCompanionSkill(companionId){
     await renderCompanionEditableSkills(companionId);
 }
 
-async function uploadCompanionImage(fileInputId, textInputId, statusId, cropOptions){
-    let fileInput = document.getElementById(fileInputId);
-    let textInput = document.getElementById(textInputId);
-    let statusBox = document.getElementById(statusId);
-    let file = fileInput ? fileInput.files[0] : null;
-    if(!file) return;
-    let adminToken = localStorage.getItem("admin_token");
-    if(!adminToken){ if(statusBox) statusBox.textContent = "❌ يجب تسجيل الدخول كأدمن لرفع صورة"; return; }
-    try{
-        const formData = new FormData();
-        formData.append("token", adminToken);
-        formData.append("file", file);
-        const resp = await fetch("/upload", { method: "POST", body: formData });
-        const json = await resp.json();
-        if(json.url){
-            if(textInput) textInput.value = json.url;
-            if(statusBox) statusBox.textContent = "✅ تم الرفع";
-        } else {
-            if(statusBox) statusBox.textContent = "❌ فشل الرفع: " + (json.error || "");
-        }
-    }catch(e){ if(statusBox) statusBox.textContent = "❌ خطأ في الرفع"; }
+// رفع صورة مرافق (يستخدم نفس مخزن صور الشخصيات وآلية رفع/اقتصاص الشخصيات والسلاح)
+function uploadCompanionImage(fileInputId, textInputId, statusId, cropOptions){
+    return uploadCharacterImage(fileInputId, textInputId, statusId, cropOptions);
 }
 
 
