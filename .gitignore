@@ -8,6 +8,8 @@ android/.gradle/
 android/app/build/
 android/build/
 android/capacitor-cordova-android-plugins/build/
-android/app/google-services.json
+# google-services.json is the Firebase Android app config (public API key,
+# no server secret) and is committed so CI can build the APK with FCM.
+# The Firebase service-account private key must never be committed.
 *firebase-adminsdk*.json
 *service-account*.json
