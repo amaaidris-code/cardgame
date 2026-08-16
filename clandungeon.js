@@ -14,11 +14,59 @@ const ClanDungeon = (function(){
     let myState = null;      // آخر حالة من clan_dungeon_get_state
     let curClanId = null;
     let selectedSkill = null;
+    let turnTimerInterval = null;
+    let turnDeadline = null;
+    let skipInFlight = false;
 
     function getToken(){ return localStorage.getItem("player_token"); }
     function getPlayerId(){ return localStorage.getItem("player_id"); }
     function box(){ return document.getElementById("clandungeon-content"); }
     function isOpen(){ const s = document.getElementById("clandungeon-screen"); return s && s.classList.contains("active"); }
+
+    // ---------- turn timer (متزامن مع turn_deadline من السيرفر) ----------
+    // يعرض عدًّا تنازليًا للدور الحالي. عند انتهاء المهلة يطلب من السيرفر
+    // تخطّي الدور (clan_dungeon_skip_turn) — الخادم هو من يتحقق فعليًا من
+    // انتهاء المهلة، فلا ضرر من استدعائها أكثر من مرة أو من أكثر من لاعب.
+    function stopTurnTimer(){
+        if(turnTimerInterval){ clearInterval(turnTimerInterval); turnTimerInterval = null; }
+        const el = document.getElementById("cd-turn-timer");
+        if(el) el.textContent = "";
+    }
+
+    function updateTurnTimer(deadlineIso){
+        if(deadlineIso === turnDeadline && turnTimerInterval) return;
+        turnDeadline = deadlineIso || null;
+        if(turnTimerInterval){ clearInterval(turnTimerInterval); turnTimerInterval = null; }
+        const el = document.getElementById("cd-turn-timer");
+        if(!turnDeadline){ if(el) el.textContent = ""; return; }
+        const deadlineMs = new Date(turnDeadline).getTime();
+        const tick = () => {
+            if(!el || !isOpen()){ stopTurnTimer(); return; }
+            const remainingMs = deadlineMs - Date.now();
+            const sec = Math.max(0, Math.ceil(remainingMs / 1000));
+            const m = Math.floor(sec / 60), s = sec % 60;
+            el.textContent = "⏱️ " + m + ":" + (s < 10 ? "0" + s : s);
+            if(remainingMs <= 0) requestSkipTurn();
+        };
+        tick();
+        turnTimerInterval = setInterval(tick, 1000);
+    }
+
+    async function requestSkipTurn(){
+        if(!myRun) return;
+        if(skipInFlight) return;
+        skipInFlight = true;
+        try{
+            await supabaseClient.rpc("clan_dungeon_skip_turn", { p_token: getToken(), p_run_id: myRun });
+        }catch(e){
+            // قد تفشل لأن لاعبًا آخر تخطّى أولاً أو المهلة لم تنتهِ فعليًا بعد
+            // (فرق توقيت بسيط) — سنعيد المحاولة في النبضة التالية
+        }finally{
+            skipInFlight = false;
+        }
+        refreshState().catch(function(){});
+        renderRun().catch(function(){});
+    }
 
     // ---------- open / close ----------
     function open(){
@@ -31,6 +79,8 @@ const ClanDungeon = (function(){
 
     function stopPolling(){
         if(timer){ clearInterval(timer); timer = null; }
+        stopTurnTimer();
+        turnDeadline = null;
     }
 
     function toast(msg){
@@ -309,6 +359,7 @@ const ClanDungeon = (function(){
             <div id="clandungeon-toast" class="cd-toast hidden"></div>
             <div class="cd-battle">
                 <div class="cd-turn-indicator ${myTurn?'cd-turn-mine':''}">${turnLabel}</div>
+                <div id="cd-turn-timer" class="cd-turn-timer"></div>
                 <div class="cd-monster-card ${st.turn_phase==="monster"?'cd-monster-turn':''}">
                     ${monsterImg}
                     <div class="cd-monster-name">${escapeHtml(st.monster_name || "وحش")} <span class="cd-wave">${monsterLabel}</span></div>
@@ -322,6 +373,13 @@ const ClanDungeon = (function(){
                     <div class="cd-skill-status" id="cd-skill-status"></div>
                 </div>
             </div>`;
+
+        // بدّئ/حدّث مؤقّت الدور (يعمل فقط في دور لاعب بموعد انتهاء)
+        if(st.turn_phase === "player" && st.turn_player_id && st.turn_deadline){
+            updateTurnTimer(st.turn_deadline);
+        }else{
+            stopTurnTimer();
+        }
 
         if(myTurn()){
             loadSkills();
@@ -634,7 +692,8 @@ const ClanDungeon = (function(){
         pickSkill,
         useOnMonster,
         useOnPlayer,
-        claimReward
+        claimReward,
+        _activeRunId: function(){ return myRun; }
     };
 
 })();

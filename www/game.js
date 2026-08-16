@@ -21,6 +21,75 @@ function escapeHtml(value){
 
 }
 
+// ========================================
+// استدعاء RPC موثوق عند مغادرة الصفحة (refresh / إغلاق / خروج)
+// ========================================
+// supabaseClient.rpc() غير موثوق خلال "unload" بالمتصفح لأنه غير متزامن ولا
+// يُضمن إتمامه قبل إغلاق الصفحة. نستخدم بدل ذلك fetch مع keepalive:true عبر
+// REST/RPC مباشرة، فهو مصمم لتسليمه حتى بعد خروج المستخدم من الصفحة. هذا
+// يُستخدم لتسجيل "الانسحاب / الوفاة" في المعركة عند إعادة التحميل أو الإغلاق
+// أو الخروج أثناء معركة PvP أو زنزانة العصابة (server-authoritative).
+const REST_FIREANDFORGET = (function(){
+    async function rpc(rpcName, params){
+        try{
+            const token = localStorage.getItem("player_token") || "";
+            await fetch(SUPABASE_URL + "/rest/v1/rpc/" + rpcName, {
+                method: "POST",
+                keepalive: true,
+                headers: {
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": "Bearer " + SUPABASE_KEY,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify(params || {})
+            });
+        }catch(e){}
+    }
+    return { rpc };
+})();
+
+// سجّل انسحابًا آمنًا عند مغادرة/إعادة تحميل الصفحة أثناء معركة حية:
+// - PvP نشط  -> pvp_forfeit_match (الخصم يفوز)
+// - زنزانة عصابة نشطة/سباق -> clan_dungeon_leave (يُعتبر ساقطًا/ميتًا)
+// هذه الدالة ترسل طلبات "fire-and-forget" فقط، لا تعرض أي إشعار ولا تُبدّل
+// الشاشات، وتُستدعى عند unload/تغيير الرؤية إلى الخلفية.
+async function forfeitActiveBattleOnUnload(){
+    try{
+        const playerToken = localStorage.getItem("player_token") || "";
+
+        // PvP: انسحب من المباراة النشطة
+        if(typeof window !== "undefined" && typeof window.__pvpActiveMatch === "function"){
+            const active = window.__pvpActiveMatch();
+            if(active && active.matchId){
+                REST_FIREANDFORGET.rpc("pvp_forfeit_match", {
+                    p_token: playerToken,
+                    p_match_id: active.matchId
+                });
+            }
+        }
+
+        // زنزانة العصابة: مغادرة الغارة النشطة (يُعتبر ساقطًا)
+        if(typeof ClanDungeon !== "undefined" && ClanDungeon && typeof ClanDungeon._activeRunId === "function"){
+            const runId = ClanDungeon._activeRunId();
+            if(runId){
+                REST_FIREANDFORGET.rpc("clan_dungeon_leave", {
+                    p_token: playerToken,
+                    p_run_id: runId
+                });
+            }
+        }
+    }catch(e){}
+}
+
+if(typeof window !== "undefined"){
+    window.addEventListener("pagehide", function(){
+        forfeitActiveBattleOnUnload();
+    });
+    document.addEventListener("visibilitychange", function(){
+        if(document.hidden) forfeitActiveBattleOnUnload();
+    });
+}
+
 // نسخة مخصصة لإدراجها داخل onclick="...": تهرب كل المحارف الخطرة في سياق
 // سلسلة JavaScript داخل خاصية HTML
 function escapeJsAttr(value){

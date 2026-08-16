@@ -3161,3 +3161,19 @@ function pvpShowResult(iWon){
         openScreen("solo-battle-screen");
     }, 1500);
 }
+
+// ========================================
+// انسحاب/وفاة تلقائي عند مغادرة/إعادة تحميل الصفحة أثناء مباراة PvP نشطة
+// ========================================
+// نُعرّض حالة المباراة الحالية عالميًا (قابلة للقراءة من game.js عبر
+// forfeitActiveBattleOnUnload) بحيث عند refresh أو إغلاق التبويب أو الخروج
+// أثناء مباراة نشطة يُرسَل pvp_forfeit_match (الخصم يفوز) — لا تبقى المباراة
+// معلّقة طالما لم يسلم اللاعب نقلة أو ينسحب صراحة.
+if(typeof window !== "undefined"){
+    window.__pvpActiveMatch = function(){
+        if(pvpState && pvpState.matchId && !pvpState.finished){
+            return { matchId: pvpState.matchId };
+        }
+        return null;
+    };
+}
