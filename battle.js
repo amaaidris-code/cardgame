@@ -28,6 +28,9 @@ let battle = {
     // حالة دور المرافق: إذا كُنَّا في دور المرافق ويجب على اللاعب الضغط
     // على أيقونته لتفعيل التحكم (سلة/هجوم) قبل بدء المؤقّت
     companionAwaitingActivation: false,
+    // عرض المرافق في خانة اللاعب (مثل وضع السلاح): تُعرض صورة/اسم/صحة
+    // ومهارات المرافق مكان بطاقة اللاعب الحقيقية
+    companionView: false,
 
     raceWon: false,
 
@@ -1842,30 +1845,33 @@ function updateBattleScreen(){
     if(playerImage) playerImage.classList.toggle("frozen-status", !!(battle.player.frozenTurns > 0));
     if(enemyImage) enemyImage.classList.toggle("frozen-status", !!(battle.enemy.frozenTurns > 0));
 
-    // المرافق: أيقونة صغيرة أعلى يمين بطاقة اللاعب (مثل أيقونة السلاح)
-    // والبطاقة الكاملة تُعرض فقط عند تفعيل دور المرافق (بالضغط على الأيقونة)
-    let compCard = document.getElementById("pve-companion-card");
+    // المرافق في عرض "المرافق": تُعرض صورة/اسم/صحة المرافق مكان الشخصية
+    // في خانة اللاعب نفسها (مثل وضع السلاح)، وتُخفى البطاقة المنفصلة دائمًا
     let comp = battle.companion;
     let hasCompanion = !!(comp && comp.hp >= 0 && battle.companionLoaded);
-    let companionTurnActive = (battle.turnOwner === "companion" && !battle.companionAwaitingActivation);
-    if(compCard){
-        compCard.style.display = hasCompanion && companionTurnActive ? "" : "none";
-    }
-    if(hasCompanion){
-        let compHp = document.getElementById("pve-companion-hp");
-        let compBar = document.getElementById("pve-companion-hp-bar");
-        let compName = document.getElementById("pve-companion-name");
-        let compImage = document.getElementById("pve-companion-image");
-        if(compHp) compHp.innerHTML = `${comp.hp} / ${comp.maxHp}`;
-        if(compBar){
-            compBar.style.width = (comp.maxHp > 0 ? comp.hp / comp.maxHp * 100 : 0) + "%";
-            updateHpBarColor(compBar, comp.hp, comp.maxHp);
+    let compCard = document.getElementById("pve-companion-card");
+    if(compCard) compCard.style.display = "none";
+
+    let showingCompanion = hasCompanion && battle.companionView;
+
+    if(showingCompanion){
+        if(playerHp) playerHp.innerHTML = `${comp.hp} / ${comp.maxHp}`;
+        if(playerBar){
+            playerBar.style.width = (comp.maxHp > 0 ? comp.hp / comp.maxHp * 100 : 0) + "%";
+            updateHpBarColor(playerBar, comp.hp, comp.maxHp);
         }
-        if(compName) compName.textContent = comp.name;
-        setFighterImage(compImage, comp.image);
-        if(compImage) compImage.classList.toggle("frozen-status", !!(comp.frozenTurns > 0));
-        // حالة موت المرافق: إظهار أقل سطوعًا للبطاقة
-        compCard.classList.toggle("companion-dead", comp.hp <= 0);
+        if(playerName) playerName.textContent = comp.name;
+        setFighterImage(playerImage, comp.image);
+        if(playerImage) playerImage.classList.toggle("frozen-status", !!(comp.frozenTurns > 0));
+    } else {
+        if(playerHp) playerHp.innerHTML = `${battle.player.hp} / ${battle.player.maxHp}`;
+        if(playerBar){
+            playerBar.style.width = (battle.player.hp / battle.player.maxHp * 100) + "%";
+            updateHpBarColor(playerBar, battle.player.hp, battle.player.maxHp);
+        }
+        if(playerName) playerName.textContent = battle.player.name;
+        setFighterImage(playerImage, battle.player.image);
+        if(playerImage) playerImage.classList.toggle("frozen-status", !!(battle.player.frozenTurns > 0));
     }
 
     renderCompanionViewIcon();
@@ -1887,7 +1893,12 @@ function renderStatusBadges(prefix){
 
     renderFighterStatusBadge(prefix + "-enemy", battle.enemy);
 
-    renderFighterStatusBadge(prefix + "-player", battle.player);
+    // في وضع المرافق تُعرض شارات المرافق في خانة اللاعب، وإلا شارات الشخصية
+    if(battle.companionView && battle.companion){
+        renderFighterStatusBadge(prefix + "-player", battle.companion);
+    } else {
+        renderFighterStatusBadge(prefix + "-player", battle.player);
+    }
 
     renderFighterStatusBadge("pve-companion", battle.companion);
 
@@ -2423,6 +2434,8 @@ function pveEndTurn(owner){
         next = ("companion");
     } else if(owner === "companion"){
         next = ("enemy");
+        // نهاية دور المرافق: الخروج من وضع عرض المرافق في خانة اللاعب
+        battle.companionView = false;
     } else {
         // بعد دور الخصم: اللاعب، أو المرافق إن كان اللاعب ميتًا
         next = (battle.player.hp > 0) ? "player" : "companion";
@@ -2602,6 +2615,12 @@ function renderSkillButtons(prefix){
     // نعرض مهارات السلاح وخلفياته بدل مهارات الشخصية
     if(battle.weaponView){
         renderWeaponSkillButtons(prefix);
+        return;
+    }
+
+    // عرض وضع "المرافق": تُعرض مهارات المرافق مكان مهارات الشخصية
+    if(battle.companionView){
+        renderCompanionSkillsInPlayerSlot(prefix);
         return;
     }
 
@@ -2796,6 +2815,51 @@ function renderWeaponSkillButtons(prefix){
             pageDiv.appendChild(buildWeaponSkillButton(skill));
         });
 
+        pagesEl.appendChild(pageDiv);
+    });
+
+    pagesEl.dataset.activePage = String(currentIndex);
+
+    let dotsEl = container ? container.querySelector(".skill-dots") : null;
+    if(dotsEl){
+        if(pagesOfSkills.length <= 1){
+            dotsEl.style.display = "none";
+        } else {
+            dotsEl.style.display = "";
+            dotsEl.innerHTML = "";
+            pagesOfSkills.forEach((_, i) => {
+                let dot = document.createElement("span");
+                if(i === currentIndex) dot.classList.add("active");
+                dot.onclick = () => goToSkillsPage(prefix, i);
+                dotsEl.appendChild(dot);
+            });
+        }
+    }
+}
+
+// عرض وضع "المرافق" في خانة اللاعب: تُعرض مهارات المرافق مكان مهارات
+// الشخصية في نفس شريط المهارات (كما يفعل وضع السلاح تمامًا)
+function renderCompanionSkillsInPlayerSlot(prefix){
+
+    let pagesEl = document.getElementById(prefix + "-player-skills-pages");
+    if(!pagesEl) return;
+    if(!battle.companion) return;
+
+    let container = pagesEl.closest(".skills-container");
+    let comp = battle.companion;
+    let skills = Array.isArray(comp.skills) ? comp.skills : [];
+    let pagesOfSkills = chunkSkills(skills, SKILLS_PER_PAGE);
+    let currentIndex = Number(pagesEl.dataset.activePage || 0);
+    currentIndex = Math.max(0, Math.min(currentIndex, pagesOfSkills.length - 1));
+
+    pagesEl.innerHTML = "";
+
+    pagesOfSkills.forEach((skillsChunk, i) => {
+        let pageDiv = document.createElement("div");
+        pageDiv.className = "skills-page" + (i === currentIndex ? " active" : "");
+        skillsChunk.forEach(skill => {
+            pageDiv.appendChild(buildCompanionSkillButton(skill));
+        });
         pagesEl.appendChild(pageDiv);
     });
 
@@ -3324,9 +3388,12 @@ function pveSwitchToCompanion(){
 
     battle.companionAwaitingActivation = false;
 
+    // تفعيل وضع المرافق: تُعرض مهارات المرافق في خانة اللاعب مكان الشخصية
+    battle.companionView = true;
+
     renderCompanionViewIcon();
 
-    renderCompanionSkillButtons();
+    renderSkillButtons(battle.prefix);
 
     updateBattleScreen();
 
@@ -3631,7 +3698,7 @@ function handleCompanionSkillClick(skill){
     if(!battle.companionUsedSkills.find(s => s.id === skill.id))
         battle.companionUsedSkills.push(skill);
 
-    renderCompanionSkillButtons();
+    renderSkillButtons(battle.prefix);
 
     updateBattleScreen();
 
