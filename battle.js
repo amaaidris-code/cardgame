@@ -23,6 +23,12 @@ let battle = {
 
     turnInterval: null,
 
+    companion: null,
+    companionLoaded: false,
+    // حالة دور المرافق: إذا كُنَّا في دور المرافق ويجب على اللاعب الضغط
+    // على أيقونته لتفعيل التحكم (سلة/هجوم) قبل بدء المؤقّت
+    companionAwaitingActivation: false,
+
     raceWon: false,
 
     raceButtonLockedUntil: 0, // عقوبة الضغط المبكر على زر السباق (طابع زمني)
@@ -1028,6 +1034,7 @@ async function loadActiveCompanionFighter(){
             fighter.scaledAttackDamages = computeScaledAttackDamages(fighter.atk, fighter.skills);
             battle.companion = fighter;
             battle.companionLoaded = true;
+            renderCompanionViewIcon();
         }
     }catch(e){
         console.error("companion load error", e);
@@ -1835,12 +1842,14 @@ function updateBattleScreen(){
     if(playerImage) playerImage.classList.toggle("frozen-status", !!(battle.player.frozenTurns > 0));
     if(enemyImage) enemyImage.classList.toggle("frozen-status", !!(battle.enemy.frozenTurns > 0));
 
-    // المرافق: أظهر بطاقته وأحدث شريط صحته إن وُجد
+    // المرافق: أيقونة صغيرة أعلى يمين بطاقة اللاعب (مثل أيقونة السلاح)
+    // والبطاقة الكاملة تُعرض فقط عند تفعيل دور المرافق (بالضغط على الأيقونة)
     let compCard = document.getElementById("pve-companion-card");
     let comp = battle.companion;
     let hasCompanion = !!(comp && comp.hp >= 0 && battle.companionLoaded);
+    let companionTurnActive = (battle.turnOwner === "companion" && !battle.companionAwaitingActivation);
     if(compCard){
-        compCard.style.display = hasCompanion ? "" : "none";
+        compCard.style.display = hasCompanion && companionTurnActive ? "" : "none";
     }
     if(hasCompanion){
         let compHp = document.getElementById("pve-companion-hp");
@@ -1858,6 +1867,8 @@ function updateBattleScreen(){
         // حالة موت المرافق: إظهار أقل سطوعًا للبطاقة
         compCard.classList.toggle("companion-dead", comp.hp <= 0);
     }
+
+    renderCompanionViewIcon();
 
     applyGlowColors();
 
@@ -3244,14 +3255,80 @@ function companionIsAliveOrZero(){
     return !!(battle.companion && battle.companionLoaded);
 }
 
-// بداية دور المرافق: يرسم شريط مهارات المرافق ويبدأ المؤقّت
+// يرسم أيقونة المرافق أعلى يمين بطاقة اللاعب (مثل أيقونة السلاح)
+function renderCompanionViewIcon(){
+
+    let icon = document.getElementById("pve-companion-icon");
+    if(!icon) return;
+
+    let comp = battle.companion;
+    let hasCompanion = !!(comp && battle.companionLoaded);
+
+    icon.style.display = hasCompanion ? "inline-flex" : "none";
+    if(!hasCompanion) return;
+
+    icon.innerHTML = comp.image
+        ? `<img src="${escapeHtml(comp.image)}" alt="">`
+        : "🐾";
+
+    icon.classList.toggle("companion-ready",
+        battle.turnOwner === "companion" && battle.companionAwaitingActivation);
+
+    icon.classList.toggle("companion-dead-icon", comp.hp <= 0);
+
+}
+
+// بداية دور المرافق: يرسم أيقونة المرافق ويُعلن أنها تنتظر ضغطة اللاعب
+// لتفعيل التحكم (بعدها تُرسم المهارات ويبدأ المؤقّت)
 function companionTurnPlay(){
 
     if(battle.finished) return;
 
+    // تفعيل أيقونة المرافق وانتظار ضغطة اللاعب قبل فتح مهاراته
+    battle.companionAwaitingActivation = true;
+
+    renderCompanionViewIcon();
+
+    setTurnIndicatorText(
+        "pve-turn-indicator",
+        "🐾 دور المرافق — اضغط على أيقونته للتحكم",
+        "companion-turn"
+    );
+
+    renderSkillButtons(battle.prefix);
+
+    // يبقى المؤقّت شغالًا طيلة دور المرافق حتى لا يعلق الدور لو لم يضغط
+    // اللاعب على الأيقونة (ينتقل الدور للخصم عند انتهاء الوقت)
+    startTurnTimer();
+
+    updateBattleScreen();
+
+}
+
+// الضغط على أيقونة المرافق أثناء دور المرافق: يفعّل التحكم بمهاراته
+function pveSwitchToCompanion(){
+
+    if(battle.finished) return;
+
+    let comp = battle.companion;
+
+    if(!comp || comp.hp <= 0) return;
+
+    if(battle.turnOwner !== "companion"){
+        return;
+    }
+
+    if(!battle.companionAwaitingActivation){
+        return;
+    }
+
+    battle.companionAwaitingActivation = false;
+
+    renderCompanionViewIcon();
+
     renderCompanionSkillButtons();
 
-    startTurnTimer();
+    updateBattleScreen();
 
 }
 

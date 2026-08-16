@@ -80,7 +80,9 @@ let pvpState = {
     oppCompAbsorbHits: 0, oppCompReflectMult: 0,
     oppCompPoisonDamage: 0, oppCompPoisonTurns: 0,
     // الهدف المحدد للمقترح القلب (enemy = الشخصية، enemy_comp = المرافق)
-    pvpTarget: "enemy"
+    pvpTarget: "enemy",
+    // لوحة مرافقي منفصلة (تعرض كأيقونة إضافية، تُفتح عند الضغط عليها)
+    myCompPanelOpen: false
 };
 
 // حالة الردهة (اختيار الخصم) والتحدي، منفصلة عن حالة النزال نفسه
@@ -1851,7 +1853,7 @@ function pvpRenderCompanionCards(){
     // مرافقي
     let myEl = document.getElementById("pvp-player-companion-card");
     if(myEl){
-        let showMy = pvpState.myCompMaxHp > 0 && !!pvpState.myCompName;
+        let showMy = pvpState.myCompMaxHp > 0 && !!pvpState.myCompName && pvpState.myCompPanelOpen;
         myEl.style.display = showMy ? "" : "none";
         if(showMy){
             setFighterImage(document.getElementById("pvp-player-companion-image"), pvpState.myCompImage);
@@ -1861,6 +1863,52 @@ function pvpRenderCompanionCards(){
             if(imgEl) imgEl.classList.toggle("companion-dead", !pvpState.myCompAlive);
         }
     }
+
+    pvpRenderCompanionIcon();
+}
+
+// أيقونة مرافقي أعلى يمين بطاقة اللاعب (مثل أيقونة السلاح)
+function pvpRenderCompanionIcon(){
+
+    let icon = document.getElementById("pvp-companion-icon");
+    if(!icon) return;
+
+    let hasComp = pvpState.myCompMaxHp > 0 && !!pvpState.myCompName;
+
+    icon.style.display = hasComp ? "inline-flex" : "none";
+    if(!hasComp) return;
+
+    icon.innerHTML = pvpState.myCompImage
+        ? `<img src="${escapeHtml(pvpState.myCompImage)}" alt="">`
+        : "🐾";
+
+    icon.classList.toggle("companion-ready",
+        pvpState.myTurn && pvpState.turnSub === 1 && pvpState.myCompAlive);
+
+    icon.classList.toggle("companion-dead-icon", !pvpState.myCompAlive);
+
+}
+
+// الضغط على أيقونة المرافق في PvP: يفتح/يغلق لوحة مهارات المرافق
+function pvpSwitchToCompanion(){
+
+    if(pvpState.finished) return;
+
+    if(pvpState.myCompMaxHp <= 0){
+        pvpState.myCompPanelOpen = false;
+        pvpRenderCompanionCards();
+        return;
+    }
+
+    pvpState.myCompPanelOpen = !pvpState.myCompPanelOpen;
+
+    pvpRenderCompanionCards();
+
+    if(pvpState.myCompPanelOpen && pvpState.myCompSkills.length){
+        loadPVPCompanionSkills();
+        pvpSetCompanionSkillsEnabled(pvpState.myTurn && pvpState.turnSub === 1);
+    }
+
 }
 
 // شارات حالة مرافقي ومرافق الخصم (قوة مؤقتة / أدوار / درع / سم...)
