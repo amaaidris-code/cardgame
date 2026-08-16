@@ -85,7 +85,6 @@ function startDungeon(dungeonId) {
     startDungeonBattle(d);
 }
 
-// يطلب/mint جلسة معركة واحدة من الخادم لهذه الزنزانة (تُستهلك عند الاستلام)
 async function ensureDungeonSession(dungeonId) {
     let token = dungeonToken();
     if (!token) return null;
@@ -116,7 +115,6 @@ async function dungeonClaimReward(dungeonId) {
     return { status: "success", gold_added: 0, remaining: -1 };
 }
 
-// يطلب جلسة معركة واحدة من الخادم لهذا الوحش (تُستهلك عند الاستلام)
 async function ensurePveSession(monsterId) {
     let token = dungeonToken();
     if (!token) return null;

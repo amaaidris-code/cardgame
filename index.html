@@ -1391,6 +1391,32 @@ id="pvp-enemy-used-skills">
 
 </div>
 
+<!-- مرافق الخصم (هدف ثانٍ) -->
+
+<div class="battle-card enemy-card companion-card" id="pvp-enemy-companion-card" style="display:none;" onclick="pvpSetTarget('enemy_comp')">
+
+<img id="pvp-enemy-companion-image" class="battle-image">
+
+
+<h3 id="pvp-enemy-companion-name">مرافق</h3>
+
+
+<div class="hp-bar">
+<div id="pvp-enemy-companion-hp-bar" class="hp-fill"></div>
+</div>
+
+
+<p>
+❤️
+<span id="pvp-enemy-companion-hp">0 / 0</span>
+</p>
+
+
+<div class="fighter-status-badges" id="pvp-enemy-companion-status"></div>
+
+
+</div>
+
 
 
 <!-- الوسط -->
@@ -1510,6 +1536,45 @@ id="pvp-player-used-skills">
         <span class="active"></span>
         <span></span>
     </div>
+
+</div>
+
+</div>
+
+<!-- مرافق اللاعب (مقاتل ثانٍ، يُتحكم فيه في دور فرعي) -->
+
+<div class="battle-card player-card companion-card" id="pvp-player-companion-card" style="display:none;">
+
+<img id="pvp-player-companion-image" class="battle-image">
+
+
+<h3 id="pvp-player-companion-name">مرافق</h3>
+
+
+<div class="hp-bar">
+<div id="pvp-player-companion-hp-bar" class="hp-fill"></div>
+</div>
+
+
+<p>
+❤️
+<span id="pvp-player-companion-hp">0 / 0</span>
+</p>
+
+
+<div class="fighter-status-badges" id="pvp-player-companion-status"></div>
+
+
+<div class="used-skills" id="pvp-player-companion-used-skills"></div>
+
+
+<div class="skills-container companion-skills">
+
+    <div class="skills-pages" id="pvp-player-companion-skills-pages">
+        <div class="skills-page active"></div>
+    </div>
+
+    <div class="skill-dots"></div>
 
 </div>
 
@@ -1905,7 +1970,7 @@ id="pve-companion-used-skills">
 
 <script src="clandungeon.js?v=20260816a"></script>
 
-<script src="game.js?v=20260816p"></script>
+<script src="game.js?v=20260817a"></script>
 
 <script src="battle.js?v=20260816f"></script>
 
