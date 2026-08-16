@@ -1,4 +1,4 @@
-package com.yourname.cardgame;
+package com.amaaidris.cardgame;
 
 import com.getcapacitor.BridgeActivity;
 
