@@ -49,7 +49,38 @@ let pvpState = {
     // آخر HP معروف للطرفين — تُستخدم لاكتشاف حدوث ضرر فعلي بين استطلاع
     // وآخر (لعرض شارة الحدث المناسبة)، undefined يعني لم نحمّل الحالة بعد
     lastMyHp: undefined,
-    lastOppHp: undefined
+    lastOppHp: undefined,
+
+    // مقاتلو المرافق: الشخصية (الرئيسية) + المرافق لكل طرف.
+    // turn_sub: 0 = دور الشخصية، 1 = دور المرافق الفرعي
+    turnSub: 0,
+    // مرافقي (للعرض والتحكم)
+    myCompName: "",
+    myCompImage: null,
+    myCompHp: 0,
+    myCompMaxHp: 0,
+    myCompAlive: false,
+    myCompSkills: [],
+    myCompUsedSkillIds: [],
+    myCompSealedSkillIds: [],
+    myCompTempAtk: 0, myCompTempHp: 0, myCompExtraTurns: 0,
+    myCompFrozenTurns: 0, myCompDefending: false, myCompShieldCharges: 0,
+    myCompAbsorbHits: 0, myCompReflectMult: 0,
+    myCompPoisonDamage: 0, myCompPoisonTurns: 0,
+    // مرافق الخصم (للعرض والاستهداف)
+    oppCompName: "",
+    oppCompImage: null,
+    oppCompHp: 0,
+    oppCompMaxHp: 0,
+    oppCompAlive: false,
+    oppCompUsedSkillIds: [],
+    oppCompSealedSkillIds: [],
+    oppCompTempAtk: 0, oppCompTempHp: 0, oppCompExtraTurns: 0,
+    oppCompFrozenTurns: 0, oppCompDefending: false, oppCompShieldCharges: 0,
+    oppCompAbsorbHits: 0, oppCompReflectMult: 0,
+    oppCompPoisonDamage: 0, oppCompPoisonTurns: 0,
+    // الهدف المحدد للمقترح القلب (enemy = الشخصية، enemy_comp = المرافق)
+    pvpTarget: "enemy"
 };
 
 // حالة الردهة (اختيار الخصم) والتحدي، منفصلة عن حالة النزال نفسه
@@ -947,6 +978,53 @@ async function pvpRefreshState(isFirstLoad){
         oppSealedIds = data.player1_sealed_skill_ids || [];
     }
 
+    // --- حالة المرافق والرائد الفرعي ---
+    pvpState.turnSub = (data.turn_sub === 1) ? 1 : 0;
+    pvpState.myCompName   = pvpState.isPlayer1 ? (data.p1_comp_name || "") : (data.p2_comp_name || "");
+    pvpState.myCompImage  = pvpState.isPlayer1 ? data.p1_comp_image : data.p2_comp_image;
+    pvpState.myCompHp     = pvpState.isPlayer1 ? (data.p1_comp_hp || 0) : (data.p2_comp_hp || 0);
+    pvpState.myCompMaxHp  = pvpState.isPlayer1 ? (data.p1_comp_max_hp || 0) : (data.p2_comp_max_hp || 0);
+    pvpState.myCompAlive  = pvpState.isPlayer1 ? !!data.p1_comp_alive : !!data.p2_comp_alive;
+    pvpState.oppCompName  = pvpState.isPlayer1 ? (data.p2_comp_name || "") : (data.p1_comp_name || "");
+    pvpState.oppCompImage = pvpState.isPlayer1 ? data.p2_comp_image : data.p1_comp_image;
+    pvpState.oppCompHp    = pvpState.isPlayer1 ? (data.p2_comp_hp || 0) : (data.p1_comp_hp || 0);
+    pvpState.oppCompMaxHp = pvpState.isPlayer1 ? (data.p2_comp_max_hp || 0) : (data.p1_comp_max_hp || 0);
+    pvpState.oppCompAlive = pvpState.isPlayer1 ? !!data.p2_comp_alive : !!data.p1_comp_alive;
+    pvpState.myCompUsedSkillIds  = pvpState.isPlayer1 ? (data.p1_comp_used_skill_ids || []) : (data.p2_comp_used_skill_ids || []);
+    pvpState.myCompSealedSkillIds = pvpState.isPlayer1 ? (data.p1_comp_sealed_skill_ids || []) : (data.p2_comp_sealed_skill_ids || []);
+    pvpState.myCompTempAtk  = pvpState.isPlayer1 ? (data.p1_comp_temp_atk || 0) : (data.p2_comp_temp_atk || 0);
+    pvpState.myCompTempHp   = pvpState.isPlayer1 ? (data.p1_comp_temp_hp || 0) : (data.p2_comp_temp_hp || 0);
+    pvpState.myCompExtraTurns = pvpState.isPlayer1 ? (data.p1_comp_extra_turns || 0) : (data.p2_comp_extra_turns || 0);
+    pvpState.myCompFrozenTurns = pvpState.isPlayer1 ? (data.p1_comp_frozen_turns || 0) : (data.p2_comp_frozen_turns || 0);
+    pvpState.myCompDefending = pvpState.isPlayer1 ? !!data.p1_comp_defending : !!data.p2_comp_defending;
+    pvpState.myCompShieldCharges = pvpState.isPlayer1 ? (data.p1_comp_shield_charges || 0) : (data.p2_comp_shield_charges || 0);
+    pvpState.myCompAbsorbHits = pvpState.isPlayer1 ? (data.p1_comp_absorb_hits || 0) : (data.p2_comp_absorb_hits || 0);
+    pvpState.myCompReflectMult = pvpState.isPlayer1 ? (data.p1_comp_reflect_multiplier || 0) : (data.p2_comp_reflect_multiplier || 0);
+    pvpState.myCompPoisonDamage = pvpState.isPlayer1 ? (data.p1_comp_poison_damage || 0) : (data.p2_comp_poison_damage || 0);
+    pvpState.myCompPoisonTurns = pvpState.isPlayer1 ? (data.p1_comp_poison_turns || 0) : (data.p2_comp_poison_turns || 0);
+    pvpState.oppCompUsedSkillIds = pvpState.isPlayer1 ? (data.p2_comp_used_skill_ids || []) : (data.p1_comp_used_skill_ids || []);
+    pvpState.oppCompSealedSkillIds = pvpState.isPlayer1 ? (data.p2_comp_sealed_skill_ids || []) : (data.p1_comp_sealed_skill_ids || []);
+    pvpState.oppCompTempAtk = pvpState.isPlayer1 ? (data.p2_comp_temp_atk || 0) : (data.p1_comp_temp_atk || 0);
+    pvpState.oppCompTempHp  = pvpState.isPlayer1 ? (data.p2_comp_temp_hp || 0) : (data.p1_comp_temp_hp || 0);
+    pvpState.oppCompExtraTurns = pvpState.isPlayer1 ? (data.p2_comp_extra_turns || 0) : (data.p1_comp_extra_turns || 0);
+    pvpState.oppCompFrozenTurns = pvpState.isPlayer1 ? (data.p2_comp_frozen_turns || 0) : (data.p1_comp_frozen_turns || 0);
+    pvpState.oppCompDefending = pvpState.isPlayer1 ? !!data.p2_comp_defending : !!data.p1_comp_defending;
+    pvpState.oppCompShieldCharges = pvpState.isPlayer1 ? (data.p2_comp_shield_charges || 0) : (data.p1_comp_shield_charges || 0);
+    pvpState.oppCompAbsorbHits = pvpState.isPlayer1 ? (data.p2_comp_absorb_hits || 0) : (data.p1_comp_absorb_hits || 0);
+    pvpState.oppCompReflectMult = pvpState.isPlayer1 ? (data.p2_comp_reflect_multiplier || 0) : (data.p1_comp_reflect_multiplier || 0);
+    pvpState.oppCompPoisonDamage = pvpState.isPlayer1 ? (data.p2_comp_poison_damage || 0) : (data.p1_comp_poison_damage || 0);
+    pvpState.oppCompPoisonTurns = pvpState.isPlayer1 ? (data.p2_comp_poison_turns || 0) : (data.p1_comp_poison_turns || 0);
+    pvpRenderCompanionCards();
+    pvpRenderCompanionStatus();
+    pvpRenderCompanionUsedSkills();
+    if(!pvpState.myCompSkills.length && pvpState.myCompAlive && pvpState.myCompMaxHp > 0){
+        loadPVPCompanionSkills();
+    }
+    // إن لم يعد مرافقي حيًّا ولا يوجد هدف مختار صالح، أعد الهدف إلى الشخصية
+    if(pvpState.pvpTarget === "enemy_comp" && (!pvpState.oppCompAlive || pvpState.oppCompMaxHp <= 0)){
+        pvpState.pvpTarget = "enemy";
+    }
+
     setFighterImage(document.getElementById("pvp-player-image"), myImage);
     setFighterImage(document.getElementById("pvp-enemy-image"), oppImage);
 
@@ -986,8 +1064,11 @@ async function pvpRefreshState(isFirstLoad){
     pvpRenderUsedSkillsUI();
 
     let myTurn = (data.turn_player_id === (pvpState.isPlayer1 ? data.player1_id : data.player2_id));
+    let activeShooter = (myTurn && data.status === "active");
+    let compShooting = activeShooter && pvpState.turnSub === 1;
     // allow using skills if it is my turn OR my hp is 0 and match is active
     pvpSetSkillsEnabled((myTurn || myHp <= 0) && data.status === "active");
+    pvpSetCompanionSkillsEnabled(compShooting);
     pvpApplySealedBadges();
 
     // شريط الجرع: متاح فقط في دوري، وحالته تُحدَّث عبر استعلام خفيف
@@ -1072,6 +1153,9 @@ async function pvpRefreshState(isFirstLoad){
             } else if(myHp <= 0){
                 statusBox.textContent = "⚠️ صحتك أصبحت صفرًا! يمكنك استخدام أي مهارة";
                 statusBox.classList.add("frozen-note");
+            } else if(myTurn && pvpState.turnSub === 1){
+                statusBox.textContent = "🐾 دور مرافقك الآن! اختر مهارته";
+                statusBox.classList.add("companion-turn");
             } else {
                 statusBox.textContent = myTurn ? "🟢 دورك الآن" : "⏳ دور الخصم...";
                 statusBox.classList.add(myTurn ? "my-turn" : "opp-turn");
@@ -1684,12 +1768,41 @@ async function pvpUseSkill(skillId){
 
     pvpSetSkillsEnabled(false);
 
+    // إن كان دور المرافق الفرعي حاليًا، تُستخدم مهارة المرافق عبر RPC منفصل
+    if(pvpState.turnSub === 1){
+        await pvpUseCompanionSkill(skillId);
+        return;
+    }
+
     let { data, error } =
     await supabaseClient
     .rpc("pvp_use_skill", {
         p_token: pvpGetToken(),
         p_match_id: pvpState.matchId,
-        p_skill_id: skillId
+        p_skill_id: skillId,
+        p_target_fight: pvpState.pvpTarget || "enemy"
+    })
+    .single();
+
+    if(error){
+        alert(error.message || "تعذر تنفيذ الحركة");
+        pvpRefreshState(false);
+        return;
+    }
+
+    pvpRefreshState(false);
+}
+
+// استخدام مهارة المرافق (الدور الفرعي)
+async function pvpUseCompanionSkill(skillId){
+    pvpSetCompanionSkillsEnabled(false);
+    let { data, error } =
+    await supabaseClient
+    .rpc("pvp_use_companion_skill", {
+        p_token: pvpGetToken(),
+        p_match_id: pvpState.matchId,
+        p_skill_id: skillId,
+        p_target_fight: pvpState.pvpTarget || "enemy"
     })
     .single();
 
@@ -1703,8 +1816,188 @@ async function pvpUseSkill(skillId){
 }
 
 // ========================================
-// سلاح اللاعب (PvP): زر بجانب مهاراتك، استخدامه ينقص المتانة ويستدعيه السيرفر
+// المرافق في PvP: عرض بطاقة المرافق، ومهاراته، والدور الفرعي، والاستهداف
 // ========================================
+
+// اختيار هدف الهجوم الحالي (enemy = شخصية الخصم، enemy_comp = مرافق الخصم)
+function pvpSetTarget(tgt){
+    if(tgt === "enemy_comp" && (!pvpState.oppCompAlive || pvpState.oppCompMaxHp <= 0)){
+        tgt = "enemy";
+    }
+    pvpState.pvpTarget = tgt;
+    // تمييز بصري للمركب المستهدف
+    let enemyCard = document.querySelector("#pvp-battle-screen .enemy-card:not(.companion-card)");
+    let enemyCompCard = document.getElementById("pvp-enemy-companion-card");
+    if(enemyCard) enemyCard.classList.toggle("pvp-target-fight", tgt === "enemy");
+    if(enemyCompCard) enemyCompCard.classList.toggle("pvp-target-fight", tgt === "enemy_comp");
+}
+
+// عرض بطاقتي مرافق الخصم واللاعب (اسم، صورة، HP، حال سقط)
+function pvpRenderCompanionCards(){
+    // مرافق الخصم
+    let oppEl = document.getElementById("pvp-enemy-companion-card");
+    if(oppEl){
+        let showOpp = pvpState.oppCompMaxHp > 0 && !!pvpState.oppCompName;
+        oppEl.style.display = showOpp ? "" : "none";
+        if(showOpp){
+            setFighterImage(document.getElementById("pvp-enemy-companion-image"), pvpState.oppCompImage);
+            document.getElementById("pvp-enemy-companion-name").textContent = pvpState.oppCompName || "مرافق";
+            updateHpDisplay("pvp-enemy-companion", pvpState.oppCompHp, pvpState.oppCompMaxHp);
+            let imgEl = document.getElementById("pvp-enemy-companion-image");
+            if(imgEl) imgEl.classList.toggle("companion-dead", !pvpState.oppCompAlive);
+        }
+    }
+
+    // مرافقي
+    let myEl = document.getElementById("pvp-player-companion-card");
+    if(myEl){
+        let showMy = pvpState.myCompMaxHp > 0 && !!pvpState.myCompName;
+        myEl.style.display = showMy ? "" : "none";
+        if(showMy){
+            setFighterImage(document.getElementById("pvp-player-companion-image"), pvpState.myCompImage);
+            document.getElementById("pvp-player-companion-name").textContent = pvpState.myCompName || "مرافق";
+            updateHpDisplay("pvp-player-companion", pvpState.myCompHp, pvpState.myCompMaxHp);
+            let imgEl = document.getElementById("pvp-player-companion-image");
+            if(imgEl) imgEl.classList.toggle("companion-dead", !pvpState.myCompAlive);
+        }
+    }
+}
+
+// شارات حالة مرافقي ومرافق الخصم (قوة مؤقتة / أدوار / درع / سم...)
+function pvpRenderCompanionStatus(){
+    let my = {
+        tempAtk: pvpState.myCompTempAtk || 0,
+        extraTurns: pvpState.myCompExtraTurns || 0,
+        reflectMult: pvpState.myCompReflectMult || 0,
+        absorbHits: pvpState.myCompAbsorbHits || 0,
+        shieldCharges: pvpState.myCompShieldCharges || 0,
+        poisonDamage: pvpState.myCompPoisonDamage || 0,
+        poisonTurns: pvpState.myCompPoisonTurns || 0
+    };
+    let opp = {
+        tempAtk: pvpState.oppCompTempAtk || 0,
+        extraTurns: pvpState.oppCompExtraTurns || 0,
+        reflectMult: pvpState.oppCompReflectMult || 0,
+        absorbHits: pvpState.oppCompAbsorbHits || 0,
+        shieldCharges: pvpState.oppCompShieldCharges || 0,
+        poisonDamage: pvpState.oppCompPoisonDamage || 0,
+        poisonTurns: pvpState.oppCompPoisonTurns || 0
+    };
+    pvpRenderFighterStatusBadge("pvp-player-companion", my);
+    pvpRenderFighterStatusBadge("pvp-enemy-companion", opp);
+}
+
+// عرض ما استخدمه مرافقي ومرافق الخصم كشرائح صغيرة (نفس آلية الشخصيات)
+function pvpRenderCompanionUsedSkills(){
+    let myIds = [...new Set(pvpState.myCompUsedSkillIds)];
+    let oppIds = [...new Set(pvpState.oppCompUsedSkillIds)];
+    pvpRenderUsedChips("pvp-player-companion-used-skills", myIds, pvpState.myCompSealedSkillIds, "pvpCompMy");
+    pvpRenderUsedChips("pvp-enemy-companion-used-skills", oppIds, pvpState.oppCompSealedSkillIds, "pvpCompOpp");
+}
+
+function pvpRenderUsedChips(boxId, ids, sealedIds, cacheKey){
+    let box = document.getElementById(boxId);
+    if(!box) return;
+    let key = ids.join(",") + "|" + (sealedIds || []).join(",");
+    if(box.dataset.pvpKey === key) return;
+    box.dataset.pvpKey = key;
+    box.innerHTML = "";
+    ids.forEach(id => {
+        let s = pvpState.skillCache[id];
+        if(!s) return;
+        let sealed = (sealedIds || []).includes(id);
+        let chip = document.createElement("span");
+        chip.className = "used-skill-chip" + (sealed ? " sealed" : "");
+        chip.textContent = s.name + (sealed ? " 🔒" : "");
+        attachSkillLongPress(chip, s);
+        box.appendChild(chip);
+    });
+}
+
+// تحميل مهارات مرافقي (من RPC get_my_active_companion) وعرضها
+async function loadPVPCompanionSkills(){
+    let token = pvpGetToken();
+    if(!token) return;
+    try{
+        let { data, error } = await supabaseClient.rpc("get_my_active_companion", { p_token: token }).maybeSingle();
+        if(error || !data) return;
+        let skills = (data.skills && typeof data.skills === "object" && !Array.isArray(data.skills))
+            ? Object.values(data.skills) : (Array.isArray(data.skills) ? data.skills : []);
+        skills.forEach(s => { pvpState.skillCache[s.id] = s; });
+        pvpState.myCompSkills = skills;
+        renderPVPCompanionSkillButtons();
+    }catch(e){
+        console.error("companion skills load error", e);
+    }
+}
+
+// عرض أزرار مهارات المرافق في بطاقة مرافقي
+function renderPVPCompanionSkillButtons(){
+    let pagesEl = document.getElementById("pvp-player-companion-skills-pages");
+    if(!pagesEl) return;
+    let container = pagesEl.closest(".skills-container");
+    let currentIndex = Number(pagesEl.dataset.activePage || 0);
+    let usable = pvpState.myCompSkills;
+    if(usable.length === 0){
+        usable = [{id:"default_atk", name:"هجوم", type:"attack", damage:100, cooldown:0, effect:null}];
+    }
+    let pagesOfSkills = [];
+    for(let i=0;i<usable.length;i+=4){
+        pagesOfSkills.push(usable.slice(i,i+4));
+    }
+    if(currentIndex >= pagesOfSkills.length) currentIndex = pagesOfSkills.length-1;
+    if(currentIndex < 0) currentIndex = 0;
+
+    pagesEl.innerHTML = "";
+    pagesOfSkills.forEach((page, pageIdx) => {
+        let pageDiv = document.createElement("div");
+        pageDiv.className = "skills-page" + (pageIdx === currentIndex ? " active" : "");
+        page.forEach(skill => {
+            let btn = document.createElement("button");
+            btn.dataset.skillId = String(skill.id);
+            btn.innerHTML = `<span class="skill-name">${escapeHtml(skill.name || "مهارة")}</span>`;
+            btn.onclick = () => pvpUseCompanionSkill(skill.id);
+            attachSkillLongPress(btn, skill);
+            // المركب المستهدف في دور الأشخاص
+            btn.dataset.fighter = "companion";
+            pageDiv.appendChild(btn);
+        });
+        pagesEl.appendChild(pageDiv);
+    });
+    pagesEl.dataset.activePage = String(currentIndex);
+
+    let dotsEl = container ? container.querySelector(".skill-dots") : null;
+    if(dotsEl){
+        if(pagesOfSkills.length <= 1){ dotsEl.style.display = "none"; }
+        else{
+            dotsEl.style.display = "";
+            dotsEl.innerHTML = "";
+            pagesOfSkills.forEach((_, i) => {
+                let dot = document.createElement("span");
+                if(i === currentIndex) dot.classList.add("active");
+                dot.onclick = () => {
+                    pagesEl.dataset.activePage = String(i);
+                    renderPVPCompanionSkillButtons();
+                };
+                dotsEl.appendChild(dot);
+            });
+        }
+    }
+    pvpSetCompanionSkillsEnabled(false);
+}
+
+// تفعيل/تعطيل أزرار مهارات المرافق
+function pvpSetCompanionSkillsEnabled(enabled){
+    let container = document.getElementById("pvp-player-companion-skills-pages");
+    if(!container) return;
+    let myTurnCompanion = !!(pvpState.turnSub === 1);
+    container.querySelectorAll("button[data-skill-id]").forEach(btn => {
+        let skill = pvpState.skillCache[btn.dataset.skillId];
+        let onCooldown = skill ? pvpCooldownRemaining(skill) > 0 : false;
+        let sealed = skill ? (pvpState.myCompSealedSkillIds || []).includes(skill.id) : false;
+        btn.classList.toggle("skill-locked", !enabled || !myTurnCompanion || onCooldown || sealed);
+    });
+}
 let pvpWeapon = null;
 let pvpWeaponView = false;
 let pvpWeaponBgs = {};
