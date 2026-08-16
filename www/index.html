@@ -7,7 +7,7 @@
 
     <title>Card Game</title>
 
-    <link rel="stylesheet" href="style.css?v=20260816b">
+    <link rel="stylesheet" href="style.css?v=20260816c">
 </head>
 
 <body>
@@ -872,6 +872,26 @@ lang="ar">
         </section>
 
         <!-- ========================= -->
+        <!-- زنزانة العصابة التعاونية -->
+        <!-- ========================= -->
+
+        <section id="clandungeon-screen" class="screen">
+
+            <h2>⚔️ زنزانة تعاونية</h2>
+
+            <div id="clandungeon-content" class="friends-content">
+
+                <div class="chat-loading">جاري التحميل...</div>
+
+            </div>
+
+            <button onclick="openScreen('clans-screen'); ClanDungeon.stopPolling();">
+                ↩ العودة للعصابة
+            </button>
+
+        </section>
+
+        <!-- ========================= -->
         <!-- اختيار الشخصية -->
         <!-- ========================= -->
 
@@ -1680,7 +1700,9 @@ id="pve-player-used-skills">
 
 <script src="social.js?v=20260816"></script>
 
-<script src="clans.js?v=20260816h"></script>
+<script src="clans.js?v=20260816i"></script>
+
+<script src="clandungeon.js?v=20260816a"></script>
 
 <script src="game.js?v=20260816c"></script>
 

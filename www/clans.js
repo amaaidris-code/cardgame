@@ -318,6 +318,9 @@ const Clans = (function(){
                 <div class="clan-title">🛡️ ${escapeHtml(clan.name)}</div>
                 <div class="friend-status">${clan.member_count} عضو • دوري: ${roleLabel(clan.my_role)}</div>
                 ${editControls}
+                <div class="clan-dungeon-row">
+                    <button class="clan-dungeon-open-btn" onclick="ClanDungeon.open()">⚔️ زنزانة تعاونية</button>
+                </div>
             </div>
 
             <div class="friends-group-title">الأعضاء (${membersHtml.length ? "" : ""})</div>
@@ -520,6 +523,7 @@ const Clans = (function(){
         stopPolling,
         switchClan,
         switchNoTab,
+        getCurrentClanId: function(){ return currentClanId; },
         createClan,
         doSearch,
         joinByName,
