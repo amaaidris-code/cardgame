@@ -7242,6 +7242,22 @@ async function openEditCompanionModal(companionId){
             </div>
             <div id="companion-editable-skills">جاري تحميل المهارات...</div>
 
+            <hr>
+            <h4>🛠️ إضافة مهارة جديدة مخصصة</h4>
+            <p class="admin-hint">أنشئ مهارة جديدة من الصفر واربطها بهذا المرافق مباشرة (إنشاء مهارة فريدة لهذا المرافق).</p>
+            <div class="form-box admin-add-skill-form">
+                <input id="new-comp-skill-name" type="text" placeholder="اسم المهارة">
+                <select id="new-comp-skill-type">${skillTypeOptionsHtml("attack")}</select>
+                <input id="new-comp-skill-damage" type="number" placeholder="الضرر" value="0">
+                <input id="new-comp-skill-cooldown" type="number" placeholder="التهدئة (بالأدوار)" value="0">
+                <textarea id="new-comp-skill-desc" placeholder="وصف المهارة (يظهر للاعب عند الضغط المطوّل على الزر)"></textarea>
+                <input id="new-comp-skill-params" type="text" placeholder="معاملات إضافية بصيغة JSON — مثل {&quot;amount&quot;:50} (اختياري)">
+                <label class="admin-color-row skill-color-row">🎨 لون اسم المهارة <input id="new-comp-skill-color" type="color" value="#22c55e"></label>
+                <label class="admin-color-row skill-color-row">✏️ لون الحد <input id="new-comp-skill-stroke-color" type="color" value="#000000"></label>
+                <label class="admin-color-row skill-color-row">📏 سماكة الحد <input id="new-comp-skill-stroke-width" type="number" value="0" min="0" max="10" step="0.1" style="width:60px;"></label>
+                <button onclick="addCompanionSkill('${p.id}')">➕ إضافة المهارة</button>
+            </div>
+
             <div class="modal-buttons" style="margin-top:10px;">
                 <button onclick="saveCompanion('${p.id}')">💾 حفظ</button>
                 <button onclick="closeCompanionEditModal()">إغلاق</button>
@@ -7356,6 +7372,35 @@ async function removeCompanionSkill(companionId, skillId){
         p_admin_token: admin_token, p_companion_id: companionId, p_skill_id: skillId
     });
     if(error){ alert(error.message); return; }
+    await renderCompanionEditableSkills(companionId);
+}
+
+async function addCompanionSkill(companionId){
+    let name = (document.getElementById("new-comp-skill-name") || {}).value; name = name ? name.trim() : "";
+    if(name === ""){ alert("اكتب اسم المهارة"); return; }
+    let typeChoice = document.getElementById("new-comp-skill-type").value || "attack";
+    let f = skillTypeChoiceToFields(typeChoice);
+    let color = (document.getElementById("new-comp-skill-color") || {}).value || "#22c55e";
+    let strokeColor = (document.getElementById("new-comp-skill-stroke-color") || {}).value;
+    let strokeWidth = Number((document.getElementById("new-comp-skill-stroke-width") || {}).value) || 0;
+    let paramsRaw = (document.getElementById("new-comp-skill-params") || {}).value || "";
+    let admin_token = localStorage.getItem("admin_token");
+    let { error } = await supabaseClient.rpc("admin_add_companion_skill", {
+        p_admin_token: admin_token, p_companion_id: companionId, p_name: name,
+        p_type: f.type || "attack",
+        p_damage: Number((document.getElementById("new-comp-skill-damage") || {}).value) || 0,
+        p_cooldown: Number((document.getElementById("new-comp-skill-cooldown") || {}).value) || 0,
+        p_effect: f.effect, p_unblockable: !!f.unblockable,
+        p_description: (document.getElementById("new-comp-skill-desc") || {}).value.trim() || null,
+        p_color: color,
+        p_params: (() => { try{ return paramsRaw.trim() ? JSON.parse(paramsRaw) : {}; }catch(e){ return {}; } })(),
+        p_stroke_color: strokeColor, p_stroke_width: strokeWidth
+    });
+    if(error){ alert(error.message); return; }
+    alert("تمت إضافة المهارة");
+    ["new-comp-skill-name","new-comp-skill-type","new-comp-skill-damage","new-comp-skill-cooldown","new-comp-skill-desc","new-comp-skill-params"].forEach(i => {
+        let el = document.getElementById(i); if(el) el.value = i === "new-comp-skill-damage" || i === "new-comp-skill-cooldown" ? "0" : "";
+    });
     await renderCompanionEditableSkills(companionId);
 }
 
