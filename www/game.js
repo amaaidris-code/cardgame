@@ -7592,6 +7592,15 @@ function initSfx(){
     if(typeof Sfx === "undefined") return;
     const btn = document.getElementById("sfx-toggle-btn");
     if(btn) Sfx.initToggleBtn(btn);
+    // شريط تحكم مستوى الصوت 0..100 متصل بـ Sfx.setVolume (0..1)
+    const vol = document.getElementById("sfx-volume");
+    if(vol){
+        vol.value = Math.round(Sfx.volume() * 100);
+        vol.addEventListener("input", function(){
+            Sfx.setVolume(Number(vol.value) / 100);
+            if(!Sfx.isMuted()) Sfx.play("click");
+        });
+    }
     // استمع لأول تفاعل (نقر/لمس) لإلغاء تعليق AudioContext
     const unlockOnce = function(){
         Sfx.unlock();
