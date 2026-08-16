@@ -81,9 +81,12 @@ var Sfx = (function(){
         osc.type = type;
         osc.frequency.value = freq;
         g.gain.setValueAtTime(0.0001, when);
-        g.gain.exponentialRampToValueAtTime(vol * master.gain.value, when + 0.01);
+        // نغم الموسيقى يُمرَّر عبر musicGain (للبهت/التحكم)، والباقي عبر master مباشرة
+        var dest = opts.route === "music" ? musicGain : master;
+        var relLevel = (dest && dest.gain) ? (dest.gain.value || 1) : 1;
+        g.gain.exponentialRampToValueAtTime(Math.max(0.0001, vol * relLevel), when + 0.01);
         g.gain.exponentialRampToValueAtTime(0.0001, when + dur);
-        osc.connect(g); g.connect(master);
+        osc.connect(g); g.connect(dest);
         // اهتزاز طفيف في التردد لمزيد من الواقعية
         if(opts.glideTo){
             osc.frequency.exponentialRampToValueAtTime(opts.glideTo, when + dur);
@@ -164,33 +167,45 @@ var Sfx = (function(){
     }
 
     // ---------- موسيقى خلفية إجرائية ----------
-    // تتابع وتر بسيط هادئ — لا نغمة إلا ضمن السلم، تُكتَم عند كتم الصوت
+    // تتابع وتر بسيط هادئ — تُمرَّر عبر musicGain (لبهتٍ سلس وليستجيب للمستوى).
     var BASS = [110.0, 130.8, 87.31, 98.0];     // A, C, F, G
     var ARP  = [220, 261.6, 329.6, 220, 261.6, 392]; // كسر بسيط
+    var musicMode = "menu";   // "menu" أهدأ | "battle" أوضح قليلًا
 
-    function startMusic(){
+    function musicLevel(){
+        if(isMuted()) return 0;
+        return musicMode === "battle" ? 0.22 : 0.14;
+    }
+
+    function startMusic(mode){
         var ctx = ensureCtx();
-        if(!ctx || musicTimer) return;
-        musicNext = ctx.currentTime + 0.1;
+        if(!ctx) return;
+        if(mode) musicMode = mode;
+        // أعد فتح منظر الصوت إن كان معلّقًا (مهم في التبويبات الخلفية)
+        if(ctx.state === "suspended") ctx.resume().catch(function(){});
+        if(musicTimer){
+            fadeMusicTo(musicLevel());
+            return;
+        }
+        musicNext = ctx.currentTime + 0.15;
         musicTimer = setInterval(scheduleMusicStep, 120);
-        fadeMusicTo(0.18);
+        fadeMusicTo(musicLevel());
     }
 
     function scheduleMusicStep(){
         var ctx = ensureCtx();
         if(!ctx || isMuted()){ return; }
-        // نغم الدرام والكسر القصير فقط — فهي مهدئة ومتدرجة
         var now = ctx.currentTime;
-        var step = 0.28; // بتر قصير كل ~0.28 ثانية
+        var step = musicMode === "battle" ? 0.26 : 0.34; // أبطأ قليلًا في القائمة
         var count = 0;
         while(musicNext < now + 0.6 && count < 20){
             var barStep = Math.floor(musicNext / step);
             var ii = barStep % ARP.length;
-            playTone({freq: ARP[ii], dur: step * 0.9, type:"triangle", vol:0.20});
+            playTone({freq: ARP[ii], dur: step * 0.9, type:"triangle", vol:0.20, route:"music"});
             // نغم الباص عند بداية كل "وتر" (كل 4 خطوات)
             if(barStep % 4 === 0){
                 var bassIdx = Math.floor(barStep / 4) % BASS.length;
-                playTone({freq: BASS[bassIdx], dur: step * 3, type:"sine", vol:0.32});
+                playTone({freq: BASS[bassIdx], dur: step * 3, type:"sine", vol:0.32, route:"music"});
             }
             musicNext += step;
             count++;
@@ -217,7 +232,7 @@ var Sfx = (function(){
         var ctx = ensureCtx();
         if(!ctx) return;
         if(master) master.gain.value = outLevel();
-        if(musicGain && musicTimer){ fadeMusicTo(0.18); }
+        if(musicGain && musicTimer){ fadeMusicTo(musicLevel()); }
     }
 
     function setMuted(m){

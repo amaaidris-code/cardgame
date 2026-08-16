@@ -406,13 +406,17 @@ function openScreen(screenId){
 
 }
 
-        // موسيقى خلفية إجرائية فقط أثناء شاشات المعارك
+        // موسيقى خلفية إجرائية طوال اللعب: نغمة هادئة في القوائم، وأوضح قليلًا
+        // أثناء المعارك، وتتوقف فقط على شاشات الدخول/التسجيل/الإدارة
         if(typeof Sfx !== "undefined"){
+            const noMusic = ["login-screen", "register-screen", "admin-panel-screen", "admin-my-characters-screen"];
             const battleScreens = ["pve-battle-screen", "pvp-battle-screen", "clandungeon-screen"];
-            if(battleScreens.indexOf(screenId) !== -1){
-                Sfx.startMusic();
-            } else {
+            if(noMusic.indexOf(screenId) !== -1){
                 Sfx.stopMusic();
+            }else if(battleScreens.indexOf(screenId) !== -1){
+                Sfx.startMusic("battle");
+            }else{
+                Sfx.startMusic("menu");
             }
         }
 
