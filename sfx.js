@@ -28,6 +28,12 @@ var Sfx = (function(){
     var KEY_MUTED = "sfx_muted";
     var KEY_VOL = "sfx_volume";
 
+    // صار الصوت موثوقًا بمجرد أول تفاعل حر (نقر/لمس). قبل ذلك لا ننشئ
+    // AudioContext أصلًا حتى لا يعترضه Chrome (autoplay policy) بصمت/تحذير.
+    var gestureUnlocked = false;
+    // يُسجَّل الطلب إذا جاءت الموسيقى قبل أول تفاعل، فتُشغَّل بعده مباشرة
+    var musicPending = null;
+
     function storedMuted(){
         try{ return localStorage.getItem(KEY_MUTED) === "1"; }catch(e){ return false; }
     }
@@ -37,8 +43,10 @@ var Sfx = (function(){
         return Math.max(0, Math.min(1, v));
     }
 
-    // إنشاء الـ AudioContext مع التأقلم مع أي بادئة قديمة
+    // إنشاء الـ AudioContext مع التأقلم مع أي بادئة قديمة — لا يُنشأ إلا بعد
+    // أول تفاعل حر من المستخدم (autoplay policy في المتصفحات/التطبيق)
     function ensureCtx(){
+        if(!gestureUnlocked) return null;
         if(ac) return ac;
         var AC = window.AudioContext || window.webkitAudioContext;
         if(!AC) return null;
@@ -56,10 +64,17 @@ var Sfx = (function(){
         return ac;
     }
 
-    // يجب استدعاؤها من تفاعل المستخدم الأول
+    // يجب استدعاؤها من تفاعل المستخدم الأول (نقر/لمس/زر): يفتح الغلق، ينشئ
+    // المنظر، يكمله التأكيد، ثم يبدأ أي موسيقى كانت معلّقة
     function unlock(){
+        gestureUnlocked = true;
         var ctx = ensureCtx();
         if(ctx && ctx.state === "suspended") ctx.resume().catch(function(){});
+        if(musicPending){
+            var mode = musicPending;
+            musicPending = null;
+            startMusic(mode);
+        }
     }
 
     function isMuted(){ return storedMuted(); }
@@ -179,7 +194,11 @@ var Sfx = (function(){
 
     function startMusic(mode){
         var ctx = ensureCtx();
-        if(!ctx) return;
+        if(!ctx){
+            // ما زال قبل أول تفاعل حر: سجّل الطلب ليبدأ بمجرد فتح الصوت
+            musicPending = mode || "menu";
+            return;
+        }
         if(mode) musicMode = mode;
         // أعد فتح منظر الصوت إن كان معلّقًا (مهم في التبويبات الخلفية)
         if(ctx.state === "suspended") ctx.resume().catch(function(){});
