@@ -406,20 +406,6 @@ function openScreen(screenId){
 
 }
 
-        // موسيقى خلفية إجرائية طوال اللعب: نغمة هادئة في القوائم، وأوضح قليلًا
-        // أثناء المعارك، وتتوقف فقط على شاشات الدخول/التسجيل/الإدارة
-        if(typeof Sfx !== "undefined"){
-            const noMusic = ["login-screen", "register-screen", "admin-panel-screen", "admin-my-characters-screen"];
-            const battleScreens = ["pve-battle-screen", "pvp-battle-screen", "clandungeon-screen"];
-            if(noMusic.indexOf(screenId) !== -1){
-                Sfx.stopMusic();
-            }else if(battleScreens.indexOf(screenId) !== -1){
-                Sfx.startMusic("battle");
-            }else{
-                Sfx.startMusic("menu");
-            }
-        }
-
     }
 
 }
@@ -7587,53 +7573,6 @@ if(document.readyState === "loading"){
     setTimeout(checkForAppUpdate, 1500);
 }
 
-
-// ========================================
-// تهيئة الصوت: يربط زر الكتم، يفتح مناظر الصوت عند أول تفاعل، ويحسب
-// سرعة النقر للنبضات. يُستدعى مرة واحدة بعد جاهزية الواجهة.
-// ========================================
-function initSfx(){
-    if(typeof Sfx === "undefined") return;
-    const btn = document.getElementById("sfx-toggle-btn");
-    if(btn) Sfx.initToggleBtn(btn);
-    // شريط تحكم مستوى الصوت 0..100 متصل بـ Sfx.setVolume (0..1)
-    const vol = document.getElementById("sfx-volume");
-    if(vol){
-        vol.value = Math.round(Sfx.volume() * 100);
-        vol.addEventListener("input", function(){
-            Sfx.setVolume(Number(vol.value) / 100);
-            if(!Sfx.isMuted()) Sfx.play("click");
-        });
-    }
-    // استمع لأول تفاعل (نقر/لمس) لإلغاء تعليق AudioContext
-    const unlockOnce = function(){
-        Sfx.unlock();
-        window.removeEventListener("pointerdown", unlockOnce);
-        window.removeEventListener("keydown", unlockOnce);
-    };
-    window.addEventListener("pointerdown", unlockOnce);
-    window.addEventListener("keydown", unlockOnce);
-    // نغمة نقر عامة للأزرار (بحدة تفادٍ لتجمعها)
-    const lastClick = {};
-    document.addEventListener("click", function(e){
-        if(typeof Sfx === "undefined" || Sfx.isMuted()) return;
-        const btn = e.target.closest("button");
-        if(!btn) return;
-        const now = Date.now();
-        if(lastClick.x === e.clientX && lastClick.y === e.clientY) return; // كبح النقرات المكررة غير المرغوبة
-        lastClick.x = e.clientX; lastClick.y = e.clientY;
-        if(now - (lastClick.t || 0) < 60) return;
-        lastClick.t = now;
-        if(btn.id === "sfx-toggle-btn") return; // للزر نص خاص به
-        Sfx.play("click");
-    });
-}
-
-if(document.readyState === "loading"){
-    document.addEventListener("DOMContentLoaded", initSfx);
-}else{
-    initSfx();
-}
 
 // ========================================
 // إعادة تحميل اللعبة

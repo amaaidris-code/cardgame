@@ -3146,11 +3146,6 @@ function pvpShowResult(iWon){
         statusBox.textContent = iWon ? "🏆 فزت! وأُضيف الخصم المهزوم إلى ظلك 🌑" : "💔 خسرت";
     }
 
-    if(typeof Sfx !== "undefined"){
-        Sfx.play(iWon ? "victory" : "defeat");
-        Sfx.stopMusic();
-    }
-
     pvpSetSkillsEnabled(false);
 
     // عند الفوز: نضيف خصمنا المهزوم إلى مخزون الظل الشخصي

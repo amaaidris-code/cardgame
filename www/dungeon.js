@@ -85,7 +85,6 @@ function startDungeon(dungeonId) {
     startDungeonBattle(d);
 }
 
-// يطلب/mint جلسة معركة واحدة من الخادم لهذه الزنزانة (تُستهلك عند الاستلام)
 async function ensureDungeonSession(dungeonId) {
     let token = dungeonToken();
     if (!token) return null;
@@ -112,14 +111,10 @@ async function dungeonClaimReward(dungeonId) {
         p_session: session
     });
     if (error) throw error;
-    if (data && data.length){
-        if(typeof Sfx !== "undefined" && data[0].gold_added > 0) Sfx.play("coin");
-        return data[0];
-    }
+    if (data && data.length) return data[0];
     return { status: "success", gold_added: 0, remaining: -1 };
 }
 
-// يطلب جلسة معركة واحدة من الخادم لهذا الوحش (تُستهلك عند الاستلام)
 async function ensurePveSession(monsterId) {
     let token = dungeonToken();
     if (!token) return null;
@@ -147,10 +142,7 @@ async function pveClaimReward(monsterId) {
         p_session: session
     });
     if (error) throw error;
-    if (data && data.length){
-        if(typeof Sfx !== "undefined" && data[0].gold_added > 0) Sfx.play("coin");
-        return data[0];
-    }
+    if (data && data.length) return data[0];
     return { status: "success", gold_added: 0, remaining: -1 };
 }
 

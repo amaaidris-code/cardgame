@@ -573,7 +573,6 @@ const ClanDungeon = (function(){
             if(el){
                 const d = data && data[0];
                 el.innerHTML = d ? `✅ استلمت ${d.gold_share} ذهب! (${d.dungeon_name})` : "✅ تم الاستلام!";
-                if(typeof Sfx !== "undefined" && d && d.gold_share > 0) Sfx.play("coin");
             }
             await refreshState();
             myRun = null;
