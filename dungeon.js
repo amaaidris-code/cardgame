@@ -85,25 +85,63 @@ function startDungeon(dungeonId) {
     startDungeonBattle(d);
 }
 
+// يطلب/mint جلسة معركة واحدة من الخادم لهذه الزنزانة (تُستهلك عند الاستلام)
+async function ensureDungeonSession(dungeonId) {
+    let token = dungeonToken();
+    if (!token) return null;
+    try {
+        let { data, error } = await supabaseClient.rpc("battle_start_dungeon", {
+            p_token: token,
+            p_dungeon_id: dungeonId
+        });
+        if (error || !data || !data.length) return null;
+        return data[0].session_id;
+    } catch (e) {
+        return null;
+    }
+}
+
 async function dungeonClaimReward(dungeonId) {
     let token = dungeonToken();
     if (!token) throw new Error("يجب تسجيل الدخول");
+    let session = await ensureDungeonSession(dungeonId);
+    if (!session) throw new Error("تعذر بدء جلسة المعركة");
     let { data, error } = await supabaseClient.rpc("dungeon_claim_reward", {
         p_token: token,
-        p_dungeon_id: dungeonId
+        p_dungeon_id: dungeonId,
+        p_session: session
     });
     if (error) throw error;
     if (data && data.length) return data[0];
     return { status: "success", gold_added: 0, remaining: -1 };
 }
 
+// يطلب جلسة معركة واحدة من الخادم لهذا الوحش (تُستهلك عند الاستلام)
+async function ensurePveSession(monsterId) {
+    let token = dungeonToken();
+    if (!token) return null;
+    try {
+        let { data, error } = await supabaseClient.rpc("battle_start_pve", {
+            p_token: token,
+            p_monster_id: monsterId
+        });
+        if (error || !data || !data.length) return null;
+        return data[0].session_id;
+    } catch (e) {
+        return null;
+    }
+}
+
 // تسليم جائزة قتل وحش فردي في PvE (ذهب + حد يومي)
 async function pveClaimReward(monsterId) {
     let token = dungeonToken();
     if (!token) throw new Error("يجب تسجيل الدخول");
+    let session = await ensurePveSession(monsterId);
+    if (!session) throw new Error("تعذر بدء جلسة المعركة");
     let { data, error } = await supabaseClient.rpc("pve_claim_reward", {
         p_token: token,
-        p_monster_id: monsterId
+        p_monster_id: monsterId,
+        p_session: session
     });
     if (error) throw error;
     if (data && data.length) return data[0];
