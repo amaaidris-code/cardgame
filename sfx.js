@@ -156,7 +156,7 @@ var Sfx = (function(){
         defeat:    function(o){ var seq=[330,262,196]; for(var j=0;j<seq.length;j++) playTone({freq:seq[j], dur:0.45, type:"triangle", vol:0.5, volume:o.volume, delay:j*0.22}); },
         draw:      function(o){ playTone({freq:440, dur:0.2, type:"triangle", vol:0.4, volume:o.volume}); playTone({freq:330, dur:0.2, type:"triangle", vol:0.4, volume:o.volume, delay:0.2}); },
         // واجهة / تنقّل
-        click:     function(o){ playTone({freq:800, dur:0.04, type:"square", vol:0.2, volume:o.volume}); },
+        click:     function(o){ playTone({freq:520, glideTo:780, dur:0.045, type:"triangle", vol:0.28, volume:o.volume}); },
         open:      function(o){ playTone({freq:500, glideTo:700, dur:0.08, type:"triangle", vol:0.3, volume:o.volume}); },
         close:     function(o){ playTone({freq:700, glideTo:500, dur:0.08, type:"triangle", vol:0.3, volume:o.volume}); },
         coin:      function(o){ playTone({freq:880, dur:0.08, type:"square", vol:0.4, volume:o.volume}); playTone({freq:1320, dur:0.14, type:"square", vol:0.4, volume:o.volume, delay:0.07}); },
