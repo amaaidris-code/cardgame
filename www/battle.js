@@ -2862,6 +2862,11 @@ function handleSkillClick(skill){
 
     }
 
+    if(typeof Sfx !== "undefined"){
+        if(skill.type === "attack") Sfx.play("card");
+        else Sfx.play("skill");
+    }
+
     playerConsumeTurn(skill, "enemy");
 
 }
@@ -5100,6 +5105,8 @@ function useDefense(defenseSkill){
 
     clearTurnTimer();
 
+    if(typeof Sfx !== "undefined") Sfx.play("shield");
+
     battle.player.hp = snapshot.hpBefore;
 
     snapshot.consumed = true;
@@ -7143,6 +7150,11 @@ function endBattle(playerWon){
 
     }
 
+    if(typeof Sfx !== "undefined"){
+        Sfx.play(playerWon ? "victory" : "defeat");
+        Sfx.stopMusic();
+    }
+
     renderSkillButtons(battle.prefix);
 
     addBattleLog(playerWon ? "لقد فزت بالمعركة!" : "لقد خسرت المعركة");
@@ -7429,6 +7441,16 @@ function playHitEffect(prefix, isUnblockable){
 
 
 function applyDamageEffect(prefix, targetPrefix, amount, isHeal, isUnblockable){
+
+    if(typeof Sfx !== "undefined"){
+        if(isHeal){
+            Sfx.play("heal");
+        }else if(isUnblockable){
+            Sfx.play("crit");
+        }else{
+            Sfx.play("hit");
+        }
+    }
 
     playHitEffect(prefix, isUnblockable);
 

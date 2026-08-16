@@ -112,7 +112,10 @@ async function dungeonClaimReward(dungeonId) {
         p_session: session
     });
     if (error) throw error;
-    if (data && data.length) return data[0];
+    if (data && data.length){
+        if(typeof Sfx !== "undefined" && data[0].gold_added > 0) Sfx.play("coin");
+        return data[0];
+    }
     return { status: "success", gold_added: 0, remaining: -1 };
 }
 
@@ -144,7 +147,10 @@ async function pveClaimReward(monsterId) {
         p_session: session
     });
     if (error) throw error;
-    if (data && data.length) return data[0];
+    if (data && data.length){
+        if(typeof Sfx !== "undefined" && data[0].gold_added > 0) Sfx.play("coin");
+        return data[0];
+    }
     return { status: "success", gold_added: 0, remaining: -1 };
 }
 
