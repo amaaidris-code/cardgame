@@ -22,6 +22,7 @@ const ClanDungeon = (function(){
     function getPlayerId(){ return localStorage.getItem("player_id"); }
     function box(){ return document.getElementById("clandungeon-content"); }
     function isOpen(){ const s = document.getElementById("clandungeon-screen"); return s && s.classList.contains("active"); }
+    function isMyCompTurn(){ return myState && myState.my_comp_turn; }
 
     // ---------- turn timer (متزامن مع turn_deadline من السيرفر) ----------
     // يعرض عدًّا تنازليًا للدور الحالي. عند انتهاء المهلة يطلب من السيرفر
@@ -335,6 +336,7 @@ const ClanDungeon = (function(){
         const players = (st.players || []).slice().sort(function(a,c){ return String(a.player_id)===String(getPlayerId()) ? -1 : 1; });
         const me = players.find(function(p){ return String(p.player_id)===String(getPlayerId()); });
         const myTurn = !!st.my_turn && st.turn_phase === "player";
+        const myCompTurn = isMyCompTurn();
 
         const monsterImg = st.monster_image ? `<img class="cd-monster-img" src="${escapeHtml(st.monster_image)}" alt="${escapeHtml(st.monster_name)}">` : `<div class="cd-monster-img cd-noimg">👹</div>`;
         const monsterHpPct = st.monster_max_hp ? Math.max(0, Math.min(100, (st.monster_hp / st.monster_max_hp) * 100)) : 0;
@@ -344,12 +346,20 @@ const ClanDungeon = (function(){
             const isMe = String(p.player_id)===String(getPlayerId());
             const alive = p.alive;
             const hpPct = p.max_hp ? Math.max(0, Math.min(100,(p.hp/p.max_hp)*100)) : 0;
+            const myComp = st.my_comp_alive;
+            const compCard = isMe && st.my_comp_max_hp ? `
+                <div class="cd-player-card cd-me cd-companion-card ${myComp?'':'cd-dead'} ${myCompTurn&&myComp?'cd-turn':''}">
+                    <div class="cd-player-head">🐾 ${escapeHtml(st.my_comp_name || "مرافق")}</div>
+                    <div class="cd-hpbar"><div class="cd-hpbar-fill" style="width:${st.my_comp_max_hp?Math.max(0,Math.min(100,(st.my_comp_hp/st.my_comp_max_hp)*100)):0}%"></div></div>
+                    <div class="cd-hpnum">${myComp ? st.my_comp_hp + " / " + st.my_comp_max_hp : "☠️ سقط"}</div>
+                </div>` : "";
             return `
-                <div class="cd-player-card ${isMe?'cd-me':''} ${alive?'':'cd-dead'} ${String(st.turn_player_id)===String(p.player_id)&&st.turn_phase==="player"?'cd-turn':''}">
+                <div class="cd-player-card ${isMe?'cd-me':''} ${alive?'':'cd-dead'} ${!myCompTurn&&String(st.turn_player_id)===String(p.player_id)&&st.turn_phase==="player"?'cd-turn':''}">
                     <div class="cd-player-head">${isMe?"👤":"🤝"} ${escapeHtml(nm)}</div>
                     <div class="cd-hpbar"><div class="cd-hpbar-fill" style="width:${hpPct}%"></div></div>
                     <div class="cd-hpnum">${alive ? p.hp + " / " + p.max_hp : "☠️ سقط"}</div>
-                </div>`;
+                </div>
+                ${compCard}`;
         }).join("");
 
         const turnLabel = turnText(st, members);
@@ -407,7 +417,7 @@ const ClanDungeon = (function(){
         if(st.turn_phase === "monster") return "👹 دور الوحش...";
         if(st.turn_phase === "player"){
             if(st.turn_player_id){
-                if(String(st.turn_player_id)===String(getPlayerId())) return "⬇️ دورك! اختر مهارة واضغط هدفًا";
+                if(String(st.turn_player_id)===String(getPlayerId())) return (st.my_comp_turn ? "🐾 دور مرافقك الآن! اختر مهارته" : "⬇️ دورك! اختر مهارة واضغط هدفًا");
                 return "⏳ دور: " + escapeHtml(members[st.turn_player_id] || "لاعب");
             }
         }
@@ -440,10 +450,11 @@ const ClanDungeon = (function(){
     // ---------- skills ----------
     async function loadSkills(){
         const st = myState;
+        const compTurn = isMyCompTurn();
         let skills = [];
         try{
             const { data, error } = await supabaseClient.rpc("clan_dungeon_list_skills", { p_token: getToken(), p_run_id: myRun });
-            if(!error) skills = (data || []).filter(function(s){ return s.fighter_kind === "player"; });
+            if(!error) skills = (data || []).filter(function(s){ return compTurn ? s.fighter_kind === "companion" : s.fighter_kind === "player"; });
         }catch(e){ skills = []; }
 
         const el = document.getElementById("cd-skills");
@@ -531,10 +542,17 @@ const ClanDungeon = (function(){
 
     async function doUse(skillId, targetPlayerId){
         try{
-            await supabaseClient.rpc("clan_dungeon_use_skill", {
-                p_token: getToken(), p_run_id: myRun, p_skill_id: skillId,
-                p_target_player_id: targetPlayerId
-            });
+            if(isMyCompTurn()){
+                await supabaseClient.rpc("clan_dungeon_use_companion_skill", {
+                    p_token: getToken(), p_run_id: myRun, p_skill_id: skillId,
+                    p_target_player_id: targetPlayerId
+                });
+            } else {
+                await supabaseClient.rpc("clan_dungeon_use_skill", {
+                    p_token: getToken(), p_run_id: myRun, p_skill_id: skillId,
+                    p_target_player_id: targetPlayerId
+                });
+            }
             await refreshState();
             await renderRun();
             // الوحش يتصرف بعد دوري إذا كان دوره
