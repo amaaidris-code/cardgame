@@ -189,7 +189,10 @@ var Sfx = (function(){
 
     function musicLevel(){
         if(isMuted()) return 0;
-        return musicMode === "battle" ? 0.22 : 0.14;
+        // musicGain هو الضرب النهائي لنغمات الموسيقى؛ القيمة هنا هي الحجم
+        // الفعلي. بما أن النغمات نفسها ~0.2، نجعل 0.5/0.7 ليكون الصوت
+        // مسموعًا بوضوح (لكن دون أن يطغى، ويتحكم به شريط الصوت العام)
+        return musicMode === "battle" ? 0.7 : 0.5;
     }
 
     function startMusic(mode){
@@ -220,11 +223,11 @@ var Sfx = (function(){
         while(musicNext < now + 0.6 && count < 20){
             var barStep = Math.floor(musicNext / step);
             var ii = barStep % ARP.length;
-            playTone({freq: ARP[ii], dur: step * 0.9, type:"triangle", vol:0.20, route:"music"});
+            playTone({freq: ARP[ii], dur: step * 0.9, type:"triangle", vol:0.28, route:"music"});
             // نغم الباص عند بداية كل "وتر" (كل 4 خطوات)
             if(barStep % 4 === 0){
                 var bassIdx = Math.floor(barStep / 4) % BASS.length;
-                playTone({freq: BASS[bassIdx], dur: step * 3, type:"sine", vol:0.32, route:"music"});
+                playTone({freq: BASS[bassIdx], dur: step * 3, type:"sine", vol:0.42, route:"music"});
             }
             musicNext += step;
             count++;
