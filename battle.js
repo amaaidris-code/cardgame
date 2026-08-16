@@ -3369,7 +3369,9 @@ function companionTurnPlay(){
 
 }
 
-// الضغط على أيقونة المرافق أثناء دور المرافق: يفعّل التحكم بمهاراته
+// الضغط على أيقونة المرافق أثناء دور المرافق: يبدّل بين التحكم بالمرافق
+// والتحكم بالشخصية. أول ضغطة تُبدّل إلى وضع المرافق (مهاراته في خانة
+// اللاعب)، والضغطة التالية تعود لعرض الشخصية — والعكس حسب الحالة الحالية.
 function pveSwitchToCompanion(){
 
     if(battle.finished) return;
@@ -3378,14 +3380,35 @@ function pveSwitchToCompanion(){
 
     if(!comp || comp.hp <= 0) return;
 
+    // التبديل متاح فقط في دور المرافق
     if(battle.turnOwner !== "companion"){
         return;
     }
 
-    if(!battle.companionAwaitingActivation){
+    // إن كُنّا بالفعل في وضع المرافق: العودة إلى عرض الشخصية
+    if(battle.companionView){
+
+        battle.companionView = false;
+
+        battle.companionAwaitingActivation = true;
+
+        setTurnIndicatorText(
+            "pve-turn-indicator",
+            "🐾 دور المرافق — اضغط على أيقونته للتحكم",
+            "companion-turn"
+        );
+
+        renderCompanionViewIcon();
+
+        renderSkillButtons(battle.prefix);
+
+        updateBattleScreen();
+
         return;
+
     }
 
+    // وإلا (في وضع انتظار التفعيل بعد بدء دور المرافق): التبديل للمرافق
     battle.companionAwaitingActivation = false;
 
     // تفعيل وضع المرافق: تُعرض مهارات المرافق في خانة اللاعب مكان الشخصية
