@@ -977,6 +977,66 @@ function buildMonsterFighter(character, skills){
 
 
 // ========================================
+// بناء مقاتل المرافق (يماثل بناء اللاعب لكنه طرف ثانٍ بدور مستقل)
+// ========================================
+function buildCompanionFighter(data, skills){
+    if(!data) return null;
+    return {
+        name: data.name || "مرافق",
+        image: data.image,
+        hp: data.hp,
+        maxHp: data.hp,
+        skills: skills || [],
+        atk: Number(data.atk) || 100,
+        turnsTaken: 0,
+        cooldownUsedAt: {},
+        lastHitSnapshot: null,
+        shieldCharges: 0,
+        frozenTurns: 0,
+        sealedSkillIds: [],
+        tempAtk: 0,
+        tempHp: 0,
+        extraTurns: 0,
+        poisonDamage: 0,
+        poisonTurns: 0,
+        absorbMode: null,
+        absorbHits: 0,
+        reflectMult: 0,
+        reflectUnblockable: false,
+        cooldownExtra: {},
+        isCompanion: true,
+        isPlayer: true,
+        playerCharacterId: null,
+        charId: null,
+        glow: safeGlowColor(data.glow_color, "#22c55e")
+    };
+}
+
+// يقرأ المرافق النشط للاعب من الخادم ويبنيه كمقاتل (إن لم يوجد، لا يضيف شيئًا)
+async function loadActiveCompanionFighter(){
+    let token = localStorage.getItem("player_token");
+    if(!token) return;
+    try{
+        let { data, error } = await supabaseClient
+            .rpc("get_my_active_companion", { p_token: token })
+            .maybeSingle();
+        if(error || !data) return;
+        let skills = (data.skills && typeof data.skills === "object" && !Array.isArray(data.skills))
+            ? Object.values(data.skills) : (Array.isArray(data.skills) ? data.skills : []);
+        let fighter = buildCompanionFighter(data, skills);
+        if(fighter){
+            fighter.scaledAttackDamages = computeScaledAttackDamages(fighter.atk, fighter.skills);
+            battle.companion = fighter;
+            battle.companionLoaded = true;
+        }
+    }catch(e){
+        console.error("companion load error", e);
+    }
+}
+
+
+
+// ========================================
 // بدء معركة PvE
 // ========================================
 
@@ -1005,6 +1065,8 @@ async function startPVEBattle(monsterId){
 
     resetBattleVisuals("pve");
 
+    battle.companion = null;
+    battle.companionLoaded = false;
 
     let pc = await getActivePlayerCharacter();
 
@@ -1092,6 +1154,10 @@ async function startPVEBattle(monsterId){
     );
 
     battle.enemy = buildMonsterFighter(monsterRow, monsterSkills);
+
+    // المرافق النشط إن وُجد: مقاتل ثانٍ إلى جانب اللاعب بدوره المستقل
+    battle.companion = null;
+    await loadActiveCompanionFighter();
 
     battle.prefix = "pve";
 
@@ -1514,6 +1580,11 @@ async function startDungeonBattle(dungeon){
 
     battle.player.scaledAttackDamages = computeScaledAttackDamages(battle.player.atk, battle.player.skills);
 
+    // المرافق النشط يُحمَّل مرة واحدة للزنزانة ويستمر بدوره بين نزالات الوحوش
+    battle.companion = null;
+    battle.companionLoaded = false;
+    await loadActiveCompanionFighter();
+
     battle.prefix = "pve";
 
     battle.phase = "idle";
@@ -1764,6 +1835,30 @@ function updateBattleScreen(){
     if(playerImage) playerImage.classList.toggle("frozen-status", !!(battle.player.frozenTurns > 0));
     if(enemyImage) enemyImage.classList.toggle("frozen-status", !!(battle.enemy.frozenTurns > 0));
 
+    // المرافق: أظهر بطاقته وأحدث شريط صحته إن وُجد
+    let compCard = document.getElementById("pve-companion-card");
+    let comp = battle.companion;
+    let hasCompanion = !!(comp && comp.hp >= 0 && battle.companionLoaded);
+    if(compCard){
+        compCard.style.display = hasCompanion ? "" : "none";
+    }
+    if(hasCompanion){
+        let compHp = document.getElementById("pve-companion-hp");
+        let compBar = document.getElementById("pve-companion-hp-bar");
+        let compName = document.getElementById("pve-companion-name");
+        let compImage = document.getElementById("pve-companion-image");
+        if(compHp) compHp.innerHTML = `${comp.hp} / ${comp.maxHp}`;
+        if(compBar){
+            compBar.style.width = (comp.maxHp > 0 ? comp.hp / comp.maxHp * 100 : 0) + "%";
+            updateHpBarColor(compBar, comp.hp, comp.maxHp);
+        }
+        if(compName) compName.textContent = comp.name;
+        setFighterImage(compImage, comp.image);
+        if(compImage) compImage.classList.toggle("frozen-status", !!(comp.frozenTurns > 0));
+        // حالة موت المرافق: إظهار أقل سطوعًا للبطاقة
+        compCard.classList.toggle("companion-dead", comp.hp <= 0);
+    }
+
     applyGlowColors();
 
     renderSkillButtons(prefix);
@@ -1782,6 +1877,8 @@ function renderStatusBadges(prefix){
     renderFighterStatusBadge(prefix + "-enemy", battle.enemy);
 
     renderFighterStatusBadge(prefix + "-player", battle.player);
+
+    renderFighterStatusBadge("pve-companion", battle.companion);
 
 }
 
@@ -2161,10 +2258,16 @@ function processTurn(){
     if(battle.finished) return;
 
     let currentFighter =
-    (battle.turnOwner === "enemy") ? battle.enemy : battle.player;
+    (battle.turnOwner === "enemy") ? battle.enemy
+    : (battle.turnOwner === "companion") ? (battle.companion || battle.player)
+    : battle.player;
 
-    // تطبيق سُم في بداية الدور: يتلقى المسموم ضررًا قبل كل دور له
-    let poisonedFighter = (currentFighter === battle.player) ? battle.enemy : battle.player;
+    // تطبيق سُم في بداية الدور: يتلقى المسموم ضررًا قبل كل دور له.
+    // عند دور المرافق: نفحص سُم الخصم فقط (المرافق لا يملك سُمًا تراكميًا
+    // مستقلاً هنا — يأخذه عبر resolveAction كأي مقاتل، ويُطبَّق ضمنه)
+    let poisonedFighter =
+    (battle.turnOwner === "companion") ? battle.enemy
+    : ((currentFighter === battle.enemy) ? battle.player : battle.enemy);
     if(poisonedFighter.poisonTurns > 0 && poisonedFighter.poisonDamage > 0 && poisonedFighter.hp > 0){
         let poisonDmg = poisonedFighter.poisonDamage;
         // مهارة "انعكاس لا يُصدّ": إذا كان درع الانعكاس فعّالًا يعكس ضرر
@@ -2219,7 +2322,9 @@ function processTurn(){
             if(battle.finished) return;
 
             battle.turnOwner =
-            (battle.turnOwner === "enemy") ? "player" : "enemy";
+            (battle.turnOwner === "enemy") ? "player"
+            : (battle.turnOwner === "companion") ? "enemy"
+            : "enemy";
 
             processTurn();
 
@@ -2229,17 +2334,33 @@ function processTurn(){
 
     }
 
+    // صور دور المرافق (المطلوب)
+    let companionTurn = (battle.turnOwner === "companion");
+
     setTurnIndicatorText(
         "pve-turn-indicator",
-        battle.turnOwner === "player" ? "🟢 دورك الآن" : "⏳ دور الخصم...",
-        battle.turnOwner === "player" ? "my-turn" : "opp-turn"
+        battle.turnOwner === "player" ? "🟢 دورك الآن"
+        : (companionTurn ? "🐾 دور المرافق الآن — تحكم بمهاراته" : "⏳ دور الخصم..."),
+        battle.turnOwner === "player" ? "my-turn"
+        : (companionTurn ? "companion-turn" : "opp-turn")
     );
 
     if(battle.turnOwner === "enemy"){
 
         enemyAct();
 
+    } else if(companionTurn){
+
+        companionTurnPlay();
+
     } else {
+
+        // إذا كان اللاعب ميتًا ولا يزال المرافق حيًّا، الدور ينتقل للمرافق
+        if(battle.player.hp <= 0 && companionIsAlive()){
+            battle.turnOwner = "companion";
+            companionTurnPlay();
+            return;
+        }
 
         // بداية دور اللاعب: يُسمح له باستخدام جرعة واحدة هذا الدور
         battle.potionUsedThisTurn = false;
@@ -2266,7 +2387,10 @@ function pveEndTurn(owner){
 
     if(battle.finished) return;
 
-    let fighter = (owner === "player") ? battle.player : battle.enemy;
+    let fighterMap = { player: battle.player, companion: battle.companion, enemy: battle.enemy };
+    let fighter = fighterMap[owner];
+
+    if(!fighter) fighter = battle.player;
 
     if((fighter.extraTurns || 0) > 0){
 
@@ -2282,7 +2406,23 @@ function pveEndTurn(owner){
 
     }
 
-    battle.turnOwner = (owner === "player") ? "enemy" : "player";
+    // ترتيب الدوران: اللاعب ← المرافق (إن حيّ) ← الخصم ← اللاعب ...
+    let next;
+    if(owner === "player"){
+        next = ("companion");
+    } else if(owner === "companion"){
+        next = ("enemy");
+    } else {
+        // بعد دور الخصم: اللاعب، أو المرافق إن كان اللاعب ميتًا
+        next = (battle.player.hp > 0) ? "player" : "companion";
+    }
+
+    // تخطّي المرافق إذا لم يتواجد أو مات، والعودة لـ"اللاعب"
+    if(next === "companion" && !(battle.companion && battle.companion.hp > 0)){
+        next = "enemy";
+    }
+
+    battle.turnOwner = next;
 
     setTimeout(processTurn, 900);
 
@@ -3092,6 +3232,340 @@ function closeSkillDetailsModal(){
 
 
 
+// ========================================
+// دور المرافق (PvE): طرف اللاعب الثاني بدور مستقل
+// ========================================
+
+function companionIsAlive(){
+    return !!(battle.companion && battle.companionLoaded && battle.companion.hp > 0);
+}
+
+function companionIsAliveOrZero(){
+    return !!(battle.companion && battle.companionLoaded);
+}
+
+// بداية دور المرافق: يرسم شريط مهارات المرافق ويبدأ المؤقّت
+function companionTurnPlay(){
+
+    if(battle.finished) return;
+
+    renderCompanionSkillButtons();
+
+    startTurnTimer();
+
+}
+
+// يرسم أزرار مهارات المرافق في بطاقته (منفصل عن شريط مهارات اللاعب)
+function renderCompanionSkillButtons(){
+
+    let pagesEl = document.getElementById("pve-companion-skills-pages");
+
+    if(!pagesEl) return;
+
+    let comp = battle.companion;
+
+    let skills = Array.isArray(comp && comp.skills) ? comp.skills : [];
+
+    let pagesOfSkills = chunkSkills(skills, SKILLS_PER_PAGE);
+
+    let currentIndex = Number(pagesEl.dataset.activePage || 0);
+
+    currentIndex = Math.max(0, Math.min(currentIndex, pagesOfSkills.length - 1));
+
+    pagesEl.innerHTML = "";
+
+    pagesOfSkills.forEach((skillsChunk, i) => {
+
+        let pageDiv = document.createElement("div");
+
+        pageDiv.className = "skills-page" + (i === currentIndex ? " active" : "");
+
+        skillsChunk.forEach(skill => {
+
+            let btn = buildCompanionSkillButton(skill);
+
+            pageDiv.appendChild(btn);
+
+        });
+
+        pagesEl.appendChild(pageDiv);
+
+    });
+
+    pagesEl.dataset.activePage = String(currentIndex);
+
+    let container = pagesEl.closest(".skills-container");
+
+    let dotsEl = container ? container.querySelector(".skill-dots") : null;
+
+    if(dotsEl){
+
+        if(pagesOfSkills.length <= 1){
+
+            dotsEl.style.display = "none";
+
+        } else {
+
+            dotsEl.style.display = "";
+
+            dotsEl.innerHTML = "";
+
+            pagesOfSkills.forEach((_, i) => {
+
+                let dot = document.createElement("span");
+
+                if(i === currentIndex) dot.classList.add("active");
+
+                dot.onclick = () => companionGoToSkillPage(i);
+
+                dotsEl.appendChild(dot);
+
+            });
+
+        }
+
+    }
+
+}
+
+function companionGoToSkillPage(index){
+
+    let pagesEl = document.getElementById("pve-companion-skills-pages");
+
+    if(!pagesEl) return;
+
+    let pages = pagesEl.querySelectorAll(".skills-page");
+
+    if(pages.length === 0) return;
+
+    index = Math.max(0, Math.min(index, pages.length - 1));
+
+    pagesEl.dataset.activePage = String(index);
+
+    pages.forEach((p, i) => p.classList.toggle("active", i === index));
+
+    let container = pagesEl.closest(".skills-container");
+
+    let dots = container ? container.querySelectorAll(".skill-dots span") : [];
+
+    dots.forEach((d, i) => d.classList.toggle("active", i === index));
+
+}
+
+function buildCompanionSkillButton(skill){
+
+    let btn = document.createElement("button");
+
+    btn.innerHTML = `<span class="skill-name">${escapeHtml(skill.name || "مهارة")}</span>`;
+
+    let skillColor = skill && skill.color;
+
+    if(skillColor && /^#[0-9A-Fa-f]{6}$/.test(skillColor)){
+
+        btn.querySelector(".skill-name").style.color = skillColor;
+
+    }
+
+    let strokeColor = skill && skill.stroke_color;
+
+    let strokeWidth = skill && skill.stroke_width;
+
+    if(strokeWidth && strokeWidth > 0){
+
+        let strokePx = Number(strokeWidth) || 0;
+
+        let sColor = (strokeColor && /^#[0-9A-Fa-f]{6}$/.test(strokeColor)) ? strokeColor : '#000000';
+
+        btn.querySelector(".skill-name").style.webkitTextStroke = strokePx + "px " + sColor;
+
+        btn.querySelector(".skill-name").style.paintOrder = "stroke fill";
+
+    }
+
+    let ready = isSkillReady(battle.companion, skill);
+
+    let remaining = cooldownTurnsRemaining(battle.companion, skill);
+
+    let sealed = isSkillSealed(battle.companion, skill);
+
+    let isTurnLocked =
+    !(battle.turnOwner === "companion")
+    || battle.finished
+    || (battle.companion && battle.companion.hp <= 0);
+
+    let locked = sealed || !ready || isTurnLocked;
+
+    btn.classList.toggle("skill-locked", locked);
+
+    if(sealed){
+
+        btn.classList.add("skill-sealed");
+
+        let badge = document.createElement("span");
+
+        badge.className = "sealed-badge";
+
+        badge.textContent = "🔒";
+
+        btn.appendChild(badge);
+
+    }
+
+    if(!ready && remaining > 0){
+
+        btn.classList.add("on-cooldown");
+
+        let badge = document.createElement("span");
+
+        badge.className = "cooldown-badge";
+
+        badge.textContent = remaining;
+
+        btn.appendChild(badge);
+
+    }
+
+    btn.onclick = () => handleCompanionSkillClick(skill);
+
+    return btn;
+
+}
+
+// مستخدم مهارة المرافق؛ يدعم النطاق الأساسي (هجوم/دفاع/تعزيز/سُم/امتصاص)
+// عبر resolveAction والتأثيرات القياسية بناءً على نوع المهارة
+function handleCompanionSkillClick(skill){
+
+    if(battle.finished) return;
+
+    if(battle.turnOwner !== "companion"){
+        alert("ليس دور المرافق الآن");
+        return;
+    }
+
+    let comp = battle.companion;
+
+    if(!comp || comp.hp <= 0) return;
+
+    if(!isSkillReady(comp, skill)){
+
+        alert("هذه المهارة ما زالت في التهدئة");
+
+        return;
+
+    }
+
+    clearTurnTimer();
+
+    // مهارة دفاع: المرافق يدافع عن نفسه (يستعيد/يتصدّى)
+    if(skill.type === "defense" || skill.effect === "defense"){
+
+        if(comp.lastHitSnapshot && !comp.lastHitSnapshot.consumed){
+
+            comp.lastHitSnapshot.consumed = true;
+
+            comp.hp = comp.lastHitSnapshot.hpBefore;
+
+            addBattleLog(`🛡️ ${comp.name} دافع وصدّ الضربة!`);
+
+            showBattleEffectBanner("pve", `🛡️ ${comp.name} تصدّى`, "info");
+
+        } else {
+
+            let healAmt = Math.max(1, Math.round(comp.maxHp * 0.15));
+
+            comp.hp = Math.min(comp.maxHp, comp.hp + healAmt);
+
+            addBattleLog(`🛡️ ${comp.name} يتحصّن ويستعيد ${healAmt} صحة`);
+
+            showBattleEffectBanner("pve", `🛡️ ${comp.name} يتحصّن`, "info");
+
+        }
+
+        comp.turnsTaken++;
+
+        if(skill.cooldown > 0)
+            comp.cooldownUsedAt[skill.id] = comp.turnsTaken;
+
+        updateBattleScreen();
+
+        if(checkBattleEnd()) return;
+
+        pveEndTurn("companion");
+
+        return;
+
+    }
+
+    // مهارات تعزيز/امتصاص/أدوار إضافية جديدة
+    if(isNewBuffEffect(skill.effect)){
+
+        let logLine = applyPveBuff(comp, skill);
+
+        comp.turnsTaken++;
+
+        if(skill.cooldown > 0)
+            comp.cooldownUsedAt[skill.id] = comp.turnsTaken;
+
+        updateBattleScreen();
+
+        if(logLine) addBattleLog(logLine);
+
+        showBattleEffectBanner("pve", logLine || `${comp.name} استخدم مهارة خاصة`, "info");
+
+        if(checkBattleEnd()) return;
+
+        if((comp.extraTurns || 0) > 0){
+            comp.extraTurns--;
+            setTimeout(companionTurnPlay, 700);
+        } else {
+            pveEndTurn("companion");
+        }
+
+        return;
+
+    }
+
+    // الهجوم / السُم / أي مهارة هجومية أخرى على الخصم
+    comp.turnsTaken++;
+
+    if(skill.cooldown > 0)
+        comp.cooldownUsedAt[skill.id] = comp.turnsTaken;
+
+    resolveAction(comp, battle.enemy, skill);
+
+    if(skill.effect === "poison" && battle.enemy.hp > 0){
+
+        let poisonDmg = Math.max(1, skillParamAmount(skill, "poison_damage", effectiveSkillDamage(skill, comp)));
+
+        let poisonTurns = Math.max(1, skillParamAmount(skill, "poison_turns", skill.damage));
+
+        battle.enemy.poisonDamage = poisonDmg;
+
+        battle.enemy.poisonTurns = Math.max(0, poisonTurns - 1);
+
+        addBattleLog(`☠️ ${battle.enemy.name} مسموم بـ ${poisonDmg}!`);
+
+        showBattleEffectBanner("pve", `☠️ ${battle.enemy.name} مسموم`, "info");
+
+    }
+
+    battle.companionUsedSkills = battle.companionUsedSkills || [];
+
+    if(!battle.companionUsedSkills.find(s => s.id === skill.id))
+        battle.companionUsedSkills.push(skill);
+
+    renderCompanionSkillButtons();
+
+    updateBattleScreen();
+
+    if(checkBattleEnd()) return;
+
+    pveEndTurn("companion");
+
+}
+
+
+
 function playerConsumeTurn(skill, target){
 
     clearTurnTimer();
@@ -3186,6 +3660,12 @@ async function enemyAct(){
     if(battle.finished) return;
 
     let enemy = battle.enemy;
+
+    // اختيار هدف الخصم هذا الدور: اللاعب أو المرافق (الأحياء فقط)، بواحد فقط
+    let liveTargets = [ battle.player ];
+    if(companionIsAlive()) liveTargets.push(battle.companion);
+    battle.enemyTarget = liveTargets[Math.floor(Math.random() * liveTargets.length)];
+    let enemyVictim = battle.enemyTarget;
 
     // الدفاع صار خيار دور الخصم نفسه تمامًا مثل اللاعب: إمّا يدافع (يلغي
     // آخر ضربة) أو يهاجم، وليس الاثنين معًا في نفس الجولة.
@@ -3420,7 +3900,7 @@ async function enemyAct(){
 
     if(chosen.effect === "poison"){
 
-        resolveAction(enemy, battle.player, chosen);
+        resolveAction(enemy, enemyVictim, chosen);
 
         if(checkBattleEnd()) return;
 
@@ -3430,19 +3910,19 @@ async function enemyAct(){
 
         let remainingTurns = Math.max(0, poisonTurns - 1);
 
-        if(remainingTurns > 0 && battle.player.hp > 0){
+        if(remainingTurns > 0 && enemyVictim.hp > 0){
 
-            battle.player.poisonDamage = poisonDmg;
+            enemyVictim.poisonDamage = poisonDmg;
 
-            battle.player.poisonTurns = remainingTurns;
+            enemyVictim.poisonTurns = remainingTurns;
 
-            addBattleLog(`☠️ ${battle.player.name} مسموم! سيتلقى ${poisonDmg} ضرر سُم إضافي لمدة ${remainingTurns} ${remainingTurns === 1 ? "دور" : "أدوار"}`);
+            addBattleLog(`☠️ ${enemyVictim.name} مسموم! سيتلقى ${poisonDmg} ضرر سُم إضافي لمدة ${remainingTurns} ${remainingTurns === 1 ? "دور" : "أدوار"}`);
 
-            showBattleEffectBanner(battle.prefix, `☠️ ${battle.player.name} مسموم!`, "info");
+            showBattleEffectBanner(battle.prefix, `☠️ ${enemyVictim.name} مسموم!`, "info");
 
-        } else if(battle.player.hp > 0){
+        } else if(enemyVictim.hp > 0){
 
-            addBattleLog(`☠️ ${battle.player.name} تلقى ضررًا مباشرًا!`);
+            addBattleLog(`☠️ ${enemyVictim.name} تلقى ضررًا مباشرًا!`);
 
         }
 
@@ -3456,7 +3936,7 @@ async function enemyAct(){
 
     }
 
-    resolveAction(enemy, battle.player, chosen);
+    resolveAction(enemy, enemyVictim, chosen);
 
     if(checkBattleEnd()) return;
 
@@ -7045,7 +7525,24 @@ function checkBattleEnd(){
 
     }
 
-    if(battle.player.hp <= 0){
+    // المرافق أيضًا يمكن أن يصمد بضربة يستطيع صدّها
+    if(companionIsAliveOrZero() && battle.companion.hp <= 0 && fighterCanBlockLastHit(battle.companion)){
+
+        battle.companion.hp = 0;
+
+        addBattleLog(`🛡️ ${battle.companion.name} صمد عند صفر صحة ولديه دفاع جاهز!`);
+
+        return false;
+
+    }
+
+    // معركة تُخسر فقط عندما يموت كل طرف اللاعب: اللاعب والمرافق (إن حي).
+    // إذا نجا المرافق، تستمر المعركة ويحل مسؤوليته في دوره.
+    let playerSideDefeated =
+    battle.player.hp <= 0
+    && (!companionIsAlive());
+
+    if(playerSideDefeated){
 
         endBattle(false);
 

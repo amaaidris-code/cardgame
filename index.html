@@ -185,6 +185,8 @@ lang="ar">
 
     <button class="admin-tab-btn" data-admin-tab="admin-tab-potions" onclick="showAdminTab('admin-tab-potions')">🧪 الجرع</button>
 
+    <button class="admin-tab-btn" data-admin-tab="admin-tab-companions" onclick="showAdminTab('admin-tab-companions')">👥 المرافقون</button>
+
 </div>
 
 
@@ -306,6 +308,76 @@ lang="ar">
 
         <button onclick="addPotion()">إضافة</button>
 
+    </div>
+
+</div>
+
+
+<!-- ===== التبويب: المرافقون ===== -->
+<div id="admin-tab-companions" class="admin-tab">
+
+    <h3>👥 المرافقون</h3>
+
+    <div id="admin-companions-content">
+        جاري تحميل المرافقين...
+    </div>
+
+    <hr>
+
+    <h3>➕ إضافة مرافق جديد</h3>
+
+    <div class="form-box admin-add-form">
+
+        <input id="admin-companion-name" type="text" placeholder="اسم المرافق">
+
+        <input id="admin-companion-description" type="text" placeholder="وصف قصير للمرافق">
+
+        <input id="admin-companion-image" type="text" placeholder="رابط صورة المرافق (أو ارفع من الجهاز)">
+
+        <input id="admin-companion-image-file" type="file" accept="image/*" onchange="uploadCompanionImage('admin-companion-image-file','admin-companion-image','admin-companion-image-status',{aspectRatio:1,crop:true})">
+
+        <p id="admin-companion-image-status" class="upload-status"></p>
+
+        <input id="admin-companion-hp" type="number" placeholder="قاعدة HP" value="100">
+
+        <input id="admin-companion-atk" type="number" placeholder="قاعدة ATK" value="100">
+
+        <label>💰 السعر بالذهب
+            <input id="admin-companion-price" type="number" min="0" placeholder="السعر">
+        </label>
+
+        <label>📦 عدد النسخ (0 = كمية محدودة حسب الرقم)
+            <input id="admin-companion-stock" type="number" min="0" placeholder="عدد النسخ المتاحة">
+        </label>
+
+        <label class="admin-checkbox-label">
+            <input id="admin-companion-infinite" type="checkbox">
+            ♾️ نسخ لا محدودة
+        </label>
+
+        <label class="admin-color-row">
+            🎨 لون التوهج
+            <input id="admin-companion-glow-color" type="color" value="#22c55e">
+        </label>
+
+        <button onclick="addCompanion()">إضافة</button>
+
+    </div>
+
+    <hr>
+
+    <h3>📈 منحنى مستويات المرافقين (تكلفة ذهب + مكافأة مهارة لكل مستوى)</h3>
+
+    <div id="admin-companion-level-content">
+        جاري التحميل...
+    </div>
+
+    <hr>
+
+    <h3>🗡️ طلبات مهارات المرافقين المعلّقة</h3>
+
+    <div id="admin-companion-skill-requests">
+        جاري التحميل...
     </div>
 
 </div>
@@ -711,6 +783,10 @@ lang="ar">
     ⬆️ تطوير الشخصية
 </button>
 
+                <button onclick="openScreen('companion-upgrade-screen')">
+    👥 تطوير المرافق
+</button>
+
 
                 <button onclick="openCollection()">
     🎴 مجموعتي
@@ -1051,6 +1127,49 @@ lang="ar">
 </section>
 
 <!-- ========================= -->
+<!-- تطوير المرافق (منفصل عن تطوير الشخصية) -->
+<!-- ========================= -->
+<section id="companion-upgrade-screen" class="screen">
+
+    <h2>
+        👥 تطوير المرافق
+    </h2>
+
+    <div id="companion-upgrade-info" class="empty-card">
+        جاري تحميل بيانات المرافق...
+    </div>
+
+    <div id="companion-upgrade-split-box" class="empty-card" style="display:none;">
+
+        <p>🎁 ستكسب 200 نقطة — وزّعها بين HP وATK (بدفعات 50 فقط)</p>
+
+        <p>
+            ❤️ HP: <span id="companion-split-hp">100</span>
+            <button onclick="companionSplitAdjustHp(-50)">−</button>
+            <button onclick="companionSplitAdjustHp(50)">+</button>
+        </p>
+
+        <p>
+            ⚔️ ATK: <span id="companion-split-atk">100</span>
+            <button onclick="companionSplitAdjustAtk(-50)">−</button>
+            <button onclick="companionSplitAdjustAtk(50)">+</button>
+        </p>
+
+        <p id="companion-split-total">المجموع: 200 / 200</p>
+
+    </div>
+
+    <button onclick="upgradeCompanion()">
+        ⬆️ تطوير المرافق
+    </button>
+
+    <button onclick="openScreen('home-screen')">
+        ↩ العودة
+    </button>
+
+</section>
+
+<!-- ========================= -->
 <!-- مجموعتي -->
 <!-- ========================= -->
 
@@ -1067,6 +1186,15 @@ lang="ar">
 
     </div>
 
+    <h2 style="text-align:center; margin-top:20px;">
+        👥 مرافقي
+    </h2>
+
+    <div id="my-companions">
+
+        جاري التحميل...
+
+    </div>
 
     <button onclick="openScreen('home-screen')">
         ↩ العودة
@@ -1579,6 +1707,58 @@ id="pve-player-used-skills">
 
 </div>
 
+
+</div>
+
+
+
+<!-- المرافق النشط (بلغ دور نفسه) -->
+<div class="battle-card companion-card" id="pve-companion-card" style="display:none;">
+
+<img id="pve-companion-image"
+class="battle-image">
+
+
+<h3 id="pve-companion-name">
+مرافق
+</h3>
+
+
+<div class="hp-bar">
+<div id="pve-companion-hp-bar"
+class="hp-fill">
+</div>
+</div>
+
+
+<p>
+❤️
+<span id="pve-companion-hp">
+0 / 0
+</span>
+</p>
+
+
+<div class="fighter-status-badges"
+id="pve-companion-status">
+
+</div>
+
+
+<div class="used-skills"
+id="pve-companion-used-skills">
+
+</div>
+
+
+<div class="skills-container companion-skills">
+    <div class="skills-pages" id="pve-companion-skills-pages">
+        <div class="skills-page active"></div>
+    </div>
+    <div class="skill-dots"></div>
+</div>
+
+
 </div>
 
 
@@ -1659,6 +1839,26 @@ id="pve-player-used-skills">
             </h2>
 
             <div id="shop-my-potions" class="empty-card">
+                جاري التحميل...
+            </div>
+
+            <hr>
+
+            <h2>
+                👥 المرافقون (مرافق واحد فقط يُستخدم في المعارك، ويمكنك امتلاك أكثر من واحد)
+            </h2>
+
+            <div id="shop-content-companions" class="empty-card">
+                جاري التحميل...
+            </div>
+
+            <hr>
+
+            <h2>
+                👥 مرافقي (اختر مرافقًا ليقاتل بجانبك)
+            </h2>
+
+            <div id="shop-my-companions" class="empty-card">
                 جاري التحميل...
             </div>
 

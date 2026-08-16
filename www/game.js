@@ -360,6 +360,14 @@ function openScreen(screenId){
 
             loadShop();
             loadShopPotions();
+            loadShopCompanions();
+
+        }
+
+
+        if(screenId === "companion-upgrade-screen"){
+
+            loadCompanionUpgradeScreen();
 
         }
 
@@ -430,6 +438,7 @@ function showAdminTab(tabId){
     if(tabId === "admin-tab-notifications") loadAdminNotifications();
     if(tabId === "admin-tab-weapons") loadAdminWeapons();
     if(tabId === "admin-tab-potions") loadAdminPotions();
+    if(tabId === "admin-tab-companions") loadAdminCompanions();
 
     if(tabId === "admin-tab-rules") loadAdminSkillRules();
 
@@ -2370,6 +2379,8 @@ async function loadCollection(){
 
 
     renderCollectionWeapons(box);
+
+    renderCollectionCompanions();
 
 }
 
@@ -6988,6 +6999,309 @@ function applyWeaponPageColor(pageIndex){
     });
 }
 
+// ========================================
+// لوحة إدارة المرافقين (Companions)
+// ========================================
+
+async function loadAdminCompanions(){
+    let listBox = document.getElementById("admin-companions-content");
+    if(listBox){ listBox.innerHTML = "جاري التحميل..."; }
+    let admin_token = localStorage.getItem("admin_token");
+    try{
+        let { data: list, error } = await supabaseClient.rpc("admin_list_companions", { p_admin_token: admin_token });
+        if(error) throw error;
+        list = Array.isArray(list) ? list : [];
+        if(!list.length) listBox.innerHTML = '<p class="admin-hint">لا توجد مرافقون بعد.</p>';
+        else listBox.innerHTML = list.map(c => `
+            <div class="admin-card" style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; border-left:4px solid ${escapeAttr(c.glow_color || '#22c55e')};">
+                <div style="display:flex; align-items:center; gap:10px;">
+                    ${c.image ? `<img src="${escapeAttr(c.image)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">` : `<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:8px;">👤</div>`}
+                    <div>
+                        <strong>${escapeAttr(c.name || '')}</strong>
+                        <div class="admin-hint" style="font-size:12px;">💰 ${c.price || 0} · ❤️ HP ${c.base_hp || 0} · ⚔️ ATK ${c.base_atk || 0} · باع ${c.sold || 0}</div>
+                    </div>
+                </div>
+                <div>
+                    <button onclick="openEditCompanionModal('${c.id}')">✏️ تعديل</button>
+                    <button onclick="deleteCompanion('${c.id}')">🗑️ حذف</button>
+                </div>
+            </div>`).join("");
+    }catch(e){ console.error(e); if(listBox) listBox.innerHTML = "حدث خطأ في التحميل"; }
+
+    loadAdminCompanionLevelConfig();
+    loadAdminCompanionSkillRequests();
+}
+
+async function loadAdminCompanionLevelConfig(){
+    let box = document.getElementById("admin-companion-level-content");
+    if(!box) return;
+    box.innerHTML = "جاري التحميل...";
+    let admin_token = localStorage.getItem("admin_token");
+    try {
+        let { data: costs, error: kErr } = await supabaseClient.rpc("admin_get_companion_level_costs", { p_admin_token: admin_token });
+        if(kErr) throw kErr;
+        let maxLevel = 50;
+        let { data: config, error: cErr } = await supabaseClient.rpc("admin_get_game_config", { p_admin_token: admin_token });
+        if(!cErr) (config || []).forEach(c => { if(c.config_key === "max_level") maxLevel = Number(c.config_value) || 50; });
+        let costRows = "";
+        (costs || []).filter(r => Number(r.level) <= Number(maxLevel)).forEach(r => {
+            let reward = r.skill_reward === "normal" ? "normal" : (r.skill_reward === "unique" ? "unique" : "none");
+            costRows += `
+                <div class="admin-player-gold-edit">
+                    <span>المستوى ${r.level}</span>
+                    <input id="compcost-${r.level}" type="number" min="0" value="${r.gold_cost}" style="width:120px;">
+                    <label style="display:flex; align-items:center; gap:4px; flex:1;">
+                        مكافأة المهارة
+                        <select id="compreward-${r.level}" style="flex:1;">
+                            <option value="none"${reward === "none" ? " selected" : ""}>بدون</option>
+                            <option value="normal"${reward === "normal" ? " selected" : ""}>عادية (اللاعب يختار هجوم/دفاع)</option>
+                            <option value="unique"${reward === "unique" ? " selected" : ""}>فريدة (الأدمن يختار النوع)</option>
+                        </select>
+                    </label>
+                    <button type="button" onclick="saveCompanionLevelCost(${r.level})">💾 حفظ الذهب</button>
+                    <button type="button" onclick="saveCompanionLevelSkillReward(${r.level})">💾 حفظ المكافأة</button>
+                </div>`;
+        });
+        box.innerHTML = `<p>منحنى مستويات المرافقين مستقل عن منحنى الشخصيات. التكلفة = المطلوب للصعود من هذا المستوى إلى التالي.</p><div class="form-box">${costRows || '<p class="admin-hint">لا توجد مستويات.</p>'}</div>`;
+    } catch(e){ console.error(e); box.innerHTML = "حدث خطأ في تحميل المنحنى"; }
+}
+
+async function saveCompanionLevelCost(level){
+    let el = document.getElementById("compcost-" + level);
+    let value = el ? (parseInt(el.value) || 0) : 0;
+    let { error } = await supabaseClient.rpc("admin_set_companion_level_cost", {
+        p_admin_token: localStorage.getItem("admin_token"),
+        p_level: level,
+        p_gold_cost: value
+    });
+    if(error){ alert(error.message); return; }
+    alert("تم الحفظ");
+    loadAdminCompanionLevelConfig();
+}
+
+async function saveCompanionLevelSkillReward(level){
+    let el = document.getElementById("compreward-" + level);
+    let value = el ? el.value : "none";
+    let { error } = await supabaseClient.rpc("admin_set_companion_level_reward", {
+        p_admin_token: localStorage.getItem("admin_token"),
+        p_level: level,
+        p_reward: value
+    });
+    if(error){ alert(error.message); return; }
+    alert("تم حفظ المكافأة");
+    loadAdminCompanionLevelConfig();
+}
+
+async function loadAdminCompanionSkillRequests(){
+    let box = document.getElementById("admin-companion-skill-requests");
+    if(!box) return;
+    box.innerHTML = "جاري التحميل...";
+    let admin_token = localStorage.getItem("admin_token");
+    if(!admin_token){ box.innerHTML = "يجب تسجيل دخول الأدمن أولاً."; return; }
+    try{
+        let {data:reqs, error} = await supabaseClient.rpc("admin_list_companion_skill_requests", { p_admin_token: admin_token });
+        if(error) throw error;
+        let pending = (reqs || []).filter(r => r.status === "pending");
+        if(pending.length === 0){
+            box.innerHTML = '<p class="admin-hint">لا توجد طلبات مهارات مرافق معلّقة الآن.</p>';
+            return;
+        }
+        box.innerHTML = pending.map(renderCompanionSkillRequestCard).join("");
+    }catch(e){ console.error(e); box.innerHTML = "حدث خطأ في تحميل الطلبات"; }
+}
+
+function renderCompanionSkillRequestCard(r){
+    let isNormal = r.reward_type === "normal";
+    let typeSelectHtml = isNormal
+        ? `<span class="admin-hint">${r.skill_type === "defense" ? "🛡️ دفاع" : "⚔️ هجوم عادي"} (مقفل من اختيار اللاعب)</span>`
+        : `<select id="comp-sk-type-${r.request_id}">${skillTypeOptionsHtml()}</select>`;
+    let damagePh = isNormal ? (r.skill_type === "defense" ? 0 : 150) : 0;
+    return `
+    <div class="admin-card" id="comp-sk-req-card-${r.request_id}" style="margin-bottom:10px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+            <strong>مهارة لمرافق: ${escapeHtml(r.companion_name || "")}</strong>
+            <span class="admin-hint">بواسطة ${escapeHtml(r.username || "")}</span>
+        </div>
+        <div class="admin-hint">
+            النوع المطلوب: ${isNormal ? (r.skill_type === "defense" ? "🛡️ دفاع" : "⚔️ هجوم عادي") : "متقدم"} · المستوى ${Number(r.level) || 0} · ${new Date(r.created_at).toLocaleString()}
+        </div>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:6px;">
+            <input type="text" id="comp-sk-req-name-${r.request_id}" placeholder="اسم المهارة">
+            <input type="number" id="comp-sk-req-damage-${r.request_id}" value="${damagePh}" placeholder="الضرر">
+            <input type="number" id="comp-sk-req-cooldown-${r.request_id}" value="0" placeholder="التهدئة">
+            ${typeSelectHtml}
+            <label style="display:flex; align-items:center; gap:6px;">
+                <input id="comp-sk-req-unblockable-${r.request_id}" type="checkbox">
+                💥 لا تُصد
+            </label>
+        </div>
+        <div style="margin-top:8px;">
+            <button class="admin-btn" onclick="approveCompanionSkillRequest('${r.request_id}')">✅ اعتماد</button>
+            <button class="admin-btn" style="background:#7f1d1d;" onclick="denyCompanionSkillRequest('${r.request_id}')">❌ رفض</button>
+        </div>
+    </div>`;
+}
+
+async function approveCompanionSkillRequest(requestId){
+    let admin_token = localStorage.getItem("admin_token");
+    let name = document.getElementById("comp-sk-req-name-" + requestId).value.trim();
+    if(!name){ alert("اكتب اسم المهارة"); return; }
+    let damage = Number(document.getElementById("comp-sk-req-damage-" + requestId).value) || 0;
+    let cooldown = Number(document.getElementById("comp-sk-req-cooldown-" + requestId).value) || 0;
+    let unblockable = document.getElementById("comp-sk-req-unblockable-" + requestId).checked;
+    let typeEl = document.getElementById("comp-sk-type-" + requestId);
+    let type = typeEl ? typeEl.value : null;
+    let effectArg = null;
+    if(type === "normal"){ type = "attack"; effectArg = null; }
+    else if(type === "defense"){ effectArg = null; }
+    else { effectArg = typeChoiceToEffect(type) || null; type = (type === "special" || type === "reflect" || type === "poison" || isNewBuffEffect(type)) ? "special" : type; }
+    let { error } = await supabaseClient.rpc("admin_approve_companion_skill_request", {
+        p_admin_token: admin_token, p_request_id: requestId,
+        p_name: name, p_type: type, p_damage: damage, p_cooldown: cooldown,
+        p_effect: effectArg, p_unblockable: unblockable
+    });
+    if(error){ alert(error.message); return; }
+    alert("تم اعتماد طلب مهارة المرافق");
+    loadAdminCompanionSkillRequests();
+}
+
+async function denyCompanionSkillRequest(requestId){
+    let admin_token = localStorage.getItem("admin_token");
+    let {error} = await supabaseClient.rpc("admin_deny_companion_skill_request", {
+        p_admin_token: admin_token, p_request_id: requestId
+    });
+    if(error){ alert(error.message); return; }
+    alert("تم رفض الطلب");
+    loadAdminCompanionSkillRequests();
+}
+
+async function addCompanion(){
+    let name = (document.getElementById("admin-companion-name") || {}).value; name = name ? name.trim() : "";
+    if(name === ""){ alert("اكتب اسم المرافق"); return; }
+    let desc = (document.getElementById("admin-companion-description") || {}).value.trim();
+    let image = (document.getElementById("admin-companion-image") || {}).value.trim();
+    let hp = Number((document.getElementById("admin-companion-hp") || {}).value) || 100;
+    let atk = Number((document.getElementById("admin-companion-atk") || {}).value) || 100;
+    let price = Number((document.getElementById("admin-companion-price") || {}).value) || 0;
+    let stock = Number((document.getElementById("admin-companion-stock") || {}).value) || 0;
+    let infinite = (document.getElementById("admin-companion-infinite") || {}).checked;
+    let glow = (document.getElementById("admin-companion-glow-color") || {}).value || "#22c55e";
+    let admin_token = localStorage.getItem("admin_token");
+    let {error} = await supabaseClient.rpc("admin_add_companion", {
+        p_admin_token: admin_token, p_name: name, p_description: desc, p_image: image,
+        p_skill_card_image: null, p_price: price, p_base_hp: hp, p_base_atk: atk,
+        p_stock: stock, p_infinite: infinite, p_glow_color: glow
+    });
+    if(error){ alert(error.message); return; }
+    alert("تمت إضافة المرافق");
+    ["admin-companion-name","admin-companion-description","admin-companion-image","admin-companion-hp","admin-companion-atk","admin-companion-price","admin-companion-stock"].forEach(i => { let el = document.getElementById(i); if(el) el.value = ""; });
+    let inf = document.getElementById("admin-companion-infinite"); if(inf) inf.checked = false;
+    loadAdminCompanions();
+}
+
+async function deleteCompanion(id){
+    if(!confirm("هل تريد حذف المرافق؟")) return;
+    let admin_token = localStorage.getItem("admin_token");
+    let {error} = await supabaseClient.rpc("admin_delete_companion", { p_admin_token: admin_token, p_companion_id: id });
+    if(error){ alert(error.message); return; }
+    alert("تم حذف المرافق");
+    loadAdminCompanions();
+}
+
+async function openEditCompanionModal(companionId){
+    let admin_token = localStorage.getItem("admin_token");
+    let { data: p, error } = await supabaseClient.rpc("admin_get_companion", { p_admin_token: admin_token, p_companion_id: companionId });
+    p = (Array.isArray(p) && p.length) ? p[0] : null;
+    if(error || !p){ if(error) alert(error.message); else alert("تعذر تحميل المرافق"); return; }
+
+    let overlay = document.createElement("div");
+    overlay.className = "modal-overlay";
+    overlay.id = "companion-edit-overlay";
+    overlay.innerHTML = `
+        <div class="modal-card" style="max-width:560px; border-left:4px solid ${escapeAttr(p.glow_color || '#22c55e')};">
+            <h3>✏️ تحرير المرافق: ${escapeHtml(p.name || '')}</h3>
+            <input id="edit-companion-name" type="text" value="${escapeAttr(p.name || '')}" placeholder="اسم المرافق">
+            <input id="edit-companion-description" type="text" value="${escapeAttr(p.description || '')}" placeholder="وصف قصير">
+            <input id="edit-companion-image" type="text" value="${escapeAttr(p.image || '')}" placeholder="رابط الصورة">
+            <input id="edit-companion-image-file" type="file" accept="image/*" onchange="uploadCompanionImage('edit-companion-image-file','edit-companion-image','edit-companion-img-status',{aspectRatio:1,crop:true})">
+            <p id="edit-companion-img-status" class="upload-status"></p>
+            <label>❤️ قاعدة HP <input id="edit-companion-hp" type="number" min="0" value="${p.base_hp || 0}"></label>
+            <label>⚔️ قاعدة ATK <input id="edit-companion-atk" type="number" min="0" value="${p.base_atk || 0}"></label>
+            <label>💰 السعر <input id="edit-companion-price" type="number" min="0" value="${p.price || 0}"></label>
+            <label>📦 عدد النسخ <input id="edit-companion-stock" type="number" min="0" value="${p.stock ?? 0}"></label>
+            <label class="admin-checkbox-label"><input id="edit-companion-infinite" type="checkbox" ${p.infinite ? "checked" : ""}> ♾️ نسخ لا محدودة</label>
+            <label class="admin-color-row">🎨 لون التوهج <input id="edit-companion-glow-color" type="color" value="${escapeAttr(p.glow_color || '#22c55e')}"></label>
+
+            <hr>
+            <h4>🗡️ مهارات المرافق</h4>
+            <p class="admin-hint">تمر هذه المهارات عبر منحنى مستويات المرافق وطلبات الموافقة المستقلة عن الشخصيات.</p>
+            ${(p.skills && p.skills.length) ? '<div class="admin-skills-edit-list">' + p.skills.map(s => `
+                <div class="admin-skill-edit-row">
+                    <span>${escapeHtml(s.name || '')} · ${escapeHtml(s.type || '')}${s.damage > 0 ? ' · ' + s.damage : ''}${s.cooldown > 0 ? ' · تهدئة ' + s.cooldown : ''}${s.effect ? ' · ' + escapeHtml(s.effect) : ''}</span>
+                </div>`).join("") + '</div>' : '<p class="admin-hint">لا مهارات مرتبطة حاليًا.</p>'}
+
+            <div class="modal-buttons" style="margin-top:10px;">
+                <button onclick="saveCompanion('${p.id}')">💾 حفظ</button>
+                <button onclick="closeCompanionEditModal()">إغلاق</button>
+            </div>
+        </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", e => { if(e.target === overlay) closeCompanionEditModal(); });
+}
+
+function closeCompanionEditModal(){
+    let o = document.getElementById("companion-edit-overlay");
+    if(o) o.remove();
+}
+
+async function saveCompanion(companionId){
+    let name = (document.getElementById("edit-companion-name") || {}).value; name = name ? name.trim() : "";
+    if(name === ""){ alert("اكتب اسم المرافق"); return; }
+    let desc = (document.getElementById("edit-companion-description") || {}).value.trim();
+    let image = (document.getElementById("edit-companion-image") || {}).value.trim();
+    let hp = Number((document.getElementById("edit-companion-hp") || {}).value) || 100;
+    let atk = Number((document.getElementById("edit-companion-atk") || {}).value) || 100;
+    let price = Number((document.getElementById("edit-companion-price") || {}).value) || 0;
+    let stock = Number((document.getElementById("edit-companion-stock") || {}).value) || 0;
+    let infinite = (document.getElementById("edit-companion-infinite") || {}).checked;
+    let glow = (document.getElementById("edit-companion-glow-color") || {}).value || "#22c55e";
+    let admin_token = localStorage.getItem("admin_token");
+    let {error} = await supabaseClient.rpc("admin_save_companion", {
+        p_admin_token: admin_token, p_companion_id: companionId,
+        p_name: name, p_description: desc, p_image: image, p_skill_card_image: null,
+        p_price: price, p_base_hp: hp, p_base_atk: atk, p_stock: stock,
+        p_infinite: infinite, p_glow_color: glow
+    });
+    if(error){ alert(error.message); return; }
+    alert("تم حفظ المرافق");
+    closeCompanionEditModal();
+    loadAdminCompanions();
+}
+
+async function uploadCompanionImage(fileInputId, textInputId, statusId, cropOptions){
+    let fileInput = document.getElementById(fileInputId);
+    let textInput = document.getElementById(textInputId);
+    let statusBox = document.getElementById(statusId);
+    let file = fileInput ? fileInput.files[0] : null;
+    if(!file) return;
+    let adminToken = localStorage.getItem("admin_token");
+    if(!adminToken){ if(statusBox) statusBox.textContent = "❌ يجب تسجيل الدخول كأدمن لرفع صورة"; return; }
+    try{
+        const formData = new FormData();
+        formData.append("token", adminToken);
+        formData.append("file", file);
+        const resp = await fetch("/upload", { method: "POST", body: formData });
+        const json = await resp.json();
+        if(json.url){
+            if(textInput) textInput.value = json.url;
+            if(statusBox) statusBox.textContent = "✅ تم الرفع";
+        } else {
+            if(statusBox) statusBox.textContent = "❌ فشل الرفع: " + (json.error || "");
+        }
+    }catch(e){ if(statusBox) statusBox.textContent = "❌ خطأ في الرفع"; }
+}
+
+
 async function loadShop(){
     let shopBox = document.getElementById("shop-content");
     let mineBox = document.getElementById("shop-my-weapons");
@@ -7131,6 +7445,297 @@ async function equipWeaponItem(pwId){
     let {error} = await supabaseClient.rpc("set_active_weapon", { p_token: token, p_player_weapon_id: pwId });
     if(error){ alert(error.message); return; }
     loadCollection();
+}
+
+
+// ========================================
+// المرافقون (Companions): المتجر، المجموعة، التطوير
+// ========================================
+
+async function loadShopCompanions(){
+    let shopBox = document.getElementById("shop-content-companions");
+    let mineBox = document.getElementById("shop-my-companions");
+    if(shopBox){ shopBox.innerHTML = "جاري تحميل المتجر..."; }
+    if(mineBox){ mineBox.innerHTML = "جاري التحميل..."; }
+    let token = localStorage.getItem("player_token");
+    try{
+        if(token && shopBox){
+            let {data:list, error} = await supabaseClient.rpc("shop_list_companions", { p_token: token });
+            if(error) throw error;
+            let items = Array.isArray(list) ? list : [];
+            if(!items.length) shopBox.innerHTML = '<p class="admin-hint">لا توجد مرافقون متاحون للشراء الآن.</p>';
+            else shopBox.innerHTML = items.map(c => {
+                let stockInfo = c.infinite ? "♾️ متوفر دائمًا" : ("متبقي: " + c.stock + " نسخة");
+                return `
+                    <div class="admin-card" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:space-between; border-left:4px solid ${escapeAttr(c.glow_color || '#22c55e')};">
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            ${c.image ? `<img src="${escapeAttr(c.image)}" style="width:52px;height:52px;object-fit:cover;border-radius:8px;">` : `<div style="width:52px;height:52px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:8px;">👤</div>`}
+                            <div>
+                                <strong>${escapeAttr(c.name || "")}</strong>
+                                <div class="admin-hint" style="font-size:12px;">${escapeAttr(c.description || "")}</div>
+                                <div class="admin-hint" style="font-size:12px;">💰 ${c.price || 0} 🪙 · ❤️ HP ${c.base_hp || 0} · ⚔️ ATK ${c.base_atk || 0} · ${escapeAttr(stockInfo)}</div>
+                            </div>
+                        </div>
+                        <button onclick="buyCompanion('${c.id}')">شراء</button>
+                    </div>`;
+            }).join("");
+        }
+    }catch(e){ console.error(e); if(shopBox) shopBox.innerHTML = "حدث خطأ في تحميل المتجر"; }
+
+    try{
+        if(token && mineBox){
+            let {data:list, error} = await supabaseClient.rpc("get_my_companions", { p_token: token });
+            if(error) throw error;
+            let items = Array.isArray(list) ? list : [];
+            if(!items.length) mineBox.innerHTML = '<p class="admin-hint">لا تملك أي مرافق بعد. اشترِ من الأعلى.</p>';
+            else mineBox.innerHTML = items.map(c => `
+                <div class="admin-card" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; justify-content:space-between; border-left:4px solid ${escapeAttr(c.glow_color || '#22c55e')};">
+                    <div style="display:flex; align-items:center; gap:10px;">
+                        ${c.image ? `<img src="${escapeAttr(c.image)}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;">` : `<div style="width:44px;height:44px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:8px;">👤</div>`}
+                        <div>
+                            <strong>${escapeAttr(c.name || "")} ${c.is_active ? "✅" : ""}</strong>
+                            <div class="admin-hint" style="font-size:12px;">LV ${c.level || 1} · ❤️ HP ${c.hp || 0} · ⚔️ ATK ${c.atk || 0}</div>
+                        </div>
+                    </div>
+                    <div>
+                        <button ${c.is_active ? "disabled" : ""} onclick="equipCompanion('${c.pc_id}')">${c.is_active ? "مجهّز حاليًا" : "تجهيز"}</button>
+                        ${c.is_active ? `<button onclick="unequipCompanion()">إلغاء التجهيز</button>` : ""}
+                    </div>
+                </div>`).join("");
+        }
+    }catch(e){ console.error(e); if(mineBox) mineBox.innerHTML = "حدث خطأ في تحميل مرافقيك"; }
+}
+
+async function buyCompanion(companionId){
+    let token = localStorage.getItem("player_token");
+    let {error} = await supabaseClient.rpc("shop_buy_companion", { p_token: token, p_companion_id: companionId });
+    if(error){ alert(error.message); return; }
+    alert("تم شراء المرافق");
+    updatePlayerInfo();
+    loadShopCompanions();
+}
+
+async function equipCompanion(pcId){
+    let token = localStorage.getItem("player_token");
+    let {error} = await supabaseClient.rpc("set_active_companion", { p_token: token, p_player_companion_id: pcId });
+    if(error){ alert(error.message); return; }
+    alert("تم تجهيز المرافق");
+    loadShopCompanions();
+    loadCollectionCompanions();
+}
+
+async function unequipCompanion(){
+    let token = localStorage.getItem("player_token");
+    let {error} = await supabaseClient.rpc("set_active_companion", { p_token: token, p_player_companion_id: null });
+    if(error){ alert(error.message); return; }
+    alert("تم إلغاء تجهيز المرافق");
+    loadShopCompanions();
+    loadCollectionCompanions();
+}
+
+async function renderCollectionCompanions(){
+    let box = document.getElementById("my-companions");
+    if(!box) return;
+    let token = localStorage.getItem("player_token");
+    let items = [];
+    if(token){
+        try{
+            let {data, error} = await supabaseClient.rpc("get_my_companions", { p_token: token });
+            if(!error) items = Array.isArray(data) ? data : [];
+        }catch(e){ items = []; }
+    }
+
+    if(!items.length){
+        box.innerHTML = '<p class="admin-hint" style="text-align:center;">لا تملك أي مرافق بعد. اشترِ من المتجر 🛒.</p>';
+        return;
+    }
+
+    box.innerHTML = items.map(c => {
+        let effectiveColor = (c.glow_color && /^#[0-9A-Fa-f]{6}$/.test(c.glow_color)) ? c.glow_color : "#22c55e";
+        return `
+            <div class="character-card" style="border-left:4px solid ${effectiveColor};">
+                <div class="character-info">
+                    <h3>${escapeHtml(c.name || 'مرافق')}  ${c.is_active ? '✅' : ''}</h3>
+                    <div style="display:flex; align-items:center; gap:10px;" >
+                        ${c.image ? `<img src="${escapeHtml(c.image)}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;">` : `<div style="width:56px;height:56px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:8px;">👤</div>`}
+                        <div>
+                            <p style="margin:2px 0;">⭐ LV ${c.level || 1}</p>
+                            <p style="margin:2px 0;">❤️ HP ${c.hp || 0}</p>
+                            <p style="margin:2px 0;">⚔️ ATK ${c.atk || 0}</p>
+                        </div>
+                    </div>
+                </div>
+                <div style="display:flex; gap:6px; margin-top:8px;">
+                    <button ${c.is_active ? "disabled" : ""} onclick="equipCompanionFromCollection('${c.pc_id}')">${c.is_active ? "مجهّز" : "تجهيز"}</button>
+                    ${c.is_active ? `<button onclick="unequipCompanion()">إلغاء التجهيز</button>` : ""}
+                    <button onclick="openScreen('companion-upgrade-screen')">⬆️ تطوير</button>
+                </div>
+            </div>`;
+    }).join("");
+}
+
+async function loadCollectionCompanions(){
+    renderCollectionCompanions();
+}
+
+async function equipCompanionFromCollection(pcId){
+    await equipCompanion(pcId);
+}
+
+
+// توزيع الـ200 نقطة لتطوير المرافق (منفصل عن الشخصية)
+let companionUpgradeSplit = { hp: 100, atk: 100 };
+let currentCompanionUpgradeReward = "none";
+
+function updateCompanionSplitUI(){
+    let hpEl = document.getElementById("companion-split-hp");
+    let atkEl = document.getElementById("companion-split-atk");
+    let totalEl = document.getElementById("companion-split-total");
+    if(hpEl) hpEl.textContent = companionUpgradeSplit.hp;
+    if(atkEl) atkEl.textContent = companionUpgradeSplit.atk;
+    if(totalEl) totalEl.textContent = "المجموع: " + (companionUpgradeSplit.hp + companionUpgradeSplit.atk) + " / 200";
+}
+
+function companionSplitAdjustHp(delta){
+    let newHp = companionUpgradeSplit.hp + delta;
+    if(newHp < 50) newHp = 50;
+    if(newHp > 150) newHp = 150;
+    companionUpgradeSplit.hp = newHp;
+    companionUpgradeSplit.atk = 200 - newHp;
+    updateCompanionSplitUI();
+}
+
+function companionSplitAdjustAtk(delta){
+    let newAtk = companionUpgradeSplit.atk + delta;
+    if(newAtk < 50) newAtk = 50;
+    if(newAtk > 150) newAtk = 150;
+    companionUpgradeSplit.atk = newAtk;
+    companionUpgradeSplit.hp = 200 - newAtk;
+    updateCompanionSplitUI();
+}
+
+async function loadCompanionUpgradeScreen(){
+    let box = document.getElementById("companion-upgrade-info");
+    if(!box) return;
+    let token = localStorage.getItem("player_token");
+
+    let { data: companion, error: cErr } =
+        await supabaseClient.rpc("get_my_active_companion", { p_token: token }).maybeSingle();
+    if(cErr || !companion){
+        box.innerHTML = "لا يوجد مرافق نشط. اشترِ وقه بتجهيز من المتجر أولًا.";
+        document.getElementById("companion-upgrade-split-box").style.display = "none";
+        return;
+    }
+
+    let quote = null;
+    if(token){
+        try {
+            let { data: q } = await supabaseClient.rpc("get_companion_level_up_quote", { p_token: token }).maybeSingle();
+            quote = q || null;
+        } catch(e) { quote = null; }
+    }
+
+    let goldDisplay = quote ? ("🪙 الذهب: " + quote.gold) : "";
+    let maxLevelDisplay = quote ? ("الحد الأقصى: " + quote.max_level) : "";
+    let costDisplay = "—";
+    if(quote){
+        costDisplay = quote.at_max ? "وصلت لأقصى مستوى" :
+            (quote.next_cost > 0 ? (quote.next_cost + " 🪙") : "مجانًا");
+    }
+    currentCompanionUpgradeReward = quote ? (quote.next_reward || "none") : "none";
+
+    let rewardHtml = "";
+    if(quote && !quote.at_max && quote.next_reward === "normal"){
+        rewardHtml = `
+            <div class="empty-card upgrade-reward" style="margin-top:10px;">
+                <p>🎯 هذا المستوى يمنح مرافقك مهارة جديدة — اختر نوعها:</p>
+                <label style="display:block; margin:4px 0;">
+                    <input type="radio" name="companion-reward-skill-type" value="attack" checked> ⚔️ هجوم عادي
+                </label>
+                <label style="display:block; margin:4px 0;">
+                    <input type="radio" name="companion-reward-skill-type" value="defense"> 🛡️ دفاع
+                </label>
+                <p class="admin-hint">سيُرسل طلب للأدمن لتصميم مهارة المرافق، وستصلك تلقائيًا بعد اعتمادها.</p>
+            </div>`;
+    }else if(quote && !quote.at_max && quote.next_reward === "unique"){
+        rewardHtml = `
+            <div class="empty-card upgrade-reward" style="margin-top:10px;">
+                <p>✨ هذا المستوى يمنح مرافقك مهارة فريدة — سيقوم الأدمن بتصميمها لك، وستصلك تلقائيًا بعد اعتمادها.</p>
+            </div>`;
+    }
+
+    box.innerHTML = `
+    👥 المرافق: ${escapeHtml(companion.name || '')}
+    <br>
+    ⭐ المستوى: ${companion.level}
+    <br>
+    ❤️ HP: ${companion.hp}
+    <br>
+    ⚔️ ATK: ${companion.atk}
+    <br>
+    ${goldDisplay}
+    <br>
+    ${maxLevelDisplay}
+    <br>
+    💰 تكلفة الترقية القادمة: ${costDisplay}
+    ${rewardHtml}
+    `;
+
+    companionUpgradeSplit.hp = 100;
+    companionUpgradeSplit.atk = 100;
+    updateCompanionSplitUI();
+
+    let splitBox = document.getElementById("companion-upgrade-split-box");
+    if(splitBox){
+        splitBox.style.display = (quote && quote.at_max) ? "none" : "block";
+    }
+}
+
+async function upgradeCompanion(){
+    let token = localStorage.getItem("player_token");
+    if(!token){
+        alert("انتهت صلاحية الجلسة، الرجاء تسجيل الدخول من جديد");
+        logout();
+        return;
+    }
+
+    let hpGain = Number(companionUpgradeSplit.hp || 100);
+    let atkGain = Number(companionUpgradeSplit.atk || 100);
+
+    let skillType = null;
+    if(currentCompanionUpgradeReward === "normal"){
+        let sel = document.querySelector('input[name="companion-reward-skill-type"]:checked');
+        skillType = sel ? sel.value : "attack";
+    }
+
+    if(hpGain + atkGain !== 200){
+        alert("يجب أن يكون مجموع النقاط 200 تمامًا");
+        return;
+    }
+    if(hpGain < 50 || atkGain < 50){
+        alert("يجب رفع كل من HP وATK بما لا يقل عن 50");
+        return;
+    }
+    if(hpGain % 50 !== 0 || atkGain % 50 !== 0){
+        alert("يجب أن تكون الزيادات مضاعفات 50");
+        return;
+    }
+
+    let { error: upgradeError } = await supabaseClient.rpc("upgrade_companion", {
+        p_token: token,
+        p_hp_gain: hpGain,
+        p_atk_gain: atkGain,
+        p_skill_type: skillType
+    });
+
+    if(upgradeError){
+        alert(upgradeError.message);
+        return;
+    }
+
+    alert("تم تطوير المرافق");
+    loadCompanionUpgradeScreen();
+    updatePlayerInfo();
 }
 
 
