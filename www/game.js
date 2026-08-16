@@ -7234,11 +7234,13 @@ async function openEditCompanionModal(companionId){
 
             <hr>
             <h4>🗡️ مهارات المرافق</h4>
-            <p class="admin-hint">تمر هذه المهارات عبر منحنى مستويات المرافق وطلبات الموافقة المستقلة عن الشخصيات.</p>
-            ${(p.skills && p.skills.length) ? '<div class="admin-skills-edit-list">' + p.skills.map(s => `
-                <div class="admin-skill-edit-row">
-                    <span>${escapeHtml(s.name || '')} · ${escapeHtml(s.type || '')}${s.damage > 0 ? ' · ' + s.damage : ''}${s.cooldown > 0 ? ' · تهدئة ' + s.cooldown : ''}${s.effect ? ' · ' + escapeHtml(s.effect) : ''}</span>
-                </div>`).join("") + '</div>' : '<p class="admin-hint">لا مهارات مرتبطة حاليًا.</p>'}
+            <p class="admin-hint">غيّر مهارات هذا المرافق باختيار مهارة موجودة من مجمع المهارات المشترك وربطها بخانة، أو احذف مهارة حالية، أو إعادة ترتيب الخانات. تُحفظ التغييرات فورًا.</p>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+                <select id="companion-skill-pool" style="flex:1; min-width:180px;"></select>
+                <input id="companion-skill-new-slot" type="number" min="1" placeholder="الخانة (اختياري)" style="width:110px;">
+                <button onclick="linkCompanionSkill('${p.id}')">➕ ربط</button>
+            </div>
+            <div id="companion-editable-skills">جاري تحميل المهارات...</div>
 
             <div class="modal-buttons" style="margin-top:10px;">
                 <button onclick="saveCompanion('${p.id}')">💾 حفظ</button>
@@ -7247,6 +7249,7 @@ async function openEditCompanionModal(companionId){
         </div>`;
     document.body.appendChild(overlay);
     overlay.addEventListener("click", e => { if(e.target === overlay) closeCompanionEditModal(); });
+    await renderCompanionEditableSkills(companionId);
 }
 
 function closeCompanionEditModal(){
@@ -7276,6 +7279,84 @@ async function saveCompanion(companionId){
     alert("تم حفظ المرافق");
     closeCompanionEditModal();
     loadAdminCompanions();
+}
+
+async function loadCompanionSkillPool(companionId){
+    let admin_token = localStorage.getItem("admin_token");
+    let { data: pool, error } = await supabaseClient.rpc("admin_list_skills_pool", { p_admin_token: admin_token });
+    if(error){ console.error(error); return; }
+    let select = document.getElementById("companion-skill-pool");
+    if(!select) return;
+    pool = Array.isArray(pool) ? pool : [];
+    let existing = new Set();
+    document.querySelectorAll("#companion-editable-skills .admin-skill-edit-row").forEach(row => {
+        if(row.dataset.skillId) existing.add(row.dataset.skillId);
+    });
+    let opts = pool.filter(s => !existing.has(s.id)).map(s =>
+        `<option value="${escapeAttr(s.id)}">${escapeHtml(s.name || '')} (${escapeHtml(s.type || '')}${s.damage ? ' · ' + s.damage : ''}${s.effect ? ' · ' + escapeHtml(s.effect) : ''})</option>`).join("");
+    select.innerHTML = opts || '<option value="">لا مهارات متاحة</option>';
+}
+
+async function renderCompanionEditableSkills(companionId){
+    let box = document.getElementById("companion-editable-skills");
+    if(!box) return;
+    box.innerHTML = "جاري التحميل...";
+    let admin_token = localStorage.getItem("admin_token");
+    let { data: p, error } = await supabaseClient.rpc("admin_get_companion", { p_admin_token: admin_token, p_companion_id: companionId });
+    p = (Array.isArray(p) && p.length) ? p[0] : null;
+    if(error || !p){
+        box.innerHTML = '<p class="admin-hint">تعذر تحميل المهارات.</p>';
+        return;
+    }
+    let skills = (p.skills && p.skills.length) ? p.skills : [];
+    if(!skills.length){
+        box.innerHTML = '<p class="admin-hint">لا مهارات مرتبطة حاليًا.</p>';
+    } else {
+        box.innerHTML = '<div class="admin-skills-edit-list">' + skills.map(s => `
+            <div class="admin-skill-edit-row" data-skill-id="${escapeAttr(s.id)}">
+                <span class="admin-skill-name">${escapeHtml(s.name || '')} · ${escapeHtml(s.type || '')}${s.damage > 0 ? ' · ' + s.damage : ''}${s.cooldown > 0 ? ' · تهدئة ' + s.cooldown : ''}${s.effect ? ' · ' + escapeHtml(s.effect) : ''}</span>
+                <button onclick="setCompanionSkillSlot('${companionId}','${s.id}',${s.slot} - 1)" title="تحريك لأعلى" ${s.slot <= 1 ? "disabled" : ""}>⬆️</button>
+                <button onclick="setCompanionSkillSlot('${companionId}','${s.id}',${s.slot} + 1)" title="تحريك لأسفل">⬇️</button>
+                <span class="admin-hint">خانة ${s.slot}</span>
+                <button onclick="removeCompanionSkill('${companionId}','${s.id}')" style="background:#7f1d1d;">🗑️ حذف</button>
+            </div>`).join("") + '</div>';
+    }
+    await loadCompanionSkillPool(companionId);
+}
+
+async function linkCompanionSkill(companionId){
+    let select = document.getElementById("companion-skill-pool");
+    if(!select || !select.value){ alert("اختر مهارة من المجمع أولاً"); return; }
+    let slotInput = document.getElementById("companion-skill-new-slot");
+    let slot = slotInput && slotInput.value ? (parseInt(slotInput.value) || null) : null;
+    let admin_token = localStorage.getItem("admin_token");
+    let { error } = await supabaseClient.rpc("admin_link_companion_skill", {
+        p_admin_token: admin_token, p_companion_id: companionId,
+        p_skill_id: select.value, p_slot: slot
+    });
+    if(error){ alert(error.message); return; }
+    if(slotInput) slotInput.value = "";
+    await renderCompanionEditableSkills(companionId);
+}
+
+async function setCompanionSkillSlot(companionId, skillId, newSlot){
+    if(!newSlot || newSlot < 1){ alert("خانة غير صحيحة"); return; }
+    let admin_token = localStorage.getItem("admin_token");
+    let { error } = await supabaseClient.rpc("admin_set_companion_skill_slot", {
+        p_admin_token: admin_token, p_companion_id: companionId, p_skill_id: skillId, p_new_slot: newSlot
+    });
+    if(error){ alert(error.message); return; }
+    await renderCompanionEditableSkills(companionId);
+}
+
+async function removeCompanionSkill(companionId, skillId){
+    if(!confirm("حذف هذه المهارة من المرافق؟")) return;
+    let admin_token = localStorage.getItem("admin_token");
+    let { error } = await supabaseClient.rpc("admin_remove_companion_skill", {
+        p_admin_token: admin_token, p_companion_id: companionId, p_skill_id: skillId
+    });
+    if(error){ alert(error.message); return; }
+    await renderCompanionEditableSkills(companionId);
 }
 
 async function uploadCompanionImage(fileInputId, textInputId, statusId, cropOptions){
