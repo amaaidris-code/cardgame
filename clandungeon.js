@@ -275,6 +275,9 @@ const ClanDungeon = (function(){
             <button class="cd-race-button" onclick="ClanDungeon.pressRace()">👆 اضغط!</button>
             <div class="cd-race-count" id="cd-race-count">3</div>
             <div class="cd-race-tip">اضغط الزر الأحمر قبل انتهاء العدّ</div>
+            <div class="cd-buttons">
+                <button class="cd-btn cd-leave" onclick="ClanDungeon.leaveRun()">🚪 عودة إلى الغارات</button>
+            </div>
             ${subChatBlock()}
         `;
         raceTimer = setInterval(stepRaceCountdown, 1000);
@@ -376,6 +379,7 @@ const ClanDungeon = (function(){
         b.innerHTML = `
             <div id="clandungeon-toast" class="cd-toast hidden"></div>
             <div class="cd-battle">
+                <div class="cd-leave-bar"><button class="cd-btn cd-leave" onclick="ClanDungeon.leaveRun()">🚪 عودة إلى الغارات</button></div>
                 <div class="cd-turn-indicator ${myTurn?'cd-turn-mine':''}">${turnLabel}</div>
                 <div id="cd-turn-timer" class="cd-turn-timer"></div>
                 <div class="cd-monster-card ${st.turn_phase==="monster"?'cd-monster-turn':''}">
@@ -722,6 +726,7 @@ const ClanDungeon = (function(){
         }catch(e){}
         myRun = null;
         myState = null;
+        if(raceTimer){ clearInterval(raceTimer); raceTimer = null; }
         stopPolling();
         stopSubChatPolling();
         await renderLobby();
