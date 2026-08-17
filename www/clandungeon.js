@@ -17,6 +17,8 @@ const ClanDungeon = (function(){
     let selectedWeaponSkill = false; // هل المهارة المحددة من سلاحي
     let myWeapon = null;              // آخر سلاح مجهز (من get_my_active_weapon)
     let myPotions = [];               // الجرعات (من get_my_potions)
+    let cdView = "player";            // player / weapon / companion (مثل PvE)
+    let cdViewPinned = false;         // هل اختار اللاعب العرض يدويًا
     let turnTimerInterval = null;
     let turnDeadline = null;
     let skipInFlight = false;
@@ -99,6 +101,8 @@ const ClanDungeon = (function(){
         curClanId = null;
         myRun = null;
         myState = null;
+        cdView = "player";
+        cdViewPinned = false;
         load();
     }
 
@@ -409,6 +413,8 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         const monsterLabel = `الوحش ${st.monster_index + 1} / ${st.total_monsters}`;
         const hasDeadline = st.turn_phase === "player" && st.turn_player_id && st.turn_deadline;
 
+        if(!cdViewPinned) cdView = isMyCompTurn() ? "companion" : "player";
+
         b.innerHTML = `
             <div id="clandungeon-toast" class="cd-toast hidden"></div>
             <div class="cd-turn-banner ${myTurnNow?'cd-turn-mine':''}">
@@ -423,6 +429,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
                     <h3>${escapeHtml(st.monster_name || "وحش")}<span class="cd-wave"> ${monsterLabel}</span></h3>
                     <div class="hp-bar"><div class="hp-fill cd-monster-hp" style="width:${monsterHpPct}%"></div></div>
                     <p>❤️ <span>${st.monster_hp} / ${st.monster_max_hp}</span></p>
+                    <div class="used-skills" id="cd-enemy-used-skills"></div>
                 </div>
                 <div class="battle-middle">
                     <div class="vs-divider"><span class="vs-line vs-line-left"></span><span class="vs-text">VS</span><span class="vs-line vs-line-right"></span></div>
@@ -430,19 +437,22 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
                 <div class="battle-card player-card">
                     <img class="battle-image" src="${escapeHtml(myPhoto)}" alt="" onerror="this.onerror=null;this.src='${fallbackImg}'">
                     <h3>${escapeHtml(myName)}</h3>
-                    ${compMini}
+                    <button class="weapon-view-icon" id="cd-weapon-icon" style="display:none;" onclick="ClanDungeon.cdToggleView('weapon')" title="تبديل عرض الشخصية/السلاح">⚔️</button>
+                    <button class="companion-view-icon" id="cd-companion-icon" style="display:none;" onclick="ClanDungeon.cdToggleView('companion')" title="تبديل عرض الشخصية/المرافق">🐾</button>
                     <div class="hp-bar"><div class="hp-fill cd-player-hp" style="width:${myHpPct}%"></div></div>
                     <p>❤️ <span>${me.hp} / ${me.max_hp}</span></p>
-                </div>
-                <div class="cd-skill-area">
-                    <div class="skill-dots" id="cd-skill-dots"></div>
-                    <div class="skills-pages" id="cd-player-skills-pages"></div>
-                    <div id="cd-targets" class="cd-targets"></div>
-                    <div id="cd-weapon" class="cd-actions"></div>
-                    <div id="cd-potions" class="cd-actions"></div>
+                    <div class="used-skills" id="cd-player-used-skills"></div>
+                    <div class="potion-bar" id="cd-potions"></div>
+                    <div class="skills-container">
+                        <div class="skills-pages" id="cd-player-skills-pages"></div>
+                        <div class="skill-dots" id="cd-skill-dots"></div>
+                    </div>
                 </div>
             </div>
+            <div id="cd-targets" class="cd-targets"></div>
             ${subChatBlock()}`;
+
+        await loadWeapon();
 
         // بدّئ/حدّث مؤقّت الدور (يعمل فقط في دور لاعب بموعد انتهاء)
         if(st.turn_phase === "player" && st.turn_player_id && st.turn_deadline){
@@ -470,7 +480,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
             selectedSkill = null;
         }
 
-        renderWeaponBar();
+        updateIcons();
         renderPotionBar();
     }
 
@@ -524,10 +534,19 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
             if(!error) rows = (data || []);
         }catch(e){ rows = []; }
         monsterSkills = rows.filter(function(s){ return s.fighter_kind === "monster"; });
-        const skills = rows.filter(function(s){ return compTurn ? s.fighter_kind === "companion" : s.fighter_kind === "player"; });
-
         const pagesEl = document.getElementById("cd-player-skills-pages");
         if(!pagesEl) return;
+        const myTurnNow = !!st && st.my_turn && st.turn_phase === "player";
+
+        if(cdView === "weapon"){
+            renderWeaponSkills(pagesEl, myTurnNow);
+            return;
+        }
+
+        const skills = rows.filter(function(s){
+            if(cdView === "companion") return s.fighter_kind === "companion";
+            return compTurn ? s.fighter_kind === "companion" : s.fighter_kind === "player";
+        });
         if(!skills.length){
             pagesEl.innerHTML = '<div class="cd-waiting">لا توجد مهارات.</div>';
             return;
@@ -535,6 +554,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         selectedSkill = null;
         renderTargets();
 
+        const locked = (cdView === "companion") ? !compTurn : !myTurnNow;
         const pages = chunkSkills(skills, 4);
         let currentIndex = Number(pagesEl.dataset.activePage || 0);
         currentIndex = Math.max(0, Math.min(currentIndex, pages.length - 1));
@@ -547,6 +567,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
                 const btn = document.createElement("button");
                 btn.dataset.skill = s.skill_id;
                 btn.innerHTML = `<span class="cd-skill-emoji">${skillEmoji(s)}</span><span class="cd-skill-name">${escapeHtml(s.name)}</span>${s.cooldown ? `<em class="cd-skill-cd">CD ${s.cooldown}</em>` : ""}`;
+                btn.disabled = locked || (stealAbility && !myTurnNow);
                 btn.onclick = function(){ if(stealAbility){ ClanDungeon.openStealPicker(s.skill_id); } else { ClanDungeon.pickSkill(s.skill_id); } };
                 div.appendChild(btn);
             });
@@ -570,6 +591,57 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
                         Array.prototype.forEach.call(dotsEl.children, function(d, idx){ d.classList.toggle("active", idx === i); });
                     };
                     dotsEl.appendChild(dot);
+                });
+            }
+        }
+    }
+
+    function renderWeaponSkills(pagesEl, myTurnNow){
+        selectedSkill = null;
+        renderTargets();
+        const sks = (myWeapon && Array.isArray(myWeapon.skills)) ? myWeapon.skills : [];
+        const broken = myWeapon && (myWeapon.durability_current || 0) <= 0;
+        const locked = broken || !myTurnNow;
+        const dotsEl = document.getElementById("cd-skill-dots");
+        if(!sks.length){
+            pagesEl.innerHTML = '<div class="cd-waiting">لا مهارات للسلاح</div>';
+            if(dotsEl) dotsEl.style.display = "none";
+            return;
+        }
+        const pages = chunkSkills(sks, 4);
+        let ci = Number(pagesEl.dataset.activePage || 0);
+        ci = Math.max(0, Math.min(ci, pages.length - 1));
+        pagesEl.innerHTML = "";
+        pages.forEach(function(chunk, i){
+            const div = document.createElement("div");
+            div.className = "skills-page" + (i === ci ? " active" : "");
+            chunk.forEach(function(s){
+                const btn = document.createElement("button");
+                btn.dataset.skill = s.skill_id;
+                btn.disabled = locked;
+                btn.style.setProperty("--wcolor", s.color && /^#[0-9A-Fa-f]{6}$/.test(s.color) ? s.color : "#ffffff");
+                btn.innerHTML = `<span class="cd-skill-emoji">⚔️</span><span class="cd-skill-name">${escapeHtml(s.name || 'مهارة')}</span>`;
+                btn.onclick = function(){ ClanDungeon.pickWeaponSkill(s.skill_id); };
+                div.appendChild(btn);
+            });
+            pagesEl.appendChild(div);
+        });
+        pagesEl.dataset.activePage = String(ci);
+        if(dotsEl){
+            if(pages.length <= 1){
+                dotsEl.style.display = "none";
+            } else {
+                dotsEl.style.display = "";
+                dotsEl.innerHTML = "";
+                pages.forEach(function(_, i){
+                    const d = document.createElement("span");
+                    if(i === ci) d.classList.add("active");
+                    d.onclick = function(){
+                        pagesEl.dataset.activePage = String(i);
+                        Array.prototype.forEach.call(pagesEl.children, function(pg, idx){ pg.classList.toggle("active", idx === i); });
+                        Array.prototype.forEach.call(dotsEl.children, function(dot, idx){ dot.classList.toggle("active", idx === i); });
+                    };
+                    dotsEl.appendChild(d);
                 });
             }
         }
@@ -645,38 +717,39 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
     }
 
     // ---------- weapon & potions (نفس أسلوب شاشات PvE/PvP) ----------
-    async function renderWeaponBar(){
-        const el = document.getElementById("cd-weapon");
-        if(!el) return;
-        const st = myState;
-        const myTurnNow = st && st.my_turn && st.turn_phase === "player";
+    async function loadWeapon(){
         try{
             const { data, error } = await supabaseClient.rpc("get_my_active_weapon", { p_token: getToken() });
-            if(error){ myWeapon = null; el.innerHTML = ""; return; }
+            if(error){ myWeapon = null; updateIcons(); return; }
             myWeapon = (Array.isArray(data) && data.length) ? data[0] : null;
-        }catch(e){ myWeapon = null; el.innerHTML = ""; return; }
-        if(!myWeapon){ el.innerHTML = '<div class="cd-actions-hint">⚔️ لا سلاح مجهز في هذه الغارة</div>'; return; }
+        }catch(e){ myWeapon = null; }
+        updateIcons();
+    }
 
-        const broken = (myWeapon.durability_current || 0) <= 0;
-        const skills = Array.isArray(myWeapon.skills) ? myWeapon.skills : [];
-        const skillBtns = skills.map(function(s){
-            const locked = broken || !myTurnNow;
-            return `<button class="weapon-skill-btn" style="--wcolor:${escapeHtml(s.color || '#ffffff')};" ${locked?"disabled":""} onclick="ClanDungeon.pickWeaponSkill('${s.skill_id}')">${escapeHtml(s.name || 'مهارة')}</button>`;
-        }).join("");
+    function updateIcons(){
+        const wIcon = document.getElementById("cd-weapon-icon");
+        if(wIcon){
+            wIcon.style.display = myWeapon ? "" : "none";
+            wIcon.classList.toggle("active", cdView === "weapon");
+        }
+        const cIcon = document.getElementById("cd-companion-icon");
+        if(cIcon){
+            const hasComp = myState && myState.my_comp_max_hp;
+            cIcon.style.display = hasComp ? "" : "none";
+            cIcon.classList.toggle("active", cdView === "companion");
+        }
+    }
 
-        el.innerHTML = `
-            <div class="weapon-box">
-                <div class="weapon-header" style="--wcolor:${escapeHtml(myWeapon.glow_color || '#e8b93f')};">
-                    ${myWeapon.image
-                        ? `<img class="weapon-image" src="${escapeHtml(myWeapon.image)}" alt="">`
-                        : `<span class="weapon-image weapon-image-ph">⚔️</span>`}
-                    <div class="weapon-meta">
-                        <div class="weapon-name">${escapeHtml(myWeapon.name || 'سلاح')}</div>
-                        <div class="weapon-duce">${escapeHtml(broken ? "مكسور 💥" : (myWeapon.durability_current + " / " + (myWeapon.max_durability || "-") + " دص"))}</div>
-                    </div>
-                </div>
-                <div class="weapon-skills">${skillBtns.length ? skillBtns : '<div class="weapon-name">لا مهارات</div>'}</div>
-            </div>`;
+    function cdToggleView(next){
+        if(!myTurn()){ toast("بدّل عرض المهارات فقط في دورك"); return; }
+        if(cdView === next){
+            cdView = isMyCompTurn() ? "companion" : "player";
+        }else{
+            cdView = next;
+        }
+        cdViewPinned = true;
+        updateIcons();
+        loadSkills();
     }
 
     async function renderPotionBar(){
@@ -1018,6 +1091,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         leaveRun,
         pickSkill,
         pickWeaponSkill,
+        cdToggleView,
         useCdPotion,
         useOnMonster,
         useOnPlayer,
