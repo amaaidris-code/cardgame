@@ -2186,6 +2186,8 @@ async function loadCollection(){
 
     renderCollectionWeapons(box);
 
+    renderCollectionPotions(box);
+
     renderCollectionCompanions();
 
 }
@@ -7347,6 +7349,55 @@ async function renderCollectionWeapons(box){
             </div>
             <button ${w.is_active ? "disabled" : ""} onclick="equipWeaponItem('${w.pw_id}')">${w.is_active ? "مجهّز حاليًا" : "تجهيز"}</button>
             ${w.is_active ? `<button onclick="unequipWeapon()">إلغاء التجهيز</button>` : ""}
+        `;
+        wrap.appendChild(card);
+    });
+
+    box.appendChild(wrap);
+}
+
+// عارض جرع اللاعب في قسم "مجموعتي"
+async function renderCollectionPotions(box){
+    if(!box) box = document.getElementById("my-characters");
+    if(!box) return;
+    let token = localStorage.getItem("player_token");
+    let items = [];
+    if(token){
+        try{
+            let {data, error} = await supabaseClient.rpc("get_my_potions", { p_token: token });
+            if(!error) items = Array.isArray(data) ? data : [];
+        }catch(e){ items = []; }
+    }
+
+    let wrap = document.createElement("div");
+    wrap.style.marginTop = "16px";
+    wrap.innerHTML = `<h3 style="text-align:center;">🧪 جرعي</h3>`;
+
+    if(items.length === 0){
+        let empty = document.createElement("p");
+        empty.className = "admin-hint";
+        empty.textContent = "لا تملك أي جرعة بعد. اشتري من المتجر 🛒.";
+        wrap.appendChild(empty);
+        box.appendChild(wrap);
+        return;
+    }
+
+    items.forEach(p => {
+        let eff = potionEffectTypeLabel(p.effect_type, p.effect_value);
+        let effectiveColor = (p.glow_color && /^#[0-9A-Fa-f]{6}$/.test(p.glow_color)) ? p.glow_color : "#22c55e";
+        let card = document.createElement("div");
+        card.className = "character-card";
+        card.style.borderLeft = "4px solid " + effectiveColor;
+        card.innerHTML = `
+            <div class="character-info">
+                <h3>${escapeHtml(p.name || 'جرعة')}  × ${p.quantity || 1}</h3>
+                <div style="display:flex; align-items:center; gap:10px;" >
+                    ${p.image ? `<img src="${escapeHtml(p.image)}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;">` : `<div style="width:56px;height:56px;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:8px;">🧪</div>`}
+                    <div>
+                        <p style="margin:2px 0;">${escapeHtml(eff)}</p>
+                    </div>
+                </div>
+            </div>
         `;
         wrap.appendChild(card);
     });
