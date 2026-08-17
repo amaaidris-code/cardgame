@@ -375,28 +375,34 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         const myTurnNow = !!st.my_turn && st.turn_phase === "player";
         const myCompTurn = isMyCompTurn();
 
-        const monsterImg = st.monster_image ? `<img class="cd-monster-img" src="${escapeHtml(st.monster_image)}" alt="${escapeHtml(st.monster_name)}">` : `<div class="cd-monster-img cd-noimg">👹</div>`;
-        const monsterHpPct = st.monster_max_hp ? Math.max(0, Math.min(100, (st.monster_hp / st.monster_max_hp) * 100)) : 0;
+        let myChar = null;
+        try{
+            const oc = await supabaseClient.rpc("get_my_active_character", { p_token: getToken() });
+            if(oc && oc.data && oc.data[0]) myChar = oc.data[0];
+        }catch(e){}
+        const myPhoto = (myChar && (myChar.identity_image || myChar.skill_card_image)) ? (myChar.identity_image || myChar.skill_card_image) : "";
+        const myName = (myChar && myChar.name) ? myChar.name : "أنت";
 
-        const partyHtml = players.map(function(p){
+        const monsterImg = st.monster_image
+            ? `<img class="battle-image cd-photo cd-monster-photo" src="${escapeHtml(st.monster_image)}" alt="${escapeHtml(st.monster_name)}">`
+            : `<div class="battle-image cd-photo cd-monster-photo cd-noimg">👹</div>`;
+        const monsterHpPct = st.monster_max_hp ? Math.max(0, Math.min(100, (st.monster_hp / st.monster_max_hp) * 100)) : 0;
+        const myHpPct = me.max_hp ? Math.max(0, Math.min(100,(me.hp/me.max_hp)*100)) : 0;
+
+        const compMini = st.my_comp_max_hp ? `
+            <div class="cd-own-comp ${st.my_comp_alive?'':'cd-dead'}">
+                <span class="cd-own-comp-name">🐾 ${escapeHtml(st.my_comp_name || "مرافق")}</span>
+                <span class="cd-own-comp-hp">${st.my_comp_alive ? (st.my_comp_hp + "/" + st.my_comp_max_hp) : "☠️ سقط"}</span>
+            </div>` : "";
+
+        const partyCompact = players.map(function(p){
             const nm = members[p.player_id] || "لاعب";
             const isMe = String(p.player_id)===String(getPlayerId());
-            const alive = p.alive;
-            const hpPct = p.max_hp ? Math.max(0, Math.min(100,(p.hp/p.max_hp)*100)) : 0;
-            const myComp = st.my_comp_alive;
-            const compCard = isMe && st.my_comp_max_hp ? `
-                <div class="cd-player-card cd-me cd-companion-card ${myComp?'':'cd-dead'} ${myCompTurn&&myComp?'cd-turn':''}">
-                    <div class="cd-player-head">🐾 ${escapeHtml(st.my_comp_name || "مرافق")}</div>
-                    <div class="cd-hpbar"><div class="cd-hpbar-fill" style="width:${st.my_comp_max_hp?Math.max(0,Math.min(100,(st.my_comp_hp/st.my_comp_max_hp)*100)):0}%"></div></div>
-                    <div class="cd-hpnum">${myComp ? st.my_comp_hp + " / " + st.my_comp_max_hp : "☠️ سقط"}</div>
-                </div>` : "";
-            return `
-                <div class="cd-player-card ${isMe?'cd-me':''} ${alive?'':'cd-dead'} ${!myCompTurn&&String(st.turn_player_id)===String(p.player_id)&&st.turn_phase==="player"?'cd-turn':''}">
-                    <div class="cd-player-head">${isMe?"👤":"🤝"} ${escapeHtml(nm)}</div>
-                    <div class="cd-hpbar"><div class="cd-hpbar-fill" style="width:${hpPct}%"></div></div>
-                    <div class="cd-hpnum">${alive ? p.hp + " / " + p.max_hp : "☠️ سقط"}</div>
-                </div>
-                ${compCard}`;
+            const pct = p.max_hp ? Math.max(0,Math.min(100,(p.hp/p.max_hp)*100)) : 0;
+            return `<div class="cd-party-mini ${isMe?'cd-me':''} ${p.alive?'':'cd-dead'}">
+                <span class="cd-party-mini-name">${isMe?"👤":"🤝"} ${escapeHtml(nm)}</span>
+                <div class="hp-bar cd-party-mini-hp"><div class="hp-fill" style="width:${pct}%"></div></div>
+            </div>`;
         }).join("");
 
         const turnLabel = turnText(st, members);
@@ -404,20 +410,31 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
 
         b.innerHTML = `
             <div id="clandungeon-toast" class="cd-toast hidden"></div>
-            <div class="cd-battle">
+            <div class="battle-arena cd-arena">
                 <div class="cd-leave-bar"><button class="cd-btn cd-leave" onclick="ClanDungeon.leaveRun()" title="إن كنت وحيدًا تُحذف الغارة نهائيًا">🚪 خروج / حذف الغارة</button></div>
-                <div class="cd-turn-indicator ${myTurnNow?'cd-turn-mine':''}">${turnLabel}</div>
-                <div id="cd-turn-timer" class="cd-turn-timer"></div>
-                <div class="cd-monster-card ${st.turn_phase==="monster"?'cd-monster-turn':''}">
+                <div class="battle-card enemy-card">
                     ${monsterImg}
-                    <div class="cd-monster-name">${escapeHtml(st.monster_name || "وحش")} <span class="cd-wave">${monsterLabel}</span></div>
-                    <div class="cd-hpbar"><div class="cd-hpbar-fill cd-monster-hp" style="width:${monsterHpPct}%"></div></div>
-                    <div class="cd-hpnum">${st.monster_hp} / ${st.monster_max_hp}</div>
+                    <h3 class="battle-name">${escapeHtml(st.monster_name || "وحش")} <span class="cd-wave">${monsterLabel}</span></h3>
+                    <div class="hp-bar"><div class="hp-fill cd-monster-hp" style="width:${monsterHpPct}%"></div></div>
+                    <p class="hp-num">❤️ ${st.monster_hp} / ${st.monster_max_hp}</p>
                 </div>
-                <div class="cd-party-grid">${partyHtml}</div>
+                <div class="battle-middle">
+                    <div class="vs-divider">VS</div>
+                    <div class="cd-turn-indicator ${myTurnNow?'cd-turn-mine':''}">${turnLabel}</div>
+                    <div id="cd-turn-timer" class="cd-turn-timer"></div>
+                </div>
+                <div class="battle-card player-card">
+                    <img class="battle-image cd-photo cd-player-photo" src="${escapeHtml(myPhoto)}" alt="">
+                    <h3 class="battle-name">👤 ${myTurnNow ? 'أنت' : escapeHtml(myName)}</h3>
+                    <div class="hp-bar"><div class="hp-fill cd-player-hp" style="width:${myHpPct}%"></div></div>
+                    <p class="hp-num">❤️ ${me.hp} / ${me.max_hp}</p>
+                    ${compMini}
+                </div>
+                <div class="cd-party-strip">${partyCompact}</div>
                 <div id="cd-targets" class="cd-targets"></div>
                 <div class="cd-skill-area">
-                    <div id="cd-skills" class="cd-skills"></div>
+                    <div class="cd-skill-pages" id="cd-player-skills-pages"></div>
+                    <div class="skill-dots" id="cd-skill-dots"></div>
                     <div class="cd-skill-status" id="cd-skill-status"></div>
                     <div id="cd-weapon" class="cd-actions"></div>
                     <div id="cd-potions" class="cd-actions"></div>
@@ -436,7 +453,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
             loadSkills();
         } else {
             // ليس دوري: نعرض فقط حالة الانتظار
-            const sk = document.getElementById("cd-skills");
+            const sk = document.getElementById("cd-player-skills-pages");
             if(sk){
                 if(st.turn_phase === "monster"){
                     sk.innerHTML = '<div class="cd-waiting">👹 الوحش يتصرف...</div>';
@@ -446,6 +463,8 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
                     sk.innerHTML = '<div class="cd-waiting">⏳ دور لاعب آخر...</div>';
                 }
             }
+            const dots = document.getElementById("cd-skill-dots");
+            if(dots) dots.innerHTML = "";
             selectedSkill = null;
         }
 
@@ -492,35 +511,117 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
     }
 
     // ---------- skills ----------
+    let monsterSkills = [];
     async function loadSkills(){
         const st = myState;
         const compTurn = isMyCompTurn();
-        let skills = [];
+        let rows = [];
+        monsterSkills = [];
         try{
             const { data, error } = await supabaseClient.rpc("clan_dungeon_list_skills", { p_token: getToken(), p_run_id: myRun });
-            if(!error) skills = (data || []).filter(function(s){ return compTurn ? s.fighter_kind === "companion" : s.fighter_kind === "player"; });
-        }catch(e){ skills = []; }
+            if(!error) rows = (data || []);
+        }catch(e){ rows = []; }
+        monsterSkills = rows.filter(function(s){ return s.fighter_kind === "monster"; });
+        const skills = rows.filter(function(s){ return compTurn ? s.fighter_kind === "companion" : s.fighter_kind === "player"; });
 
-        const el = document.getElementById("cd-skills");
-        if(!el) return;
+        const pagesEl = document.getElementById("cd-player-skills-pages");
+        if(!pagesEl) return;
         if(!skills.length){
-            el.innerHTML = '<div class="cd-waiting">لا توجد مهارات.</div>';
+            pagesEl.innerHTML = '<div class="cd-waiting">لا توجد مهارات.</div>';
             return;
         }
         selectedSkill = null;
         renderTargets();
-        el.innerHTML = skills.map(function(s, i){
-            return `<button class="cd-skill-btn" data-skill="${s.skill_id}" onclick="ClanDungeon.pickSkill('${s.skill_id}')">
-                <span class="cd-skill-emoji">${skillEmoji(s)}</span>
-                <span class="cd-skill-name">${escapeHtml(s.name)}</span>
-                ${s.cooldown ? `<span class="cd-skill-cd">CD ${s.cooldown}</span>` : ""}
-            </button>`;
-        }).join("");
+
+        const pages = chunkSkills(skills, 4);
+        let currentIndex = Number(pagesEl.dataset.activePage || 0);
+        currentIndex = Math.max(0, Math.min(currentIndex, pages.length - 1));
+        pagesEl.innerHTML = "";
+        pages.forEach(function(chunk, i){
+            const div = document.createElement("div");
+            div.className = "skills-page" + (i === currentIndex ? " active" : "");
+            chunk.forEach(function(s){
+                const stealAbility = s.effect && ["steal","copy","control","shadow","delay_cooldown"].indexOf(s.effect) !== -1;
+                const btn = document.createElement("button");
+                btn.dataset.skill = s.skill_id;
+                btn.innerHTML = `<span class="cd-skill-emoji">${skillEmoji(s)}</span><span class="cd-skill-name">${escapeHtml(s.name)}</span>${s.cooldown ? `<em class="cd-skill-cd">CD ${s.cooldown}</em>` : ""}`;
+                btn.onclick = function(){ if(stealAbility){ ClanDungeon.openStealPicker(s.skill_id); } else { ClanDungeon.pickSkill(s.skill_id); } };
+                div.appendChild(btn);
+            });
+            pagesEl.appendChild(div);
+        });
+        pagesEl.dataset.activePage = String(currentIndex);
+
+        const dotsEl = document.getElementById("cd-skill-dots");
+        if(dotsEl){
+            if(pages.length <= 1){
+                dotsEl.style.display = "none";
+            } else {
+                dotsEl.style.display = "";
+                dotsEl.innerHTML = "";
+                pages.forEach(function(_, i){
+                    const dot = document.createElement("span");
+                    if(i === currentIndex) dot.classList.add("active");
+                    dot.onclick = function(){
+                        pagesEl.dataset.activePage = String(i);
+                        Array.prototype.forEach.call(pagesEl.children, function(pg, idx){ pg.classList.toggle("active", idx === i); });
+                        Array.prototype.forEach.call(dotsEl.children, function(d, idx){ d.classList.toggle("active", idx === i); });
+                    };
+                    dotsEl.appendChild(dot);
+                });
+            }
+        }
     }
 
     function clearSkills(){
-        const el = document.getElementById("cd-skills");
-        if(!el || !myTurn()) el.innerHTML = "";
+        const el = document.getElementById("cd-player-skills-pages");
+        if(el && !myTurn()) el.innerHTML = "";
+    }
+
+    function openStealPicker(abilitySkillId){
+        if(!myTurn()){ toast("ليس دورك الآن"); return; }
+        if(!monsterSkills.length){ toast("لا توجد مهارات من الوحش لسرقتها"); return; }
+        const targets = document.getElementById("cd-targets");
+        if(targets) targets.innerHTML = "";
+        selectedSkill = null;
+        selectedWeaponSkill = false;
+        const ov = document.createElement("div");
+        ov.className = "cd-steal-overlay";
+        ov.innerHTML = `
+            <div class="cd-steal-panel">
+                <div class="cd-steal-title">🎯 اختر مهارة من الوحش لسَرقتها/نسخها</div>
+                <div class="cd-steal-list">
+                    ${monsterSkills.map(function(s){
+                        return `<button class="cd-steal-opt" onclick="ClanDungeon.castSteal('${abilitySkillId}','${s.skill_id}')"><span class="cd-skill-emoji">${skillEmoji(s)}</span> ${escapeHtml(s.name)}</button>`;
+                    }).join("")}
+                </div>
+                <button class="cd-btn cd-leave" onclick="this.closest('.cd-steal-overlay').remove()">إلغاء</button>
+            </div>`;
+        const host = document.getElementById("clandungeon-content");
+        if(host) host.appendChild(ov);
+    }
+
+    async function castSteal(abilitySkillId, targetSkillId){
+        try{
+            await supabaseClient.rpc("clan_dungeon_steal_or_copy_skill", {
+                p_token: getToken(), p_run_id: myRun,
+                p_ability_skill_id: abilitySkillId, p_target_skill_id: targetSkillId,
+                p_target_player_id: null
+            });
+            removeStealOverlay();
+            await refreshState();
+            await renderRun();
+            if(myState && myState.turn_phase === "monster") await actMonster();
+        }catch(e){
+            toast(e.message || e);
+            removeStealOverlay();
+            await refreshState();
+        }
+    }
+
+    function removeStealOverlay(){
+        const ov = document.querySelector(".cd-steal-overlay");
+        if(ov) ov.remove();
     }
 
     function myTurn(){
@@ -918,6 +1019,8 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         useCdPotion,
         useOnMonster,
         useOnPlayer,
+        openStealPicker,
+        castSteal,
         claimReward,
         sendSubMessage,
         startSubChatPolling,
