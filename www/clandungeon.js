@@ -240,6 +240,11 @@ const ClanDungeon = (function(){
                 if(error){ b.innerHTML = '<div class="chat-empty">⚠️ ' + escapeHtml(error.message) + '</div>'; return; }
                 myState = Array.isArray(data) ? data[0] : data;
                 updateIcons();
+                // Ensure companion icon reflects initial state after state load
+                if (myState && myState.status === "active") {
+                    // Force refresh after battle starts
+                    setTimeout(updateIcons, 500);
+                }
             }catch(e){ b.innerHTML = '<div class="chat-empty">⚠️ ' + escapeHtml(e.message||e) + '</div>'; return; }
         }
         const st = myState;
