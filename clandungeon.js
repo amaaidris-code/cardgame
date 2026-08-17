@@ -217,7 +217,8 @@ const ClanDungeon = (function(){
         if(st.status === "lobby") await renderLobbyRoom();
         else if(st.status === "race") await renderRace();
         else if(st.status === "active") await renderBattle();
-        else if(st.status === "finished") await renderResult();
+        else if(st.status === "finished"){ stopSubChatPolling(); await renderResult(); }
+        if(st.status === "lobby" || st.status === "race" || st.status === "active") startSubChatPolling();
     }
 
     // ---------- lobby room ----------
@@ -227,6 +228,9 @@ const ClanDungeon = (function(){
         const players = myState.players || [];
         const myReady = players.some(function(p){ return String(p.player_id)===String(getPlayerId()) && p.ready; });
         const aliveCount = players.length;
+        const allReady = aliveCount > 0 && players.every(function(p){ return !!p.ready; });
+        const canStart = aliveCount === 1 || (aliveCount >= 2 && allReady);
+        const readyCount = players.filter(function(p){ return !!p.ready; }).length;
 
         const rows = players.map(function(p){
             const nm = members[p.player_id] || "لاعب";
@@ -248,10 +252,13 @@ const ClanDungeon = (function(){
             <div class="cd-party-list">${rows || '<div class="chat-empty">لا يوجد لاعبون</div>'}</div>
             <div class="cd-buttons">
                 <button class="cd-btn ${myReady ? 'cd-ready' : 'cd-primary'}" onclick="ClanDungeon.toggleReady()">${myReady ? "✅ جاهز — إلغاء" : "اضغط لتكون جاهزًا"}</button>
-                <button class="cd-btn ${aliveCount >= 2 ? 'cd-primary' : ''}" onclick="ClanDungeon.startRace()" ${aliveCount >= 2 ? "" : "disabled"}>🚀 ابدأ السباق (${aliveCount}/4)</button>
+                <button class="cd-btn ${canStart ? 'cd-primary' : ''}" onclick="ClanDungeon.startRace()" ${canStart ? "" : "disabled"}>🚀 ابدأ الغارة (${aliveCount}/4)</button>
                 <button class="cd-btn cd-leave" onclick="ClanDungeon.leaveRun()">🚪 مغادرة</button>
             </div>
-            <div class="cd-hint">💡 ابدأ السباق (يلزم لاعبان على الأقل)، ثم اضغط الزر الأحمر في أسرع وقت ممكن لتحديد ترتيب الأدوار.</div>
+            ${aliveCount >= 2 && !allReady
+                ? `<div class="cd-hint">⏳ انتظر حتى يكون الجميع جاهزين لبدء السباق (جاهز ${readyCount}/${aliveCount}).</div>`
+                : `<div class="cd-hint">💡 أنت وحدك؟ ابدأ مباشرة. أو اضغط جاهزًا حتى يجاهز الجميع ثم ابدأ الغارة.</div>`}
+            ${subChatBlock()}
         `;
     }
 
@@ -268,6 +275,7 @@ const ClanDungeon = (function(){
             <button class="cd-race-button" onclick="ClanDungeon.pressRace()">👆 اضغط!</button>
             <div class="cd-race-count" id="cd-race-count">3</div>
             <div class="cd-race-tip">اضغط الزر الأحمر قبل انتهاء العدّ</div>
+            ${subChatBlock()}
         `;
         raceTimer = setInterval(stepRaceCountdown, 1000);
     }
@@ -382,6 +390,7 @@ const ClanDungeon = (function(){
                     <div id="cd-skills" class="cd-skills"></div>
                     <div class="cd-skill-status" id="cd-skill-status"></div>
                 </div>
+                ${subChatBlock()}
             </div>`;
 
         // بدّئ/حدّث مؤقّت الدور (يعمل فقط في دور لاعب بموعد انتهاء)
@@ -620,6 +629,61 @@ const ClanDungeon = (function(){
         }catch(e){ toast(e.message || e); }
     }
 
+    // ---------- sub-chat (رسائل الغارة) ----------
+    let subChatTimer = null;
+    let subChatBusy = false;
+
+    function subChatBlock(){
+        return `
+            <div class="cd-subchat" id="cd-subchat">
+                <div class="cd-subchat-msgs" id="cd-subchat-msgs"><div class="chat-empty">جارٍ التحميل…</div></div>
+                <div class="cd-subchat-input">
+                    <input id="cd-subchat-input" maxlength="500" placeholder="اكتب خطة الغارة…" onkeydown="if(event.key==='Enter')ClanDungeon.sendSubMessage()">
+                    <button class="cd-btn cd-primary" onclick="ClanDungeon.sendSubMessage()">إرسال</button>
+                </div>
+            </div>`;
+    }
+
+    async function loadSubMessages(){
+        const el = document.getElementById("cd-subchat-msgs");
+        if(!el || !myRun) return;
+        if(subChatBusy) return;
+        subChatBusy = true;
+        try{
+            const { data, error } = await supabaseClient.rpc("clan_dungeon_get_messages", { p_token: getToken(), p_run_id: myRun, p_limit: 50 });
+            if(error) throw error;
+            const list = (data || []).map(function(m){
+                const me = String(m.sender_id)===String(getPlayerId());
+                return `<div class="cd-subchat-msg ${me ? 'cd-subchat-me' : ''}"><span class="cd-subchat-who">${me ? 'أنت' : escapeHtml(m.sender_username || '')}</span>&nbsp;${escapeHtml(m.message)}</div>`;
+            }).join("");
+            el.innerHTML = list || '<div class="chat-empty">لا رسائل بعد</div>';
+            el.scrollTop = el.scrollHeight;
+        }catch(e){ /* تجاهل أخطاء التحديث الدوري */ }
+        finally { subChatBusy = false; }
+    }
+
+    function startSubChatPolling(){
+        stopSubChatPolling();
+        loadSubMessages();
+        subChatTimer = setInterval(loadSubMessages, 3000);
+    }
+
+    function stopSubChatPolling(){
+        if(subChatTimer){ clearInterval(subChatTimer); subChatTimer = null; }
+    }
+
+    async function sendSubMessage(){
+        const inp = document.getElementById("cd-subchat-input");
+        if(!inp || !myRun) return;
+        const msg = inp.value;
+        if(!msg.trim()) return;
+        try{
+            await supabaseClient.rpc("clan_dungeon_send_message", { p_token: getToken(), p_run_id: myRun, p_message: msg });
+            inp.value = "";
+            await loadSubMessages();
+        }catch(e){ toast(e.message || e); }
+    }
+
     async function tryJoin(runId){
         try{
             await supabaseClient.rpc("clan_dungeon_join", { p_token: getToken(), p_run_id: runId });
@@ -659,6 +723,7 @@ const ClanDungeon = (function(){
         myRun = null;
         myState = null;
         stopPolling();
+        stopSubChatPolling();
         await renderLobby();
     }
 
@@ -720,6 +785,9 @@ const ClanDungeon = (function(){
         useOnMonster,
         useOnPlayer,
         claimReward,
+        sendSubMessage,
+        startSubChatPolling,
+        stopSubChatPolling,
         _activeRunId: function(){ return myRun; }
     };
 
