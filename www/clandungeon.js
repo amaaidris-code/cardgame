@@ -569,12 +569,13 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
             const div = document.createElement("div");
             div.className = "skills-page" + (i === currentIndex ? " active" : "");
             chunk.forEach(function(s){
+                const sid = s.skill_id || s.id;
                 const stealAbility = s.effect && ["steal","copy","control","shadow","delay_cooldown"].indexOf(s.effect) !== -1;
                 const btn = document.createElement("button");
-                btn.dataset.skill = s.skill_id;
+                btn.dataset.skill = sid;
                 btn.innerHTML = `<span class="cd-skill-emoji">${skillEmoji(s)}</span><span class="cd-skill-name">${escapeHtml(s.name)}</span>${s.cooldown ? `<em class="cd-skill-cd">CD ${s.cooldown}</em>` : ""}`;
                 btn.disabled = locked || (stealAbility && !myTurnNow);
-                btn.onclick = function(){ if(stealAbility){ ClanDungeon.openStealPicker(s.skill_id); } else { ClanDungeon.pickSkill(s.skill_id); } };
+                btn.onclick = function(){ if(stealAbility){ ClanDungeon.openStealPicker(sid); } else { ClanDungeon.pickSkill(sid); } };
                 div.appendChild(btn);
             });
             pagesEl.appendChild(div);
@@ -673,7 +674,8 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
                 <div class="cd-steal-title">🎯 اختر مهارة من الوحش لسَرقتها/نسخها</div>
                 <div class="cd-steal-list">
                     ${monsterSkills.map(function(s){
-                        return `<button class="cd-steal-opt" onclick="ClanDungeon.castSteal('${abilitySkillId}','${s.skill_id}')"><span class="cd-skill-emoji">${skillEmoji(s)}</span> ${escapeHtml(s.name)}</button>`;
+                        const msid = s.skill_id || s.id;
+                        return `<button class="cd-steal-opt" onclick="ClanDungeon.castSteal('${abilitySkillId}','${msid}')"><span class="cd-skill-emoji">${skillEmoji(s)}</span> ${escapeHtml(s.name)}</button>`;
                     }).join("")}
                 </div>
                 <button class="cd-btn cd-leave" onclick="this.closest('.cd-steal-overlay').remove()">إلغاء</button>
