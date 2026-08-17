@@ -361,7 +361,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         const members = await getMemberNames();
         const players = (st.players || []).slice().sort(function(a,c){ return String(a.player_id)===String(getPlayerId()) ? -1 : 1; });
         const me = players.find(function(p){ return String(p.player_id)===String(getPlayerId()); });
-        const myTurn = !!st.my_turn && st.turn_phase === "player";
+        const myTurnNow = !!st.my_turn && st.turn_phase === "player";
         const myCompTurn = isMyCompTurn();
 
         const monsterImg = st.monster_image ? `<img class="cd-monster-img" src="${escapeHtml(st.monster_image)}" alt="${escapeHtml(st.monster_name)}">` : `<div class="cd-monster-img cd-noimg">👹</div>`;
@@ -395,7 +395,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
             <div id="clandungeon-toast" class="cd-toast hidden"></div>
             <div class="cd-battle">
                 <div class="cd-leave-bar"><button class="cd-btn cd-leave" onclick="ClanDungeon.leaveRun()">🚪 عودة إلى الغارات</button></div>
-                <div class="cd-turn-indicator ${myTurn?'cd-turn-mine':''}">${turnLabel}</div>
+                <div class="cd-turn-indicator ${myTurnNow?'cd-turn-mine':''}">${turnLabel}</div>
                 <div id="cd-turn-timer" class="cd-turn-timer"></div>
                 <div class="cd-monster-card ${st.turn_phase==="monster"?'cd-monster-turn':''}">
                     ${monsterImg}
@@ -419,7 +419,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
             stopTurnTimer();
         }
 
-        if(myTurn()){
+        if(myTurnNow){
             loadSkills();
         } else {
             // ليس دوري: نعرض فقط حالة الانتظار
