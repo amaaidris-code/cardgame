@@ -1,6 +1,8 @@
 -- عند حذف حساب لاعب، كان اللاعب المحذوف يُحسب ضمن قائمة أعضاء الكلان
 -- والـ PVP والأصدقاء (صفوف يتيمة). نوسّع admin_delete_player لتنظيف كل
 -- المراجع قبل حذف المستخدم، وننظّف أي صفوف يتيمة قائمة من قبل.
+-- أسماء الأعمدة الفعلية: clan_members.player_id، clan_dungeon_claims.claimed_by،
+-- friend_requests.from_player_id/to_player_id، skill_requests.player_id.
 
 create or replace function public.admin_delete_player(p_admin_token text, p_player_id uuid)
  returns void
@@ -34,14 +36,14 @@ begin
     );
 
   -- تنظيف مراجع الكلان والـ PVP والأصدقاء الخاصة باللاعب المحذوف
-  delete from clan_members where member_id = p_player_id;
+  delete from clan_members where player_id = p_player_id;
   delete from pvp_matches where player1_id = p_player_id or player2_id = p_player_id;
   delete from pvp_cooldowns where player_id = p_player_id;
   delete from clan_dungeon_players where player_id = p_player_id;
-  delete from clan_dungeon_claims where player_id = p_player_id;
+  delete from clan_dungeon_claims where claimed_by = p_player_id;
   delete from friends where player_id = p_player_id or friend_id = p_player_id;
-  delete from friend_requests where sender_id = p_player_id or receiver_id = p_player_id;
-  delete from skill_requests where sender_id = p_player_id or receiver_id = p_player_id;
+  delete from friend_requests where from_player_id = p_player_id or to_player_id = p_player_id;
+  delete from skill_requests where player_id = p_player_id;
 
   delete from users where id = v_user_id;
 end;

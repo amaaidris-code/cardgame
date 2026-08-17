@@ -122,7 +122,7 @@ const ClanDungeon = (function(){
 
             // هل أنا في غارة حالية؟
             const my = await findMyRun();
-            if(my){ myRun = my; startBattlePolling(); await renderRun(); }
+            if(my){ myRun = my.run_id; startBattlePolling(); await renderRun(); }
             else{ myRun = null; await renderLobby(); }
         }catch(e){
             b.innerHTML = '<div class="chat-empty">⚠️ خطأ: ' + escapeHtml(e.message || e) + '</div>';
