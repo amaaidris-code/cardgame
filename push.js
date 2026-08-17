@@ -58,8 +58,12 @@ var pushModule = (function(){
     }
 
     var lastDeviceToken = "";
+    var listenersReady = false;
 
-    function requestPermission(){
+    // نسجّل مستمعي الإضافة مرة واحدة فقط (تجنُّب التكرار عند التمهيد والدخول).
+    function ensureListeners(){
+        if(listenersReady) return;
+        listenersReady = true;
         if(!isNative()) return;
         const PushNotifications = window.Capacitor.Plugins.PushNotifications;
 
@@ -80,12 +84,27 @@ var pushModule = (function(){
 
         PushNotifications.addListener("pushNotificationActionPerformed", function(notification){
         });
+    }
 
+    // يطلب إذن الإشعارات من النظام، وإن مُنح يسجّل الجهاز لدى FCM.
+    function requestPermission(){
+        if(!isNative()) return;
+        ensureListeners();
+        const PushNotifications = window.Capacitor.Plugins.PushNotifications;
         PushNotifications.requestPermissions().then(function(perm){
             if(perm && perm.receive === "granted"){
                 PushNotifications.register();
             }
         }).catch(function(){});
+    }
+
+    // يُطلَب إذن الإشعارات تلقائيًا عند فتح التطبيق (أول تشغيل) ليُسأل
+    // النظام المستخدم مباشرة دون انتظار تسجيل الدخول.
+    function bootstrap(){
+        if(!isNative()) return;
+        setTimeout(function(){
+            try{ requestPermission(); }catch(e){}
+        }, 700);
     }
 
     // يُستدعى بعد نجاح تسجيل الدخول
@@ -110,7 +129,10 @@ var pushModule = (function(){
     return {
         requestPermission: requestPermission,
         onLogin: onLogin,
-        onLogout: onLogout
+        onLogout: onLogout,
+        bootstrap: bootstrap
     };
 
 })();
+
+pushModule.bootstrap();
