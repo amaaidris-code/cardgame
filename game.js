@@ -543,8 +543,8 @@ function updatePlayerInfo(){
 // ========================================
 
 // ========================================
-// إنشاء حساب — يتطلب تحقق بريد إلكتروني عبر رمز OTP
-// (نفس آلية OTP المستخدمة لدخول الأدمن، لكن لأي بريد يدخله المستخدم)
+// إنشاء حساب — البريد الإلكتروني اختياري
+// (أُزيل نظام OTP؛ لا نحتاج بريدًا للتحقق)
 // ========================================
 
 async function startRegisterOtp(){
@@ -553,8 +553,8 @@ async function startRegisterOtp(){
     let email = document.getElementById("register-email").value.trim();
     let password = document.getElementById("register-password").value.trim();
 
-    if(username === "" || email === "" || password === ""){
-        alert("اكتب اسم المستخدم والبريد الإلكتروني وكلمة المرور");
+    if(username === "" || password === ""){
+        alert("اكتب اسم المستخدم وكلمة المرور");
         return;
     }
 
@@ -576,7 +576,7 @@ async function startRegisterOtp(){
         p_password: password,
         p_device_id: deviceId,
         p_fingerprint: fingerprint,
-        p_email: email
+        p_email: email || null
     })
     .single();
 

@@ -14,6 +14,9 @@ const ClanDungeon = (function(){
     let myState = null;      // آخر حالة من clan_dungeon_get_state
     let curClanId = null;
     let selectedSkill = null;
+    let selectedWeaponSkill = false; // هل المهارة المحددة من سلاحي
+    let myWeapon = null;              // آخر سلاح مجهز (من get_my_active_weapon)
+    let myPotions = [];               // الجرعات (من get_my_potions)
     let turnTimerInterval = null;
     let turnDeadline = null;
     let skipInFlight = false;
@@ -408,6 +411,8 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
                 <div class="cd-skill-area">
                     <div id="cd-skills" class="cd-skills"></div>
                     <div class="cd-skill-status" id="cd-skill-status"></div>
+                    <div id="cd-weapon" class="cd-actions"></div>
+                    <div id="cd-potions" class="cd-actions"></div>
                 </div>
                 ${subChatBlock()}
             </div>`;
@@ -435,6 +440,9 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
             }
             selectedSkill = null;
         }
+
+        renderWeaponBar();
+        renderPotionBar();
     }
 
     // ---------- turn text ----------
@@ -525,19 +533,88 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         return "⚔️";
     }
 
+    // ---------- weapon & potions (نفس أسلوب شاشات PvE/PvP) ----------
+    async function renderWeaponBar(){
+        const el = document.getElementById("cd-weapon");
+        if(!el) return;
+        const st = myState;
+        const myTurnNow = st && st.my_turn && st.turn_phase === "player";
+        try{
+            const { data, error } = await supabaseClient.rpc("get_my_active_weapon", { p_token: getToken() });
+            if(error){ myWeapon = null; el.innerHTML = ""; return; }
+            myWeapon = (Array.isArray(data) && data.length) ? data[0] : null;
+        }catch(e){ myWeapon = null; el.innerHTML = ""; return; }
+        if(!myWeapon){ el.innerHTML = ""; return; }
+
+        const broken = (myWeapon.durability_current || 0) <= 0;
+        const skills = Array.isArray(myWeapon.skills) ? myWeapon.skills : [];
+        const skillBtns = skills.map(function(s){
+            const locked = broken || !myTurnNow;
+            return `<button class="weapon-skill-btn" style="--wcolor:${escapeHtml(s.color || '#ffffff')};" ${locked?"disabled":""} onclick="ClanDungeon.pickWeaponSkill('${s.skill_id}')">${escapeHtml(s.name || 'مهارة')}</button>`;
+        }).join("");
+
+        el.innerHTML = `
+            <div class="weapon-box">
+                <div class="weapon-header" style="--wcolor:${escapeHtml(myWeapon.glow_color || '#e8b93f')};">
+                    ${myWeapon.image
+                        ? `<img class="weapon-image" src="${escapeHtml(myWeapon.image)}" alt="">`
+                        : `<span class="weapon-image weapon-image-ph">⚔️</span>`}
+                    <div class="weapon-meta">
+                        <div class="weapon-name">${escapeHtml(myWeapon.name || 'سلاح')}</div>
+                        <div class="weapon-duce">${escapeHtml(broken ? "مكسور 💥" : (myWeapon.durability_current + " / " + (myWeapon.max_durability || "-") + " دص"))}</div>
+                    </div>
+                </div>
+                <div class="weapon-skills">${skillBtns.length ? skillBtns : '<div class="weapon-name">لا مهارات</div>'}</div>
+            </div>`;
+    }
+
+    async function renderPotionBar(){
+        const el = document.getElementById("cd-potions");
+        if(!el) return;
+        const st = myState;
+        const myTurnNow = st && st.my_turn && st.turn_phase === "player";
+        try{
+            const { data, error } = await supabaseClient.rpc("get_my_potions", { p_token: getToken() });
+            if(error){ myPotions = []; el.innerHTML = ""; return; }
+            myPotions = (Array.isArray(data) ? data : []).filter(function(p){ return (p.quantity || 0) > 0; });
+        }catch(e){ myPotions = []; el.innerHTML = ""; return; }
+        if(!myPotions.length){ el.innerHTML = ""; return; }
+        el.innerHTML = `<div class="potion-bar">${myPotions.map(function(p){
+            const borderColor = (p.glow_color && /^#[0-9A-Fa-f]{6}$/.test(p.glow_color)) ? p.glow_color : "#22c55e";
+            const img = p.image ? `<img src="${escapeHtml(p.image)}" alt="">` : `<span style="font-size:18px;">🧪</span>`;
+            return `<button class="potion-btn" style="--pcolor:${borderColor};" ${myTurnNow?"":"disabled"} onclick="ClanDungeon.useCdPotion('${p.potion_id}')" title="${escapeHtml(p.name || 'جرعة')}">${img}<span class="potion-qty">${p.quantity}</span></button>`;
+        }).join("")}</div>`;
+    }
+
+    async function useCdPotion(potionId){
+        if(!myTurn()){ toast("ليس دورك الآن"); return; }
+        try{
+            await supabaseClient.rpc("clan_dungeon_use_potion", { p_token: getToken(), p_run_id: myRun, p_potion_id: potionId });
+            await refreshState();
+            await renderRun();
+        }catch(e){ toast(e.message || e); await refreshState(); }
+    }
+
     // ---------- targeting ----------
     function pickSkill(skillId){
         selectedSkill = skillId;
+        selectedWeaponSkill = false;
         renderTargets();
         const btns = document.querySelectorAll(".cd-skill-btn");
         btns.forEach(function(b){ b.classList.toggle("cd-selected", b.dataset.skill === skillId); });
+    }
+
+    function pickWeaponSkill(skillId){
+        selectedSkill = skillId;
+        selectedWeaponSkill = true;
+        renderTargets();
     }
 
     function renderTargets(){
         const st = myState;
         const el = document.getElementById("cd-targets");
         if(!el) return;
-        if(!selectedSkill){ el.innerHTML = ""; return; }
+        if(!selectedSkill){ selectedWeaponSkill = false; el.innerHTML = ""; return; }
         const members = {};
         // نعيد بناء أسماء الأعضاء
         const players = (st && st.players) || [];
@@ -555,22 +632,30 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
     async function useOnMonster(){
         if(!selectedSkill) return;
         const skillId = selectedSkill;
+        const isWeapon = selectedWeaponSkill;
         selectedSkill = null;
         renderTargets();
-        await doUse(skillId, null);
+        await doUse(skillId, null, isWeapon);
     }
 
     async function useOnPlayer(targetId){
         if(!selectedSkill) return;
         const skillId = selectedSkill;
+        const isWeapon = selectedWeaponSkill;
         selectedSkill = null;
         renderTargets();
-        await doUse(skillId, targetId);
+        await doUse(skillId, targetId, isWeapon);
     }
 
-    async function doUse(skillId, targetPlayerId){
+    async function doUse(skillId, targetPlayerId, isWeapon){
+        const weaponFlag = (isWeapon === undefined) ? selectedWeaponSkill : isWeapon;
         try{
-            if(isMyCompTurn()){
+            if(weaponFlag){
+                await supabaseClient.rpc("clan_dungeon_use_weapon_skill", {
+                    p_token: getToken(), p_run_id: myRun, p_skill_id: skillId,
+                    p_target_player_id: targetPlayerId
+                });
+            } else if(isMyCompTurn()){
                 await supabaseClient.rpc("clan_dungeon_use_companion_skill", {
                     p_token: getToken(), p_run_id: myRun, p_skill_id: skillId,
                     p_target_player_id: targetPlayerId
@@ -581,6 +666,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
                     p_target_player_id: targetPlayerId
                 });
             }
+            selectedWeaponSkill = false;
             await refreshState();
             await renderRun();
             // الوحش يتصرف بعد دوري إذا كان دوره
@@ -820,6 +906,8 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         pressRace,
         leaveRun,
         pickSkill,
+        pickWeaponSkill,
+        useCdPotion,
         useOnMonster,
         useOnPlayer,
         claimReward,
