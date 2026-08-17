@@ -717,6 +717,9 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
     async function enterRun(){
         if(!myRun) return;
         myState = null;
+        try{
+            await supabaseClient.rpc("clan_dungeon_join", { p_token: getToken(), p_run_id: myRun });
+        }catch(e){ toast(e.message || e); }
         startBattlePolling();
         await renderRun();
     }
