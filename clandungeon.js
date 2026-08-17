@@ -148,7 +148,7 @@ const ClanDungeon = (function(){
             try{
                 const { data, error } = await supabaseClient.rpc("clan_dungeon_get_state", { p_token: getToken(), p_run_id: r.run_id });
                 if(!error && data){
-                    myState = data;
+                    myState = Array.isArray(data) ? data[0] : data;
                     return r;
                 }
             }catch(e){ /* لست عضوًا في هذه الغارة */ }
@@ -210,7 +210,7 @@ const ClanDungeon = (function(){
             try{
                 const { data, error } = await supabaseClient.rpc("clan_dungeon_get_state", { p_token: getToken(), p_run_id: myRun });
                 if(error){ b.innerHTML = '<div class="chat-empty">⚠️ ' + escapeHtml(error.message) + '</div>'; return; }
-                myState = data;
+                myState = Array.isArray(data) ? data[0] : data;
             }catch(e){ b.innerHTML = '<div class="chat-empty">⚠️ ' + escapeHtml(e.message||e) + '</div>'; return; }
         }
         const st = myState;
@@ -693,8 +693,8 @@ const ClanDungeon = (function(){
         if(!myRun) return null;
         const { data, error } = await supabaseClient.rpc("clan_dungeon_get_state", { p_token: getToken(), p_run_id: myRun });
         if(error) throw error;
-        myState = data;
-        return data;
+        myState = Array.isArray(data) ? data[0] : data;
+        return myState;
     }
 
     async function getMemberNames(){
