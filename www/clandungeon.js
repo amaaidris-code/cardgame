@@ -63,7 +63,15 @@ const ClanDungeon = (function(){
             const sec = Math.max(0, Math.ceil(remainingMs / 1000));
             const m = Math.floor(sec / 60), s = sec % 60;
             el.textContent = "⏱️ " + m + ":" + (s < 10 ? "0" + s : s);
-            if(remainingMs <= 0) requestSkipTurn();
+            if(remainingMs <= 0){
+                // عند انتهاء المهلة نطلب التخطّي مرة واحدة ثم نوقف المؤقّت.
+                // النبضة (refreshState) هي من تحدّث الحالة الفعلية؛ فإن بقي الدور
+                // منتهيًا يُعيد updateTurnTimer تشغيل المؤقّت ويُعاد الطلب بوتيرة
+                // النبضة بدلًا من إغراق السيرفر بطلب كل ثانية.
+                requestSkipTurn();
+                stopTurnTimer();
+                return;
+            }
         };
         tick();
         turnTimerInterval = setInterval(tick, 1000);
