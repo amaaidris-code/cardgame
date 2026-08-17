@@ -383,64 +383,66 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         const myPhoto = (myChar && (myChar.identity_image || myChar.skill_card_image)) ? (myChar.identity_image || myChar.skill_card_image) : "";
         const myName = (myChar && myChar.name) ? myChar.name : "أنت";
 
-        const monsterImg = st.monster_image
-            ? `<img class="battle-image cd-photo cd-monster-photo" src="${escapeHtml(st.monster_image)}" alt="${escapeHtml(st.monster_name)}">`
-            : `<div class="battle-image cd-photo cd-monster-photo cd-noimg">👹</div>`;
         const monsterHpPct = st.monster_max_hp ? Math.max(0, Math.min(100, (st.monster_hp / st.monster_max_hp) * 100)) : 0;
         const myHpPct = me.max_hp ? Math.max(0, Math.min(100,(me.hp/me.max_hp)*100)) : 0;
+        const fallbackImg = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="100%" height="100%" fill="#1a1a22" rx="8"/><text x="50%" y="55%" font-size="20" text-anchor="middle" fill="#fff">👹</text></svg>')}`;
 
-        const compMini = st.my_comp_max_hp ? `
+        const compMini = isMyCompTurn() && st.my_comp_max_hp ? `
             <div class="cd-own-comp ${st.my_comp_alive?'':'cd-dead'}">
                 <span class="cd-own-comp-name">🐾 ${escapeHtml(st.my_comp_name || "مرافق")}</span>
                 <span class="cd-own-comp-hp">${st.my_comp_alive ? (st.my_comp_hp + "/" + st.my_comp_max_hp) : "☠️ سقط"}</span>
             </div>` : "";
 
-        const partyCompact = players.map(function(p){
+        const sidePlayers = players.map(function(p){
             const nm = members[p.player_id] || "لاعب";
             const isMe = String(p.player_id)===String(getPlayerId());
             const pct = p.max_hp ? Math.max(0,Math.min(100,(p.hp/p.max_hp)*100)) : 0;
-            return `<div class="cd-party-mini ${isMe?'cd-me':''} ${p.alive?'':'cd-dead'}">
-                <span class="cd-party-mini-name">${isMe?"👤":"🤝"} ${escapeHtml(nm)}</span>
-                <div class="hp-bar cd-party-mini-hp"><div class="hp-fill" style="width:${pct}%"></div></div>
+            return `<div class="cd-player-side ${isMe?'cd-me':''} ${p.alive?'':'cd-dead'}">
+                <span class="cd-player-side-role">${isMe?'👤':'🤝'}</span>
+                <span class="cd-player-side-name">${escapeHtml(nm)}</span>
+                <span class="cd-player-side-hp">${p.hp}/${p.max_hp}</span>
+                <div class="hp-bar cd-player-side-bar"><div class="hp-fill" style="width:${pct}%"></div></div>
             </div>`;
         }).join("");
 
         const turnLabel = turnText(st, members);
         const monsterLabel = `الوحش ${st.monster_index + 1} / ${st.total_monsters}`;
+        const hasDeadline = st.turn_phase === "player" && st.turn_player_id && st.turn_deadline;
 
         b.innerHTML = `
             <div id="clandungeon-toast" class="cd-toast hidden"></div>
+            <div class="cd-turn-banner ${myTurnNow?'cd-turn-mine':''}">
+                <span class="cd-exit" onclick="ClanDungeon.leaveRun()" title="خروج / حذف الغارة">🚪</span>
+                <span class="cd-turn-label">${turnLabel}</span>
+                ${hasDeadline ? `<span id="cd-turn-timer" class="cd-turn-timer"></span>` : ""}
+            </div>
+            <div class="cd-players-side" id="cd-players-side">${sidePlayers}</div>
             <div class="battle-arena cd-arena">
-                <div class="cd-leave-bar"><button class="cd-btn cd-leave" onclick="ClanDungeon.leaveRun()" title="إن كنت وحيدًا تُحذف الغارة نهائيًا">🚪 خروج / حذف الغارة</button></div>
                 <div class="battle-card enemy-card">
-                    ${monsterImg}
-                    <h3 class="battle-name">${escapeHtml(st.monster_name || "وحش")} <span class="cd-wave">${monsterLabel}</span></h3>
+                    <img class="battle-image" src="${escapeHtml(st.monster_image || '')}" alt="" onerror="this.onerror=null;this.src='${fallbackImg}'">
+                    <h3>${escapeHtml(st.monster_name || "وحش")}<span class="cd-wave"> ${monsterLabel}</span></h3>
                     <div class="hp-bar"><div class="hp-fill cd-monster-hp" style="width:${monsterHpPct}%"></div></div>
-                    <p class="hp-num">❤️ ${st.monster_hp} / ${st.monster_max_hp}</p>
+                    <p>❤️ <span>${st.monster_hp} / ${st.monster_max_hp}</span></p>
                 </div>
                 <div class="battle-middle">
-                    <div class="vs-divider">VS</div>
-                    <div class="cd-turn-indicator ${myTurnNow?'cd-turn-mine':''}">${turnLabel}</div>
-                    <div id="cd-turn-timer" class="cd-turn-timer"></div>
+                    <div class="vs-divider"><span class="vs-line vs-line-left"></span><span class="vs-text">VS</span><span class="vs-line vs-line-right"></span></div>
                 </div>
                 <div class="battle-card player-card">
-                    <img class="battle-image cd-photo cd-player-photo" src="${escapeHtml(myPhoto)}" alt="">
-                    <h3 class="battle-name">👤 ${myTurnNow ? 'أنت' : escapeHtml(myName)}</h3>
-                    <div class="hp-bar"><div class="hp-fill cd-player-hp" style="width:${myHpPct}%"></div></div>
-                    <p class="hp-num">❤️ ${me.hp} / ${me.max_hp}</p>
+                    <img class="battle-image" src="${escapeHtml(myPhoto)}" alt="" onerror="this.onerror=null;this.src='${fallbackImg}'">
+                    <h3>${escapeHtml(myName)}</h3>
                     ${compMini}
+                    <div class="hp-bar"><div class="hp-fill cd-player-hp" style="width:${myHpPct}%"></div></div>
+                    <p>❤️ <span>${me.hp} / ${me.max_hp}</span></p>
                 </div>
-                <div class="cd-party-strip">${partyCompact}</div>
-                <div id="cd-targets" class="cd-targets"></div>
                 <div class="cd-skill-area">
-                    <div class="cd-skill-pages" id="cd-player-skills-pages"></div>
                     <div class="skill-dots" id="cd-skill-dots"></div>
-                    <div class="cd-skill-status" id="cd-skill-status"></div>
+                    <div class="skills-pages" id="cd-player-skills-pages"></div>
+                    <div id="cd-targets" class="cd-targets"></div>
                     <div id="cd-weapon" class="cd-actions"></div>
                     <div id="cd-potions" class="cd-actions"></div>
                 </div>
-                ${subChatBlock()}
-            </div>`;
+            </div>
+            ${subChatBlock()}`;
 
         // بدّئ/حدّث مؤقّت الدور (يعمل فقط في دور لاعب بموعد انتهاء)
         if(st.turn_phase === "player" && st.turn_player_id && st.turn_deadline){

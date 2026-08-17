@@ -6140,56 +6140,52 @@ box-shadow: 0 6px 24px rgba(0,0,0,0.5), 0 0 18px rgba(255,120,0,0.4);
 .cd-actions-hint{display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 10px;margin:4px 0;font-size:12px;opacity:.6;border:1px dashed rgba(255,255,255,.12);border-radius:var(--radius-md);}
 
 /* ===== Clan dungeon battle: standard battle-arena look (photo + background + menus) ===== */
+/* ---- Clan-dungeon battle: PvE-clone layout ---- */
 #clandungeon-screen .cd-arena{
-  height:100dvh;
   max-width:480px;
   margin:0 auto;
-  overflow:auto;
-  box-sizing:border-box;
+  width:100%;
+  padding-right:44px; /* leave room for the right-side player column */
 }
 #clandungeon-screen .cd-arena .battle-card{
   border-radius:16px;
-  padding:12px;
-  margin:0 4px 10px;
+  padding:8px 12px;
+  margin:2px 4px 10px;
   text-align:center;
+  background:linear-gradient(160deg,#1a1a22,#0c0c10);
+  border:1px solid rgba(255,255,255,.08);
 }
-#clandungeon-screen .cd-arena .cd-photo{
-  width:92px;height:92px;border-radius:12px;object-fit:cover;margin-bottom:6px;
+#clandungeon-screen .cd-arena .battle-card h3{
+  font-size:14px;
+  margin:6px 0 4px;
+  color:#ffe9a6;
 }
-#clandungeon-screen .cd-arena .cd-monster-photo{ width:128px;height:128px; }
-#clandungeon-screen .cd-arena .cd-player-photo{ width:84px;height:84px; }
-#clandungeon-screen .cd-arena .cd-noimg{
-  display:flex;align-items:center;justify-content:center;font-size:44px;background:#121218;margin:0 auto 6px;
+#clandungeon-screen .cd-arena .battle-card p{
+  margin:2px 0 0;
+  font-size:12px;
+  color:#ddd;
 }
-#clandungeon-screen .cd-arena .hp-bar{ width:80%; margin:4px auto; }
-#clandungeon-screen .cd-arena .battle-name{ font-size:15px; margin:4px 0; }
-#clandungeon-screen .cd-arena .hp-num{ margin:0 0 2px; font-size:12px; color:#ddd; }
+#clandungeon-screen .cd-arena .battle-card .battle-image{
+  width:40px;height:40px;border-radius:10px;object-fit:cover;display:block;margin:0 auto;
+}
+#clandungeon-screen .cd-arena .hp-bar{ width:86%; margin:4px auto; }
+#clandungeon-screen .cd-arena .cd-monster-hp{ background:#e14b4b !important; }
+#clandungeon-screen .cd-arena .cd-player-hp{ background:#35c46f !important; }
 #clandungeon-screen .cd-arena .battle-middle{
-  position:static; display:flex; flex-direction:column; align-items:center;
-  gap:4px; padding:2px 10px 8px; text-align:center;
+  padding:2px 10px 8px;
+  --color:var(--accent,#ffd76b);
 }
-#clandungeon-screen .cd-arena .vs-divider{ position:static; }
-#clandungeon-screen .cd-arena .cd-turn-indicator{ font-size:13px; }
-#clandungeon-screen .cd-arena .cd-turn-timer{ font-size:14px; color:#ffd76b; }
+#clandungeon-screen .cd-arena .vs-divider{
+  display:flex; align-items:center; justify-content:center; gap:10px; margin:4px 0;
+}
+#clandungeon-screen .cd-arena .vs-line{ flex:1; height:2px; border-radius:2px; background:linear-gradient(90deg,transparent,#e8b93f,transparent); }
+#clandungeon-screen .cd-arena .vs-text{ color:#e8b93f; font-weight:800; font-size:20px; letter-spacing:2px; text-shadow:0 0 12px rgba(232,185,63,.6); }
 #clandungeon-screen .cd-arena .cd-own-comp{
   display:flex; justify-content:center; gap:8px; font-size:12px; margin-top:4px; color:#22c55e;
 }
 #clandungeon-screen .cd-arena .cd-own-comp.cd-dead{ color:#f87171; }
-#clandungeon-screen .cd-party-strip{
-  display:flex; gap:6px; flex-wrap:wrap; justify-content:center; padding:0 8px 8px;
-}
-#clandungeon-screen .cd-party-mini{
-  background:linear-gradient(160deg,#1a1a22,#0c0c10);
-  border:1px solid rgba(255,255,255,.08); border-radius:10px;
-  padding:6px 8px; min-width:92px; text-align:center;
-}
-#clandungeon-screen .cd-party-mini.cd-dead{ opacity:.5; filter:grayscale(.9); }
-#clandungeon-screen .cd-party-mini-name{ font-size:11px; display:block; margin-bottom:4px; }
-#clandungeon-screen .cd-party-mini-hp{ width:100%; }
 #clandungeon-screen .cd-skill-area{ padding:4px 10px 12px; }
-#clandungeon-screen .cd-arena .skills-page{
-  display:none;
-}
+#clandungeon-screen .cd-arena .skills-page{ display:none; }
 #clandungeon-screen .cd-arena .skills-page.active{
   display:grid; grid-template-columns:repeat(2,1fr); gap:8px;
 }
@@ -6208,8 +6204,39 @@ box-shadow: 0 6px 24px rgba(0,0,0,0.5), 0 0 18px rgba(255,120,0,0.4);
 #clandungeon-screen .cd-arena .skill-dots span.active{ background:#e8b93f; }
 #clandungeon-screen .cd-arena .cd-waiting{ color:#bbb; text-align:center; padding:12px; font-size:14px; }
 #clandungeon-screen .cd-arena .cd-targets{ text-align:center; padding:4px 8px; }
-#clandungeon-screen .cd-arena .cd-skill-status{ text-align:center; font-size:12px; color:#ffd76b; min-height:14px; }
 #clandungeon-screen .cd-arena .cd-skill-cd{ font-size:10px; color:#ffd76b; font-style:normal; }
+
+/* turn banner */
+#clandungeon-screen .cd-turn-banner{
+  position:sticky; top:0; z-index:5;
+  display:flex; align-items:center; gap:8px;
+  background:linear-gradient(160deg,#1a1a22,#0c0c10);
+  border:1px solid rgba(255,255,255,.08); border-radius:10px;
+  padding:6px 8px; margin:0 0 8px;
+}
+#clandungeon-screen .cd-turn-banner.cd-turn-mine{ border-color:rgba(53,196,111,.5); }
+#clandungeon-screen .cd-turn-label{ flex:1; font-size:13px; color:#ffe9a6; text-align:center; }
+#clandungeon-screen .cd-turn-timer{ font-size:13px; color:#ffd76b; }
+#clandungeon-screen .cd-exit{ cursor:pointer; font-size:15px; padding:2px 4px; opacity:.8; }
+
+/* right-side player HP column */
+#clandungeon-screen .cd-players-side{
+  position:fixed; right:4px; top:52%; transform:translateY(-50%);
+  display:flex; flex-direction:column; gap:8px; z-index:8;
+  max-width:96px;
+}
+#clandungeon-screen .cd-player-side{
+  background:linear-gradient(160deg,#16161d,#0b0b0f);
+  border:1px solid rgba(255,255,255,.1); border-radius:10px;
+  padding:4px 6px; text-align:center;
+}
+#clandungeon-screen .cd-player-side.cd-me{ border-color:rgba(53,196,111,.55); }
+#clandungeon-screen .cd-player-side.cd-dead{ opacity:.45; filter:grayscale(.9); }
+#clandungeon-screen .cd-player-side-role{ font-size:12px; display:block; }
+#clandungeon-screen .cd-player-side-name{ font-size:9px; color:#ddd; display:block; margin:1px 0 3px; white-space:normal; word-break:break-word; line-height:1.2; }
+#clandungeon-screen .cd-player-side-hp{ font-size:9px; color:#ffd76b; }
+#clandungeon-screen .cd-player-side-bar{ width:100%; height:5px; margin-top:3px; }
+#clandungeon-screen .cd-player-side-bar .hp-fill{ background:linear-gradient(90deg,#4caf50,#35c46f); }
 
 /* steal/copy picker overlay for the clan dungeon */
 .cd-steal-overlay{
