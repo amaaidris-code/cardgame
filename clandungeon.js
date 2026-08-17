@@ -616,12 +616,13 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
             const div = document.createElement("div");
             div.className = "skills-page" + (i === ci ? " active" : "");
             chunk.forEach(function(s){
+                const id = s.id || s.skill_id;
                 const btn = document.createElement("button");
-                btn.dataset.skill = s.skill_id;
+                btn.dataset.skill = id;
                 btn.disabled = locked;
                 btn.style.setProperty("--wcolor", s.color && /^#[0-9A-Fa-f]{6}$/.test(s.color) ? s.color : "#ffffff");
                 btn.innerHTML = `<span class="cd-skill-emoji">⚔️</span><span class="cd-skill-name">${escapeHtml(s.name || 'مهارة')}</span>`;
-                btn.onclick = function(){ ClanDungeon.pickWeaponSkill(s.skill_id); };
+                btn.onclick = function(){ ClanDungeon.pickWeaponSkill(id); };
                 div.appendChild(btn);
             });
             pagesEl.appendChild(div);
@@ -732,12 +733,18 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         const wIcon = document.getElementById("cd-weapon-icon");
         if(wIcon){
             wIcon.style.display = myWeapon ? "" : "none";
+            wIcon.innerHTML = (myWeapon && myWeapon.image)
+                ? `<img src="${escapeHtml(myWeapon.image)}" alt="">`
+                : (myWeapon ? "⚔️" : "");
             wIcon.classList.toggle("active", cdView === "weapon");
         }
         const cIcon = document.getElementById("cd-companion-icon");
         if(cIcon){
-            const hasComp = myState && myState.my_comp_max_hp;
+            const hasComp = !!(myState && myState.my_comp_alive && (myState.my_comp_hp || 0) > 0);
             cIcon.style.display = hasComp ? "" : "none";
+            cIcon.innerHTML = (hasComp && myState.my_comp_image)
+                ? `<img src="${escapeHtml(myState.my_comp_image)}" alt="">`
+                : "🐾";
             cIcon.classList.toggle("active", cdView === "companion");
         }
     }
