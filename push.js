@@ -86,11 +86,38 @@ var pushModule = (function(){
         });
     }
 
-    // يطلب إذن الإشعارات من النظام، وإن مُنح يسجّل الجهاز لدى FCM.
+    // يطلب إذن الإشعارات من النظام فقط لمن لم يُبدِ قرارًا بعد.
+    // من يفعل الإشعارات (granted) أو من جعلها غير مفعلة (denied)
+    // لا يُسأل مجددًا — لا نستدعي requestPermissions الدائم الذي قد
+    // يُظهر النافذة لمن رفض مرة واحدة فقط في الإصدارات القديمة.
     function requestPermission(){
         if(!isNative()) return;
         ensureListeners();
         const PushNotifications = window.Capacitor.Plugins.PushNotifications;
+        pushCheckAndRequest(PushNotifications);
+    }
+
+    function pushCheckAndRequest(PushNotifications){
+        if(typeof PushNotifications.checkPermissions === "function"){
+            PushNotifications.checkPermissions().then(function(perm){
+                if(!perm) return pushRequest(PushNotifications);
+                if(perm.receive === "granted"){
+                    // ممنوح مسبقًا: سجّل الجهاز فقط دون إعادة السؤال
+                    PushNotifications.register();
+                }else if(perm.receive === "prompt"){
+                    // لم يُسأل بعد — الآن فقط نظهر نافذة النظام
+                    pushRequest(PushNotifications);
+                }
+                // denied: تم الإيقاف — لا نسأل مجددًا (يُفعل من إعدادات النظام)
+            }).catch(function(){
+                pushRequest(PushNotifications);
+            });
+        }else{
+            pushRequest(PushNotifications);
+        }
+    }
+
+    function pushRequest(PushNotifications){
         PushNotifications.requestPermissions().then(function(perm){
             if(perm && perm.receive === "granted"){
                 PushNotifications.register();
