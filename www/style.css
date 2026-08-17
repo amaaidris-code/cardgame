@@ -3702,6 +3702,44 @@ border-color: rgba(232,185,63,0.35);
 .weapon-view-icon:hover{
     border-color: var(--gold, #e8b93f);
 }
+.companion-view-icon{
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid color-mix(in srgb, #22c55e 70%, transparent);
+    background: var(--bg-panel-2);
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    z-index: 6;
+    padding: 0;
+    font-size: 20px;
+    box-shadow: 0 0 10px rgba(0,0,0,0.4);
+}
+.companion-view-icon img{
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.companion-view-icon:hover{
+    border-color: #22c55e;
+}
+.companion-view-icon.companion-ready{
+    animation: companionReadyPulse 1.2s ease-in-out infinite;
+}
+.companion-view-icon.companion-dead-icon{
+    opacity: 0.55;
+    filter: grayscale(0.9);
+}
+@keyframes companionReadyPulse{
+    0%, 100%{ box-shadow: 0 0 10px rgba(34,197,94,0.4); transform: scale(1); }
+    50%{ box-shadow: 0 0 22px rgba(34,197,94,0.9); transform: scale(1.08); }
+}
 .weapon-header{
     display: flex;
     align-items: center;
@@ -6098,3 +6136,5 @@ box-shadow: 0 6px 24px rgba(0,0,0,0.5), 0 0 18px rgba(255,120,0,0.4);
     cursor: pointer;
 }
 
+
+.cd-actions-hint{display:flex;align-items:center;justify-content:center;gap:6px;padding:6px 10px;margin:4px 0;font-size:12px;opacity:.6;border:1px dashed rgba(255,255,255,.12);border-radius:var(--radius-md);}

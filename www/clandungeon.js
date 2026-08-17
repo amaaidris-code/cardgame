@@ -544,7 +544,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
             if(error){ myWeapon = null; el.innerHTML = ""; return; }
             myWeapon = (Array.isArray(data) && data.length) ? data[0] : null;
         }catch(e){ myWeapon = null; el.innerHTML = ""; return; }
-        if(!myWeapon){ el.innerHTML = ""; return; }
+        if(!myWeapon){ el.innerHTML = '<div class="cd-actions-hint">⚔️ لا سلاح مجهز في هذه الغارة</div>'; return; }
 
         const broken = (myWeapon.durability_current || 0) <= 0;
         const skills = Array.isArray(myWeapon.skills) ? myWeapon.skills : [];
@@ -578,7 +578,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
             if(error){ myPotions = []; el.innerHTML = ""; return; }
             myPotions = (Array.isArray(data) ? data : []).filter(function(p){ return (p.quantity || 0) > 0; });
         }catch(e){ myPotions = []; el.innerHTML = ""; return; }
-        if(!myPotions.length){ el.innerHTML = ""; return; }
+        if(!myPotions.length){ el.innerHTML = '<div class="cd-actions-hint">🧪 لا تُوجد جرعات لديك</div>'; return; }
         el.innerHTML = `<div class="potion-bar">${myPotions.map(function(p){
             const borderColor = (p.glow_color && /^#[0-9A-Fa-f]{6}$/.test(p.glow_color)) ? p.glow_color : "#22c55e";
             const img = p.image ? `<img src="${escapeHtml(p.image)}" alt="">` : `<span style="font-size:18px;">🧪</span>`;
