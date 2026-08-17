@@ -27,7 +27,7 @@ const ClanDungeon = (function(){
     function getPlayerId(){ return localStorage.getItem("player_id"); }
     function box(){ return document.getElementById("clandungeon-content"); }
     function isOpen(){ const s = document.getElementById("clandungeon-screen"); return s && s.classList.contains("active"); }
-    function isMyCompTurn(){ return myState && myState.my_comp_turn; }
+    function isMyCompTurn(){ return myTurn() && myState && myState.turn_sub === 1; }
 
     // ---------- بدون شخصية نشطة ----------
     // إذا حُذفت شخصية اللاعب يجب أن يختار أو يطلب شخصية جديدة قبل اللعب.
@@ -376,7 +376,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         const members = await getMemberNames();
         const players = (st.players || []).slice().sort(function(a,c){ return String(a.player_id)===String(getPlayerId()) ? -1 : 1; });
         const me = players.find(function(p){ return String(p.player_id)===String(getPlayerId()); });
-        const myTurnNow = !!st.my_turn && st.turn_phase === "player";
+        const myTurnNow = myTurn();
         const myCompTurn = isMyCompTurn();
 
         let myChar = null;
@@ -536,7 +536,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         monsterSkills = rows.filter(function(s){ return s.fighter_kind === "monster"; });
         const pagesEl = document.getElementById("cd-player-skills-pages");
         if(!pagesEl) return;
-        const myTurnNow = !!st && st.my_turn && st.turn_phase === "player";
+        const myTurnNow = myTurn();
 
         if(cdView === "weapon"){
             renderWeaponSkills(pagesEl, myTurnNow);
@@ -699,7 +699,9 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
     }
 
     function myTurn(){
-        return myState && myState.my_turn && myState.turn_phase === "player";
+        const st = myState;
+        if(!st || st.turn_phase !== "player") return false;
+        return !!st.turn_player_id && String(st.turn_player_id) === String(getPlayerId());
     }
 
     function skillEmoji(s){
@@ -741,7 +743,6 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
     }
 
     function cdToggleView(next){
-        if(!myTurn()){ toast("بدّل عرض المهارات فقط في دورك"); return; }
         if(cdView === next){
             cdView = isMyCompTurn() ? "companion" : "player";
         }else{
@@ -756,7 +757,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         const el = document.getElementById("cd-potions");
         if(!el) return;
         const st = myState;
-        const myTurnNow = st && st.my_turn && st.turn_phase === "player";
+        const myTurnNow = myTurn();
         try{
             const { data, error } = await supabaseClient.rpc("get_my_potions", { p_token: getToken() });
             if(error){ myPotions = []; el.innerHTML = ""; return; }
