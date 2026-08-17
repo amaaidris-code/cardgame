@@ -24,6 +24,19 @@ const ClanDungeon = (function(){
     function isOpen(){ const s = document.getElementById("clandungeon-screen"); return s && s.classList.contains("active"); }
     function isMyCompTurn(){ return myState && myState.my_comp_turn; }
 
+    // ---------- بدون شخصية نشطة ----------
+    // إذا حُذفت شخصية اللاعب يجب أن يختار أو يطلب شخصية جديدة قبل اللعب.
+    function isNoActiveCharacterError(m){
+        return typeof m === "string" && m.indexOf("ليس لديك شخصية") !== -1;
+    }
+    function forceChooseCharacter(msg){
+        toast(msg || "لا تملك شخصية نشطة — اختر أو اطلب شخصية جديدة أولاً");
+        if(typeof openScreen === "function" && typeof loadAvailableCharacters === "function"){
+            openScreen("character-choice-screen");
+            loadAvailableCharacters();
+        }
+    }
+
     // ---------- turn timer (متزامن مع turn_deadline من السيرفر) ----------
     // يعرض عدًّا تنازليًا للدور الحالي. عند انتهاء المهلة يطلب من السيرفر
     // تخطّي الدور (clan_dungeon_skip_turn) — الخادم هو من يتحقق فعليًا من
@@ -628,11 +641,16 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
 
     async function startRace(){
         try{
-            await supabaseClient.rpc("clan_dungeon_start_race", { p_token: getToken(), p_run_id: myRun });
+            const pToken = getToken();
+            const { data, error } = await supabaseClient.rpc("clan_dungeon_start_race", { p_token: pToken, p_run_id: myRun });
+            if(error) throw error;
             racePressed = false;
             await refreshState();
             await renderRun();
-        }catch(e){ toast(e.message || e); }
+        }catch(e){
+            if(isNoActiveCharacterError(e.message || e)){ forceChooseCharacter(); return; }
+            toast(e.message || e);
+        }
     }
 
     // ---------- sub-chat (رسائل الغارة) ----------
@@ -692,12 +710,16 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
 
     async function tryJoin(runId){
         try{
-            await supabaseClient.rpc("clan_dungeon_join", { p_token: getToken(), p_run_id: runId });
+            const { data, error } = await supabaseClient.rpc("clan_dungeon_join", { p_token: getToken(), p_run_id: runId });
+            if(error) throw error;
             myRun = runId;
             await refreshState();
             startBattlePolling();
             await renderRun();
-        }catch(e){ toast(e.message || e); }
+        }catch(e){
+            if(isNoActiveCharacterError(e.message || e)){ forceChooseCharacter(); return; }
+            toast(e.message || e);
+        }
     }
 
     async function createRun(){
@@ -718,8 +740,13 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         if(!myRun) return;
         myState = null;
         try{
-            await supabaseClient.rpc("clan_dungeon_join", { p_token: getToken(), p_run_id: myRun });
-        }catch(e){ toast(e.message || e); }
+            const { data, error } = await supabaseClient.rpc("clan_dungeon_join", { p_token: getToken(), p_run_id: myRun });
+            if(error) throw error;
+        }catch(e){
+            if(isNoActiveCharacterError(e.message || e)){ forceChooseCharacter(); return; }
+            toast(e.message || e);
+            return;
+        }
         startBattlePolling();
         await renderRun();
     }
