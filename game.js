@@ -7987,8 +7987,6 @@ function goBack(){
 
         case "battle-screen":
 
-        case "story-screen":
-
         case "pvp-screen":
 
         case "shop-screen":

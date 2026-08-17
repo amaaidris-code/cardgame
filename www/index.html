@@ -414,9 +414,9 @@ lang="ar">
 
         <input id="admin-character-image" type="text" placeholder="رابط صورة الشخصية (أو ارفع من الجهاز)">
 
-        <input id="admin-character-image-file" type="file" accept="image/*" onchange="uploadCharacterImage('admin-character-image-file','admin-character-image','admin-character-image-status',{aspectRatio:1,crop:true})">
+        <input id="admin-character-image-file" type="file" accept="image/*" onchange="uploadCharacterImage('admin-character-image-file','admin-character-image','admin-image-status',{aspectRatio:1,crop:true})">
 
-        <p id="admin-character-image-status" class="upload-status"></p>
+        <p id="admin-image-status" class="upload-status"></p>
 
         <input id="admin-character-hp" type="number" placeholder="نقاط الحياة">
 
@@ -796,11 +796,6 @@ lang="ar">
                 <button onclick="openScreen('battle-menu-screen')">
     ⚔️ المعارك
 </button>
-
-
-                <button onclick="openScreen('story-screen')">
-                    📖 القصة
-                </button>
 
 
                 <button onclick="openScreen('shop-screen')">
@@ -1472,6 +1467,8 @@ class="battle-image">
 
 <button class="weapon-view-icon" id="pvp-weapon-icon" style="display:none;" onclick="pvpToggleWeaponView()" title="تبديل عرض الشخصية/السلاح"></button>
 
+<button class="companion-view-icon" id="pvp-companion-icon" style="display:none;" onclick="pvpSwitchToCompanion()" title="التحكم بالمرافق"></button>
+
 
 <div class="hp-bar">
 
@@ -1705,6 +1702,8 @@ class="battle-image">
 
 <button class="weapon-view-icon" id="pve-weapon-icon" style="display:none;" onclick="pveToggleWeaponView()" title="تبديل عرض الشخصية/السلاح"></button>
 
+<button class="companion-view-icon" id="pve-companion-icon" style="display:none;" onclick="pveToggleCompanionView()" title="تبديل عرض الشخصية/المرافق"></button>
+
 
 <div class="hp-bar">
 
@@ -1789,28 +1788,6 @@ id="pve-player-used-skills">
 
 
 </section>
-
-
-        <!-- ========================= -->
-        <!-- القصة -->
-        <!-- ========================= -->
-
-        <section id="story-screen" class="screen">
-
-            <h2>
-                📖 القصة
-            </h2>
-
-            <div class="empty-card">
-                طور القصة قيد التطوير
-            </div>
-
-            <button onclick="openScreen('home-screen')">
-                ↩ العودة
-            </button>
-
-        </section>
-
 
 
         <!-- ========================= -->
@@ -1922,7 +1899,7 @@ id="pve-player-used-skills">
 
 <script src="game.js?v=20260817a"></script>
 
-<script src="battle.js?v=20260816f"></script>
+<script src="battle.js?v=20260817d"></script>
 
 <script src="pvp.js?v=20260816e"></script>
 
