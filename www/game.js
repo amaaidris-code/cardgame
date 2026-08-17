@@ -547,13 +547,6 @@ function updatePlayerInfo(){
 // (نفس آلية OTP المستخدمة لدخول الأدمن، لكن لأي بريد يدخله المستخدم)
 // ========================================
 
-let pendingRegisterData = null;
-
-const REGISTER_OTP_COOLDOWN_SECONDS = 60;
-let registerOtpCooldownUntil = 0;
-let registerOtpCooldownTimer = null;
-
-
 async function startRegisterOtp(){
 
     let username = document.getElementById("register-username").value.trim();
@@ -571,215 +564,28 @@ async function startRegisterOtp(){
     }
 
     let btn = document.getElementById("register-submit-btn");
-    if(btn){ btn.disabled = true; btn.textContent = "جارٍ الإرسال..."; }
+    if(btn){ btn.disabled = true; btn.textContent = "جارٍ إنشاء الحساب..."; }
 
     const deviceId = await getDeviceId();
     const fingerprint = await getDeviceFingerprint();
 
-    pendingRegisterData = { username, email, password, deviceId, fingerprint };
-
-    let error = await sendRegisterOtp(email);
-
-    if(btn){ btn.disabled = false; btn.textContent = "إنشاء الحساب"; }
-
-    if(error){
-        let waitSeconds = extractRateLimitSeconds(error);
-        alert(waitSeconds
-            ? `انتظر ${waitSeconds} ثانية قبل طلب رمز جديد`
-            : "تعذّر إرسال رمز التحقق، تأكد من صحة البريد وحاول لاحقًا");
-        return;
-    }
-
-    openRegisterOtpModal();
-}
-
-
-async function sendRegisterOtp(email){
-
-    let {error} =
-    await supabaseClient.auth.signInWithOtp({
-        email: email,
-        options: { shouldCreateUser: true }
-    });
-
-    if(!error){
-        registerOtpCooldownUntil = Date.now() + (REGISTER_OTP_COOLDOWN_SECONDS * 1000);
-    }
-
-    return error;
-}
-
-
-function openRegisterOtpModal(){
-
-    closeRegisterOtpModal();
-
-    let modal = document.createElement("div");
-    modal.id = "register-otp-modal";
-    modal.className = "steal-modal";
-
-    modal.innerHTML = `
-        <div class="steal-modal-box">
-            <h3>🔐 تأكيد البريد الإلكتروني</h3>
-            <p class="skill-desc-text">تم إرسال رمز تحقق إلى بريدك. أدخله لإتمام إنشاء الحساب.</p>
-            <input id="register-otp-input" type="text" inputmode="numeric" maxlength="10" placeholder="رمز التحقق" autocomplete="one-time-code">
-            <div class="steal-modal-buttons">
-                <button id="register-otp-confirm-btn">تأكيد</button>
-                <button id="register-otp-resend-btn">إعادة إرسال الرمز</button>
-            </div>
-            <p class="steal-or" style="margin-top:12px;">
-                <button id="register-otp-cancel-btn">إلغاء</button>
-            </p>
-        </div>
-    `;
-
-    document.body.appendChild(modal);
-
-    modal.querySelector("#register-otp-confirm-btn").onclick = confirmRegisterOtp;
-    modal.querySelector("#register-otp-cancel-btn").onclick = cancelRegisterOtp;
-
-    modal.querySelector("#register-otp-resend-btn").onclick = async () => {
-
-        let btn = modal.querySelector("#register-otp-resend-btn");
-        btn.disabled = true;
-        btn.textContent = "جارٍ الإرسال...";
-
-        let error = await sendRegisterOtp(pendingRegisterData.email);
-
-        if(error){
-            btn.disabled = false;
-            btn.textContent = "إعادة إرسال الرمز";
-            let waitSeconds = extractRateLimitSeconds(error);
-            alert(waitSeconds
-                ? `انتظر ${waitSeconds} ثانية قبل طلب رمز جديد`
-                : "تعذّر إرسال الرمز، حاول لاحقًا");
-            return;
-        }
-
-        alert("تم إرسال رمز جديد، استخدم آخر رمز وصلك فقط");
-        startRegisterOtpCooldownCountdown();
-    };
-
-    let input = modal.querySelector("#register-otp-input");
-    if(input) input.focus();
-
-    startRegisterOtpCooldownCountdown();
-}
-
-
-function startRegisterOtpCooldownCountdown(){
-
-    let btn = document.getElementById("register-otp-resend-btn");
-    if(!btn) return;
-
-    if(registerOtpCooldownTimer) clearInterval(registerOtpCooldownTimer);
-
-    let tick = () => {
-
-        btn = document.getElementById("register-otp-resend-btn");
-
-        if(!btn){
-            clearInterval(registerOtpCooldownTimer);
-            return;
-        }
-
-        let remaining = Math.ceil((registerOtpCooldownUntil - Date.now()) / 1000);
-
-        if(remaining > 0){
-            btn.disabled = true;
-            btn.textContent = `إعادة إرسال الرمز (${remaining})`;
-        } else {
-            btn.disabled = false;
-            btn.textContent = "إعادة إرسال الرمز";
-            clearInterval(registerOtpCooldownTimer);
-        }
-    };
-
-    tick();
-    registerOtpCooldownTimer = setInterval(tick, 1000);
-}
-
-
-function closeRegisterOtpModal(){
-
-    if(registerOtpCooldownTimer){
-        clearInterval(registerOtpCooldownTimer);
-        registerOtpCooldownTimer = null;
-    }
-
-    let modal = document.getElementById("register-otp-modal");
-    if(modal) modal.remove();
-}
-
-
-function cancelRegisterOtp(){
-    pendingRegisterData = null;
-    closeRegisterOtpModal();
-}
-
-
-async function confirmRegisterOtp(){
-
-    let input = document.getElementById("register-otp-input");
-    let code = input ? input.value.trim() : "";
-
-    if(!code){
-        alert("اكتب رمز التحقق المرسل إلى بريدك");
-        return;
-    }
-
-    if(!pendingRegisterData){
-        alert("انتهت صلاحية المحاولة، ابدأ التسجيل من جديد");
-        closeRegisterOtpModal();
-        return;
-    }
-
-    let {error} =
-    await supabaseClient.auth.verifyOtp({
-        email: pendingRegisterData.email,
-        token: code,
-        type: "email"
-    });
-
-    if(error){
-        let retry =
-        await supabaseClient.auth.verifyOtp({
-            email: pendingRegisterData.email,
-            token: code,
-            type: "recovery"
-        });
-        error = retry.error;
-    }
-
-    if(error){
-        console.log(error);
-        alert("رمز التحقق غير صحيح أو منتهي الصلاحية");
-        return;
-    }
-
-    // نجح تأكيد البريد: الآن نستدعي register_user وجلسة Supabase Auth
-    // المؤقتة لا تزال فعّالة بنفس البريد — الدالة تتحقق من هذا التطابق
-    let {data:user, error:registerError} =
+    let {data:user, error} =
     await supabaseClient
     .rpc("register_user", {
-        p_username: pendingRegisterData.username,
-        p_password: pendingRegisterData.password,
-        p_device_id: pendingRegisterData.deviceId,
-        p_fingerprint: pendingRegisterData.fingerprint,
-        p_email: pendingRegisterData.email
+        p_username: username,
+        p_password: password,
+        p_device_id: deviceId,
+        p_fingerprint: fingerprint,
+        p_email: email
     })
     .single();
 
-    // جلسة supabase auth كانت مؤقتة فقط لتأكيد البريد، لا حاجة لإبقائها
-    await supabaseClient.auth.signOut();
+    if(btn){ btn.disabled = false; btn.textContent = "إنشاء الحساب"; }
 
-    if(registerError){
-        alert(registerError.message);
+    if(error || !user){
+        alert((error && error.message) || "تعذّر إنشاء الحساب، حاول لاحقًا");
         return;
     }
-
-    pendingRegisterData = null;
-    closeRegisterOtpModal();
 
     alert("تم إنشاء الحساب");
     openScreen("login-screen");
