@@ -226,21 +226,23 @@ const ClanDungeon = (function(){
         const b = box();
         const members = await getMemberNames();
         const players = myState.players || [];
-        const myReady = players.some(function(p){ return String(p.player_id)===String(getPlayerId()) && p.ready; });
-        const aliveCount = players.length;
-        const allReady = aliveCount > 0 && players.every(function(p){ return !!p.ready; });
+const myReady = players.some(function(p){ return String(p.player_id)===String(getPlayerId()) && p.ready; });
+        const present = players.filter(function(p){ return !!p.present; });
+        const aliveCount = present.length;
+        const allReady = aliveCount > 0 && present.every(function(p){ return !!p.ready; });
         const canStart = aliveCount === 1 || (aliveCount >= 2 && allReady);
-        const readyCount = players.filter(function(p){ return !!p.ready; }).length;
+        const readyCount = present.filter(function(p){ return !!p.ready; }).length;
 
         const rows = players.map(function(p){
             const nm = members[p.player_id] || "لاعب";
             const isMe = String(p.player_id)===String(getPlayerId());
+            const presentMark = p.present ? "🟢" : "⚪";
             return `
                 <div class="cd-party-row">
                     <div class="cd-party-avatar">${isMe ? "👤" : "🤝"}</div>
                     <div class="cd-party-meta">
-                        <div class="cd-party-name">${escapeHtml(nm)} ${isMe ? "(أنت)" : ""}</div>
-                        <div class="cd-party-ready">${p.ready ? "✅ جاهز" : "⏳ ينتظر"}</div>
+                        <div class="cd-party-name">${presentMark} ${escapeHtml(nm)} ${isMe ? "(أنت)" : ""}</div>
+                        <div class="cd-party-ready">${p.present ? (p.ready ? "✅ جاهز" : "⏳ ينتظر") : "غير متصل"}</div>
                     </div>
                 </div>`;
         }).join("") || "";
@@ -248,15 +250,15 @@ const ClanDungeon = (function(){
         b.innerHTML = `
             <div id="clandungeon-toast" class="cd-toast hidden"></div>
             <div class="cd-title">قاعة انتظار الزنزانة ⚔️</div>
-            <div class="cd-status-line">${aliveCount}/4 لاعب في الغارة</div>
+            <div class="cd-status-line">${aliveCount}/4 لاعب حاضر في الغارة</div>
             <div class="cd-party-list">${rows || '<div class="chat-empty">لا يوجد لاعبون</div>'}</div>
             <div class="cd-buttons">
                 <button class="cd-btn ${myReady ? 'cd-ready' : 'cd-primary'}" onclick="ClanDungeon.toggleReady()">${myReady ? "✅ جاهز — إلغاء" : "اضغط لتكون جاهزًا"}</button>
                 <button class="cd-btn ${canStart ? 'cd-primary' : ''}" onclick="ClanDungeon.startRace()" ${canStart ? "" : "disabled"}>🚀 ابدأ الغارة (${aliveCount}/4)</button>
-                <button class="cd-btn cd-leave" onclick="ClanDungeon.leaveRun()">🚪 مغادرة</button>
+                <button class="cd-btn cd-leave" onclick="ClanDungeon.leaveRun()">🚪 عودة إلى الغارات</button>
             </div>
             ${aliveCount >= 2 && !allReady
-                ? `<div class="cd-hint">⏳ انتظر حتى يكون الجميع جاهزين لبدء السباق (جاهز ${readyCount}/${aliveCount}).</div>`
+                ? `<div class="cd-hint">⏳ انتظر حتى يجاهز جميع الحاضرين لبدء السباق (جاهز ${readyCount}/${aliveCount}).</div>`
                 : `<div class="cd-hint">💡 أنت وحدك؟ ابدأ مباشرة. أو اضغط جاهزًا حتى يجاهز الجميع ثم ابدأ الغارة.</div>`}
             ${subChatBlock()}
         `;
@@ -738,7 +740,7 @@ const ClanDungeon = (function(){
     function stateKey(st){
         if(!st) return "";
         const parts = [st.status, st.turn_phase, st.turn_player_id || "none", st.monster_index, st.monster_hp, (st.monster_hp>0&&st.turn_phase==="monster")?"M":""];
-        (st.players || []).forEach(function(p){ parts.push(p.player_id, p.hp, p.alive); });
+        (st.players || []).forEach(function(p){ parts.push(p.player_id, p.hp, p.alive, p.present?1:0); });
         return parts.join("|");
     }
 
@@ -761,6 +763,7 @@ const ClanDungeon = (function(){
 
     async function refreshState(){
         if(!myRun) return null;
+        supabaseClient.rpc("clan_dungeon_heartbeat", { p_token: getToken(), p_run_id: myRun }).then(function(){}).catch(function(){});
         const { data, error } = await supabaseClient.rpc("clan_dungeon_get_state", { p_token: getToken(), p_run_id: myRun });
         if(error) throw error;
         myState = Array.isArray(data) ? data[0] : data;
