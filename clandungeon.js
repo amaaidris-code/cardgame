@@ -174,7 +174,7 @@ const ClanDungeon = (function(){
                         <div class="cd-run-name">⚔️ ${escapeHtml(r.dungeon_name)}</div>
                         <div class="cd-run-status">${statusLabel(r.status)} • ${r.member_count}/4 لاعب</div>
                     </div>
-                    <button class="cd-btn" onclick="ClanDungeon.tryJoin('${r.run_id}')">انضمام</button>
+                    <button class="cd-btn" onclick="ClanDungeon.${inMine ? "enterRun" : "tryJoin"}('${r.run_id}')">${inMine ? "دخول" : "انضمام"}</button>
                 </div>`;
             }).join("") : '<div class="chat-empty">لا توجد غارات مفتوحة حاليًا.</div>';
 
@@ -636,11 +636,19 @@ const ClanDungeon = (function(){
         try{
             const { data, error } = await supabaseClient.rpc("clan_dungeon_create", { p_token: getToken(), p_clan_id: curClanId, p_dungeon_id: sel.value });
             if(error) throw error;
+            // الغارة تُضاف للقائمة المفتوحة، ويبقى اللاعب في القائمة حتى يضغط
+            // الغارة ليدخل قاعة الانتظار (هو وأصدقاؤه).
             myRun = data[0].run_id;
-            await refreshState();
-            startBattlePolling();
-            await renderRun();
+            myState = null;
+            await renderLobby();
         }catch(e){ toast(e.message || e); }
+    }
+
+    async function enterRun(){
+        if(!myRun) return;
+        myState = null;
+        startBattlePolling();
+        await renderRun();
     }
 
     async function leaveRun(){
@@ -702,6 +710,7 @@ const ClanDungeon = (function(){
         open,
         stopPolling,
         tryJoin,
+        enterRun,
         createRun,
         toggleReady,
         startRace,
