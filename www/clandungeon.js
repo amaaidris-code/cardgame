@@ -239,6 +239,7 @@ const ClanDungeon = (function(){
                 const { data, error } = await supabaseClient.rpc("clan_dungeon_get_state", { p_token: getToken(), p_run_id: myRun });
                 if(error){ b.innerHTML = '<div class="chat-empty">⚠️ ' + escapeHtml(error.message) + '</div>'; return; }
                 myState = Array.isArray(data) ? data[0] : data;
+                updateIcons();
             }catch(e){ b.innerHTML = '<div class="chat-empty">⚠️ ' + escapeHtml(e.message||e) + '</div>'; return; }
         }
         const st = myState;
@@ -554,7 +555,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         selectedSkill = null;
         renderTargets();
 
-        const locked = (cdView === "companion") ? !compTurn : !myTurnNow;
+        const locked = !myTurnNow;
         const pages = chunkSkills(skills, 4);
         let currentIndex = Number(pagesEl.dataset.activePage || 0);
         currentIndex = Math.max(0, Math.min(currentIndex, pages.length - 1));
