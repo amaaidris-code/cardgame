@@ -82,11 +82,11 @@ async function forfeitActiveBattleOnUnload(){
 }
 
 if(typeof window !== "undefined"){
+    // يُشغّل الانسحاب عند مغادرة الصفحة فعليًا فقط (إغلاق/إعادة تحميل)،
+    // وليس عند إخفاء التبويب/الخلفية (visibilitychange) لأن ذلك كان يُسقط
+    // اللاعب في زنزانة العصابة لمجرد التبديل بين التبويبات.
     window.addEventListener("pagehide", function(){
         forfeitActiveBattleOnUnload();
-    });
-    document.addEventListener("visibilitychange", function(){
-        if(document.hidden) forfeitActiveBattleOnUnload();
     });
 }
 

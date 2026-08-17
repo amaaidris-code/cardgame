@@ -405,7 +405,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         b.innerHTML = `
             <div id="clandungeon-toast" class="cd-toast hidden"></div>
             <div class="cd-battle">
-                <div class="cd-leave-bar"><button class="cd-btn cd-leave" onclick="ClanDungeon.leaveRun()">🚪 عودة إلى الغارات</button></div>
+                <div class="cd-leave-bar"><button class="cd-btn cd-leave" onclick="ClanDungeon.leaveRun()" title="إن كنت وحيدًا تُحذف الغارة نهائيًا">🚪 خروج / حذف الغارة</button></div>
                 <div class="cd-turn-indicator ${myTurnNow?'cd-turn-mine':''}">${turnLabel}</div>
                 <div id="cd-turn-timer" class="cd-turn-timer"></div>
                 <div class="cd-monster-card ${st.turn_phase==="monster"?'cd-monster-turn':''}">
