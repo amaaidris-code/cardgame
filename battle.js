@@ -1859,6 +1859,26 @@ function updateBattleScreen(){
     if(playerImage) playerImage.classList.toggle("frozen-status", !!(cardFighter.frozenTurns > 0));
     if(enemyImage) enemyImage.classList.toggle("frozen-status", !!(battle.enemy.frozenTurns > 0));
 
+    // البطاقة المستقلة للمرافق: تُعرض فقط خارج وضع "المرافق" (حيث يُعرض
+    // المرافق في خانة اللاعب) لتجنّب تكرار العرض
+    let compCard = document.getElementById(prefix + "-companion-card");
+    if(compCard) compCard.style.display = (hasCompanion && !cardShowsCompanion) ? "" : "none";
+    if(hasCompanion){
+        let compHp = document.getElementById(prefix + "-companion-hp");
+        let compBar = document.getElementById(prefix + "-companion-hp-bar");
+        let compName = document.getElementById(prefix + "-companion-name");
+        let compImage = document.getElementById(prefix + "-companion-image");
+        if(compHp) compHp.innerHTML = `${comp.hp} / ${comp.maxHp}`;
+        if(compBar){
+            compBar.style.width = (comp.maxHp > 0 ? comp.hp / comp.maxHp * 100 : 0) + "%";
+            updateHpBarColor(compBar, comp.hp, comp.maxHp);
+        }
+        if(compName) compName.textContent = comp.name;
+        setFighterImage(compImage, comp.image);
+        if(compImage) compImage.classList.toggle("frozen-status", !!(comp.frozenTurns > 0));
+        compCard.classList.toggle("companion-dead", comp.hp <= 0);
+    }
+
     renderPveCompanionIcon();
 
     applyGlowColors();
@@ -1884,6 +1904,8 @@ function renderStatusBadges(prefix){
     } else {
         renderFighterStatusBadge(prefix + "-player", battle.player);
     }
+
+    renderFighterStatusBadge("pve-companion", battle.companion);
 
 }
 
@@ -3320,6 +3342,8 @@ function companionTurnPlay(){
 
     if(battle.finished) return;
 
+    renderCompanionSkillButtons();
+
     // كل دور جديد للمرافق يبدأ بعرض الشخصية؛ تَبْديل بطاقة المرافق فقط
     // عند ضغط أيقونته
     battle.companionView = false;
@@ -3333,6 +3357,103 @@ function companionTurnPlay(){
     );
 
     startTurnTimer();
+
+}
+
+// يرسم أزرار مهارات المرافق في بطاقته (منفصل عن شريط مهارات اللاعب)
+function renderCompanionSkillButtons(){
+
+    let pagesEl = document.getElementById("pve-companion-skills-pages");
+
+    if(!pagesEl) return;
+
+    let comp = battle.companion;
+
+    let skills = Array.isArray(comp && comp.skills) ? comp.skills : [];
+
+    let pagesOfSkills = chunkSkills(skills, SKILLS_PER_PAGE);
+
+    let currentIndex = Number(pagesEl.dataset.activePage || 0);
+
+    currentIndex = Math.max(0, Math.min(currentIndex, pagesOfSkills.length - 1));
+
+    pagesEl.innerHTML = "";
+
+    pagesOfSkills.forEach((skillsChunk, i) => {
+
+        let pageDiv = document.createElement("div");
+
+        pageDiv.className = "skills-page" + (i === currentIndex ? " active" : "");
+
+        skillsChunk.forEach(skill => {
+
+            let btn = buildCompanionSkillButton(skill);
+
+            pageDiv.appendChild(btn);
+
+        });
+
+        pagesEl.appendChild(pageDiv);
+
+    });
+
+    pagesEl.dataset.activePage = String(currentIndex);
+
+    let container = pagesEl.closest(".skills-container");
+
+    let dotsEl = container ? container.querySelector(".skill-dots") : null;
+
+    if(dotsEl){
+
+        if(pagesOfSkills.length <= 1){
+
+            dotsEl.style.display = "none";
+
+        } else {
+
+            dotsEl.style.display = "";
+
+            dotsEl.innerHTML = "";
+
+            pagesOfSkills.forEach((_, i) => {
+
+                let dot = document.createElement("span");
+
+                if(i === currentIndex) dot.classList.add("active");
+
+                dot.onclick = () => companionGoToSkillPage(i);
+
+                dotsEl.appendChild(dot);
+
+            });
+
+        }
+
+    }
+
+}
+
+function companionGoToSkillPage(index){
+
+    let pagesEl = document.getElementById("pve-companion-skills-pages");
+
+    if(!pagesEl) return;
+
+    let pages = pagesEl.querySelectorAll(".skills-page");
+
+    if(pages.length === 0) return;
+
+    index = Math.max(0, Math.min(index, pages.length - 1));
+
+    pagesEl.dataset.activePage = String(index);
+
+    pages.forEach((p, i) => p.classList.toggle("active", i === index));
+
+    let container = pagesEl.closest(".skills-container");
+
+    let dots = container ? container.querySelectorAll(".skill-dots span") : [];
+
+    dots.forEach((d, i) => d.classList.toggle("active", i === index));
 
 }
 
