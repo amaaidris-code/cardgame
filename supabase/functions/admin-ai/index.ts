@@ -2,7 +2,16 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const GEMINI_MODEL = Deno.env.get("GEMINI_MODEL") || "gemini-1.5-flash";
+
+// قائمة نماذج متاحة حاليًا في Gemini. نجرّب النموذج المضبوط في الإعدادات أولًا
+// (GEMINI_MODEL)، ثم نتنقل تلقائيًا إلى أحدث نماذج متاحة إن كان المضبوط قديمًا
+// أو محذوفًا من خوادم Google (مثل gemini-1.5-flash).
+const GEMINI_MODELS = [
+  Deno.env.get("GEMINI_MODEL"),
+  "gemini-3.6-flash",
+  "gemini-2.5-flash",
+  "gemini-2.0-flash"
+].filter((m): m is string => !!m && m.trim() !== "");
 
 const SCHEMAS = {
   character: '{"name":"string","anime":"string","hp":"number 40..1000","atk":"number 40..1000","quote":"string","power_name":"string","power_description":"string","gold_prize":"number 0..5000"}',
@@ -35,7 +44,6 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
 }
 
 async function callGemini(apiKey: string, prompt: string, entityType: string, isEdit: boolean, existing: any): Promise<string> {
-  const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + apiKey;
   let fullPrompt = prompt;
   if (isEdit && existing) {
     fullPrompt = "CURRENT DATA of the existing " + entityType + ":\n" +
@@ -45,18 +53,39 @@ async function callGemini(apiKey: string, prompt: string, entityType: string, is
     contents: [{ role: "user", parts: [{ text: systemPrompt(entityType, isEdit) + "\n\n" + fullPrompt }] }],
     generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
   };
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error("Gemini " + res.status + ": " + text);
+
+  let lastErr = "";
+  const attempts: string[] = [];
+  for (const model of GEMINI_MODELS) {
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + apiKey;
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        attempts.push(model + " -> HTTP " + res.status + ": " + text.slice(0, 300));
+        lastErr = "Gemini " + res.status + " (" + model + "): " + text;
+        // نموذج غير موجود أو تم إيقافه → جرّب النموذج التالي
+        if (res.status === 404 || res.status === 429 || /not found|deprecated|disabled/i.test(text)) continue;
+        break;
+      }
+      const json = await res.json();
+      const out = (json && json.candidates && json.candidates[0] && json.candidates[0].content &&
+        json.candidates[0].content.parts && json.candidates[0].content.parts[0] && json.candidates[0].content.parts[0].text) || "";
+      if (out) return out;
+      attempts.push(model + " -> empty response");
+      lastErr = "Gemini returned empty response";
+      continue;
+    } catch (err) {
+      attempts.push(model + " -> " + ((err && err.message) ? err.message : String(err)).slice(0, 300));
+      lastErr = (err && err.message) ? err.message : String(err);
+      continue;
+    }
   }
-  const json = await res.json();
-  return (json && json.candidates && json.candidates[0] && json.candidates[0].content &&
-    json.candidates[0].content.parts && json.candidates[0].content.parts[0] && json.candidates[0].content.parts[0].text) || "";
+  throw new Error((lastErr || "كل نماذج Gemini غير متاحة حاليًا") + " || Attempts: " + JSON.stringify(attempts));
 }
 
 function extractJson(text: string): any {
