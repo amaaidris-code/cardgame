@@ -1,2 +1,8 @@
 /version.json
   Cache-Control: no-store, max-age=0
+
+/*.js
+  Cache-Control: no-store, max-age=0
+
+/*.css
+  Cache-Control: no-store, max-age=0
