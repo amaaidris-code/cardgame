@@ -5991,7 +5991,7 @@ async function addCharacter(){
 
     let admin_token = localStorage.getItem("admin_token");
 
-    let {error}=
+    let {data, error}=
 
     await supabaseClient
     .rpc("admin_add_character", {
@@ -6061,6 +6061,17 @@ async function addCharacter(){
 
 
     refreshAdminViews();
+
+
+    // إن كانت البيانات من المساعد الآلي تتضمن مهارات، أنشئها واربطها بهذه
+    // الشخصية فورًا ثم افتح نافذة التعديل (بعد تحديث الكاش) لمراجعة المهارات.
+    let newCharId = (data && Array.isArray(data) ? data[0] : data) || null;
+    if(newCharId && Array.isArray(pendingAISkills) && pendingAISkills.length){
+        await createAISkillsForCharacter(newCharId, pendingAISkills);
+        pendingAISkills = null;
+        await loadAdminPanel();
+        await openEditCharacterModal(newCharId);
+    }
 
 
 }
@@ -8184,6 +8195,7 @@ function uploadAIImage(){
 
 let lastAIFields = null;
 let lastAIType = null;
+let pendingAISkills = null; // مهارات المساعد المحفوظة للربط بشخصية تُضاف من النموذج مباشرة
 
 async function generateWithAI(){
     const type = (document.getElementById("admin-ai-type") || {}).value || "character";
@@ -8312,16 +8324,87 @@ function applyLastAI(type){
         set("admin-character-quote", f.quote);
         set("admin-character-gold-prize", f.gold_prize);
         setBool("admin-character-is-monster", type === "monster");
+        pendingAISkills = (Array.isArray(f.skills) && f.skills.length) ? f.skills : null;
+        const hasSkills = pendingAISkills !== null;
         alert(type === "monster"
-            ? "تم نسخ بيانات الوحش إلى نموذج الإضافة في تبويب الشخصيات (خانة \"وحش PvE\" مفعّلة). اضغط إضافة."
-            : "تم نسخ بيانات الشخصية إلى نموذج الإضافة.");
+            ? "تم نسخ بيانات الوحش إلى نموذج الإضافة في تبويب الشخصيات (خانة \"وحش PvE\" مفعّلة)." + (hasSkills ? " بعد إضافته ستُرفَق مهاراته تلقائيًا وتفتح نافذة التعديل لمراجعتها." : "")
+            : "تم نسخ بيانات الشخصية إلى نموذج الإضافة." + (hasSkills ? " بعد إضافتها ستُرفَق مهاراتها تلقائيًا وتفتح نافذة التعديل لمراجعتها." : ""));
         showAdminTab("admin-tab-characters");
     }
 }
 
+// ينشئ المهارات التي اقترحها المساعد الآلي ويربطها بشخصية/وحش جديد
+// (نفس تدفق addSkillToCharacter لكن بالبيانات الواردة من الذكاء الاصطناعي).
+async function createAISkillsForCharacter(characterId, skills){
+    const admin_token = localStorage.getItem("admin_token");
+    for(const sk of skills){
+        const typeChoice = aiSkillTypeChoice(sk);
+        const damageRaw = Math.max(0, Number(sk.damage) || 0);
+        let damage = damageRaw;
+        let params = {};
+        try{
+            if(sk.params && typeof sk.params === "object") params = Object.assign({}, sk.params);
+        }catch(e){}
+
+        if(typeChoice === "control"){
+            params.control_count = damageRaw;
+            damage = 0;
+        }
+        if(typeChoice === "poison" && params.poison_turns == null){
+            params.poison_turns = 2;
+        }
+
+        const {type, effect, unblockable} = skillTypeChoiceToFields(typeChoice);
+
+        const { error } = await supabaseClient.rpc("admin_add_skill", {
+            p_admin_token: admin_token,
+            p_character_id: characterId,
+            p_name: String(sk.name || "مهارة").slice(0, 60),
+            p_type: type,
+            p_damage: damage,
+            p_cooldown: Math.max(0, Number(sk.cooldown) || 0),
+            p_effect: effect,
+            p_unblockable: unblockable,
+            p_description: String(sk.description || "").slice(0, 300),
+            p_color: (sk.color && /^#[0-9A-Fa-f]{6}$/.test(sk.color)) ? sk.color : null,
+            p_params: params,
+            p_stroke_color: (sk.stroke_color && /^#[0-9A-Fa-f]{6}$/.test(sk.stroke_color)) ? sk.stroke_color : null,
+            p_stroke_width: Math.max(0, Number(sk.stroke_width) || 0)
+        });
+        if(error) return error; // نوقف ونترك الباقي للتعديل اليدوي
+    }
+    return null;
+}
+
+// يختار نوع المهارة الصحيح: نفضّل "effect" إن ذُكر (مثل steal/copy/control)
+// لأن AI قد يعتمد عليه، وإلا نستخدم "type" ثم نطابقها مع خيارات لوحة الإدارة.
+function aiSkillTypeChoice(sk){
+    const e = String(sk.effect || "").trim();
+    const effectAliases = {
+        "steal": "steal", "copy": "copy", "control": "control",
+        "reflect": "reflect", "shield": "defense", "heal": "hp_boost",
+        "poison": "poison", "atk_boost": "atk_boost", "freeze": "freeze",
+        "lifesteal": "lifesteal", "seal": "seal", "unseal": "unseal"
+    };
+    if(e && effectAliases[e] !== undefined) return effectAliases[e];
+    const t = String(sk.type || "attack").trim().toLowerCase();
+    const typeAliases = {
+        "attack": "attack", "defense": "defense", "special": "special",
+        "steal": "steal", "copy": "copy", "control": "control",
+        "unblockable": "unblockable", "freeze": "freeze",
+        "lifesteal": "lifesteal", "reflect": "reflect",
+        "seal": "seal", "unseal": "unseal", "poison": "poison",
+        "shadow": "shadow", "hp_boost": "hp_boost", "atk_boost": "atk_boost",
+        "delay_cooldown": "delay_cooldown"
+    };
+    return typeAliases[t] || "attack";
+}
+
+
 function clearAIResult(){
     lastAIFields = null;
     lastAIType = null;
+    pendingAISkills = null;
     const result = document.getElementById("admin-ai-result");
     if(result) result.innerHTML = "";
     const img = document.getElementById("admin-ai-image");
