@@ -12,8 +12,19 @@ const SCHEMAS = {
   potion: '{"name":"string","description":"string","effect_type":"heal|heal_percent|reset_cooldown|atk_boost|shield|skill","effect_value":"number 0..10000","price":"number 0..5000"}'
 };
 
-function systemPrompt(entityType: string): string {
+function systemPrompt(entityType: string, isEdit: boolean): string {
   const schema = SCHEMAS[entityType] || SCHEMAS.character;
+  if (isEdit) {
+    return (
+      "You are the assistant for a mobile card-battle game. The admin gives you the CURRENT data of an " +
+      "existing " + entityType + " (below) and a request about how to adjust it (name, stats, skills) in " +
+      "Arabic or English. Reply with ONLY valid JSON matching the requested type. Do NOT wrap in markdown. " +
+      "Do NOT invent fields outside the schema. Keep every field from the CURRENT data that the request " +
+      "does not change — only change the fields implied by the request. If a field is missing from current " +
+      "data, keep the same key name with a sensible value. Text fields may be in the same language as the request.\n\n" +
+      "Requested type: " + entityType + "\nSchema (use these keys):\n" + schema
+    );
+  }
   return (
     "You are the assistant for a mobile card-battle game. The admin gives you a short " +
     "description (name, stats, skills) in Arabic or English. You must reply with ONLY valid JSON " +
@@ -23,10 +34,15 @@ function systemPrompt(entityType: string): string {
   );
 }
 
-async function callGemini(apiKey: string, prompt: string, entityType: string): Promise<string> {
+async function callGemini(apiKey: string, prompt: string, entityType: string, isEdit: boolean, existing: any): Promise<string> {
   const url = "https://generativelanguage.googleapis.com/v1beta/models/" + GEMINI_MODEL + ":generateContent?key=" + apiKey;
+  let fullPrompt = prompt;
+  if (isEdit && existing) {
+    fullPrompt = "CURRENT DATA of the existing " + entityType + ":\n" +
+      JSON.stringify(existing) + "\n\nRequest:\n" + prompt;
+  }
   const body = {
-    contents: [{ role: "user", parts: [{ text: systemPrompt(entityType) + "\n\nRequest:\n" + prompt }] }],
+    contents: [{ role: "user", parts: [{ text: systemPrompt(entityType, isEdit) + "\n\n" + fullPrompt }] }],
     generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
   };
   const res = await fetch(url, {
@@ -57,7 +73,7 @@ Deno.serve(async (req) => {
   try {
     if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
     const body = await req.json();
-    const { admin_token, entity_type, prompt, image_url } = body || {};
+    const { admin_token, entity_type, prompt, image_url, existing, entity_id } = body || {};
 
     if (!admin_token || !prompt || !entity_type) {
       return new Response(JSON.stringify({ ok: false, error: "bad request" }), { status: 400 });
@@ -75,10 +91,11 @@ Deno.serve(async (req) => {
     }
 
     const fullPrompt = image_url ? "Image: " + image_url + "\n\nDescription:\n" + prompt : prompt;
-    const raw = await callGemini(apiKey, fullPrompt, entity_type);
+    const isEdit = !!(existing && (typeof existing === "object"));
+    const raw = await callGemini(apiKey, fullPrompt, entity_type, isEdit, isEdit ? existing : null);
     const fields = extractJson(raw);
 
-    return new Response(JSON.stringify({ ok: true, entity_type, fields, image_url: image_url || null }), {
+    return new Response(JSON.stringify({ ok: true, entity_type, fields, image_url: image_url || null, isEdit, entity_id: entity_id || null }), {
       status: 200,
       headers: { "Content-Type": "application/json" }
     });

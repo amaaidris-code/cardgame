@@ -18,7 +18,7 @@
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
 
-    <link rel="stylesheet" href="style.css?v=20260819a">
+    <link rel="stylesheet" href="style.css?v=20260819b">
 </head>
 
 <body>
@@ -426,12 +426,18 @@ lang="ar">
     <div class="form-box admin-add-form">
 
         <label>نوع الكيان
-            <select id="admin-ai-type">
+            <select id="admin-ai-type" onchange="loadAITargetOptions()">
                 <option value="character">🎭 شخصية</option>
                 <option value="monster">👹 وحش (PvE)</option>
                 <option value="weapon">⚔️ سلاح</option>
                 <option value="companion">👥 مرافق</option>
                 <option value="potion">🧪 جرعة</option>
+            </select>
+        </label>
+
+        <label>تعديل كيان موجود (اختياري) — يُستخدم لتعديل كيان حالي بدل إنشاء جديد
+            <select id="admin-ai-target" onchange="onAITargetChange()">
+                <option value="">— وضع: إنشاء جديد —</option>
             </select>
         </label>
 
@@ -453,6 +459,7 @@ lang="ar">
 
     <p class="admin-hint">
         سيولّد المساعد محتوى مقترحًا هنا. بعد مراجعته، اضغط «نسخ للوحة الإضافة» لملء نموذج الإضافة الحالي للكيان، ثم احفظه كالمعتاد.
+        عند اختيار «تعديل كيان موجود» يُعدِّل الكيان مباشرة عبر زر «تطبيق التعديل».
     </p>
 
 </div>
@@ -2031,7 +2038,7 @@ id="pve-companion-used-skills">
 
 <script src="clandungeon.js?v=20260818b"></script>
 
-<script src="game.js?v=20260819a"></script>
+<script src="game.js?v=20260819b"></script>
 
 <script src="battle.js?v=20260817c"></script>
 

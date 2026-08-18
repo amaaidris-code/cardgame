@@ -8208,7 +8208,72 @@ function uploadAIImage(){
 
 let lastAIFields = null;
 let lastAIType = null;
+let lastAIEntityId = null; // id الكيان الحالي عند تعديل كيان موجود
+let lastAIExisting = null; // بيانات الكيان الحالي (لكي يعدّلها المساعد ويطبّقها)
 let pendingAISkills = null; // مهارات المساعد المحفوظة للربط بشخصية تُضاف من النموذج مباشرة
+
+async function loadAITargetOptions(){
+    const type = (document.getElementById("admin-ai-type") || {}).value || "character";
+    const target = document.getElementById("admin-ai-target");
+    if(!target) return;
+    target.innerHTML = '<option value="">— وضع: إنشاء جديد —</option>';
+    lastAIEntityId = null;
+    lastAIExisting = null;
+    const admin_token = localStorage.getItem("admin_token");
+    if(!admin_token) return;
+    try{
+        let list = [];
+        if(type === "character" || type === "monster"){
+            const { data } = await supabaseClient.from("characters").select("id, name, is_monster").order("name");
+            if(data) list = (type === "monster")
+                ? data.filter(c => c.is_monster)
+                : data.filter(c => !c.is_monster);
+        }else{
+            const rpcName = type === "weapon" ? "admin_list_weapons"
+                : type === "potion" ? "admin_list_potions"
+                : type === "companion" ? "admin_list_companions" : null;
+            if(rpcName){
+                const { data, error } = await supabaseClient.rpc(rpcName, { p_admin_token: admin_token });
+                if(error) throw error;
+                list = Array.isArray(data) ? data : [];
+            }
+        }
+        if(list.length){
+            target.innerHTML = '<option value="">— وضع: إنشاء جديد —</option>' + list.map(t =>
+                `<option value="${escapeAttr(t.id)}">${escapeHtml(t.name || "بلا اسم")}</option>`).join("");
+        }
+    }catch(e){
+        console.error(e);
+    }
+}
+
+async function onAITargetChange(){
+    const sel = document.getElementById("admin-ai-target");
+    const id = sel ? sel.value : "";
+    lastAIEntityId = id || null;
+    lastAIExisting = null;
+    if(!id) return;
+    const type = (document.getElementById("admin-ai-type") || {}).value || "character";
+    const admin_token = localStorage.getItem("admin_token");
+    try{
+        if(type === "character" || type === "monster"){
+            const { data } = await supabaseClient.from("characters").select("*").eq("id", id).single();
+            if(data) lastAIExisting = data;
+        }else{
+            const rpcName = type === "weapon" ? "admin_get_weapon"
+                : type === "potion" ? "admin_get_potion"
+                : type === "companion" ? "admin_get_companion" : null;
+            if(rpcName){
+                const key = type === "weapon" ? "p_weapon_id" : type === "potion" ? "p_potion_id" : "p_companion_id";
+                const { data, error } = await supabaseClient.rpc(rpcName, { p_admin_token: admin_token, [key]: id });
+                if(error) throw error;
+                lastAIExisting = (Array.isArray(data) && data.length) ? data[0] : data;
+            }
+        }
+    }catch(e){
+        console.error(e);
+    }
+}
 
 async function generateWithAI(){
     const type = (document.getElementById("admin-ai-type") || {}).value || "character";
@@ -8228,10 +8293,21 @@ async function generateWithAI(){
     if(result) result.innerHTML = "";
 
     try{
+        const body = {
+            admin_token: adminToken,
+            entity_type: type,
+            prompt,
+            image_url: imageUrl
+        };
+        if(lastAIEntityId && lastAIExisting){
+            body.existing = lastAIExisting;
+            body.entity_id = lastAIEntityId;
+            if(imageUrl){ body.existing.image = imageUrl; }
+        }
         const res = await fetch(SUPABASE_URL + "/functions/v1/admin-ai", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ admin_token: adminToken, entity_type: type, prompt, image_url: imageUrl })
+            body: JSON.stringify(body)
         });
         const json = await res.json();
         if(!res.ok || !json.ok){
@@ -8250,6 +8326,7 @@ async function generateWithAI(){
 function renderAIResult(json){
     lastAIFields = json.fields || {};
     lastAIType = json.entity_type || "character";
+    lastAIEntityId = json.isEdit && json.entity_id ? json.entity_id : lastAIEntityId;
     const result = document.getElementById("admin-ai-result");
     if(!result) return;
     const type = lastAIType;
@@ -8279,9 +8356,169 @@ function renderAIResult(json){
             ${f.description ? `<p><strong>الوصف:</strong> ${escapeHtml(f.description)}</p>` : ""}
             ${f.skills ? `<p><strong>المهارات:</strong></p><ul>${skillRows}</ul>` : ""}
             <div style="margin-top:10px;">
-                <button class="admin-btn" onclick="applyAIToForm('${type}')">📋 نسخ للوحة الإضافة</button>
+                ${json.isEdit && json.entity_id
+                    ? `<button class="admin-btn" onclick="applyAIEdit()">💾 تطبيق التعديل مباشرة</button>`
+                    : `<button class="admin-btn" onclick="applyAIToForm('${type}')">📋 نسخ للوحة الإضافة</button>`}
             </div>
         </div>`;
+}
+
+// يطبّق اقتراح المساعد مباشرة على الكيان الحالي، ويحفظ كل الحقول التي
+// يستحق تعديلها مع إبقاء الحقول غير المذكورة كما هي
+async function applyAIEdit(){
+    const type = lastAIType;
+    const id = lastAIEntityId;
+    const f = lastAIFields || {};
+    const existing = lastAIExisting || {};
+    if(!id){ alert("لم يُحدَّد كيان للتعديل."); return; }
+    const admin_token = localStorage.getItem("admin_token");
+    if(!admin_token){ alert("يجب تسجيل الدخول كأدمن أولاً."); return; }
+    const num = (v, d) => { const n = Number(v); return isFinite(n) && v != null && v !== "" ? n : d; };
+
+    try{
+        if(type === "character" || type === "monster"){
+            await supabaseClient.rpc("admin_save_character", {
+                p_admin_token: admin_token,
+                p_character_id: id,
+                p_name: f.name ?? existing.name ?? "",
+                p_anime: f.anime ?? existing.anime ?? "",
+                p_image: f.image ?? existing.identity_image ?? existing.image ?? "",
+                p_hp: num(f.hp, existing.hp ?? 100),
+                p_atk: num(f.atk, existing.atk ?? 100),
+                p_level: num(f.level, existing.level ?? 1),
+                p_power_name: f.power_name ?? existing.power_name ?? "",
+                p_power_description: f.power_description ?? existing.power_description ?? "",
+                p_quote: f.quote ?? existing.quote ?? "",
+                p_is_monster: type === "monster",
+                p_gold_prize: num(f.gold_prize, existing.gold_prize ?? 0),
+                p_admin_only: !!existing.admin_only,
+                p_glow_color: existing.glow_color || "#3b82ff",
+                p_glow_locked: !!existing.glow_locked
+            });
+            await refreshAdminViews();
+        }else if(type === "weapon"){
+            await supabaseClient.rpc("admin_save_weapon", {
+                p_admin_token: admin_token, p_weapon_id: id,
+                p_name: f.name ?? existing.name ?? "",
+                p_description: f.description ?? existing.description ?? "",
+                p_image: f.image ?? existing.image ?? "",
+                p_skill_card_image: existing.skill_card_image ?? "",
+                p_price: num(f.price, existing.price ?? 0),
+                p_max_durability: num(f.max_durability, existing.max_durability ?? 0),
+                p_stock: num(f.stock, existing.stock ?? 0),
+                p_infinite: !!existing.infinite,
+                p_glow_color: existing.glow_color || "#e8b93f"
+            });
+            await replaceWeaponSkillsFromAI(id);
+            await loadAdminWeapons();
+        }else if(type === "potion"){
+            const et = (f.effect_type && ["heal","heal_percent","reset_cooldown","atk_boost","shield","skill"].indexOf(f.effect_type) !== -1)
+                ? f.effect_type : (existing.effect_type || "heal");
+            await supabaseClient.rpc("admin_save_potion", {
+                p_admin_token: admin_token, p_potion_id: id,
+                p_name: f.name ?? existing.name ?? "",
+                p_description: f.description ?? existing.description ?? "",
+                p_image: f.image ?? existing.image ?? "",
+                p_effect_type: et,
+                p_effect_value: num(f.effect_value, existing.effect_value ?? 0),
+                p_effect_skill_id: null,
+                p_effect_skill_type: et === "skill" ? (f.effect_skill_type ?? existing.effect_skill_type ?? "attack") : (existing.effect_skill_type || null),
+                p_price: num(f.price, existing.price ?? 0),
+                p_stock: num(f.stock, existing.stock ?? 0),
+                p_infinite: !!existing.infinite,
+                p_glow_color: existing.glow_color || "#22c55e"
+            });
+            await loadAdminPotions();
+        }else if(type === "companion"){
+            await supabaseClient.rpc("admin_save_companion", {
+                p_admin_token: admin_token, p_companion_id: id,
+                p_name: f.name ?? existing.name ?? "",
+                p_description: f.description ?? existing.description ?? "",
+                p_image: f.image ?? existing.image ?? "",
+                p_skill_card_image: existing.skill_card_image ?? null,
+                p_price: num(f.price, existing.price ?? 0),
+                p_base_hp: num(f.base_hp, existing.base_hp ?? 100),
+                p_base_atk: num(f.base_atk, existing.base_atk ?? 100),
+                p_stock: num(f.stock, existing.stock ?? 0),
+                p_infinite: !!existing.infinite,
+                p_glow_color: existing.glow_color || "#22c55e"
+            });
+            await replaceCompanionSkillsFromAI(id);
+            await loadAdminCompanions();
+        }else{
+            alert("نوع غير مدعوم للتعديل.");
+            return;
+        }
+        alert("تم تطبيق تعديل المساعد الذكي بنجاح.");
+        const targetSel = document.getElementById("admin-ai-target");
+        if(targetSel) targetSel.value = "";
+        clearAIResult();
+    }catch(e){
+        alert("فشل تطبيق التعديل: " + (e && e.message ? e.message : "خطأ غير معروف"));
+        console.error(e);
+    }
+}
+
+// يستبدل مهارات السلاح بقائمة مهارات المساعد (يُستدعى فقط عند تعديل كيان موجود)
+async function replaceWeaponSkillsFromAI(weaponId){
+    const f = lastAIFields || {};
+    const skills = Array.isArray(f.skills) ? f.skills : [];
+    const admin_token = localStorage.getItem("admin_token");
+    if(!skills.length) return;
+    // إزالة المهارات الحالية ثم إضافة المهارات الجديدة
+    const { data: cur } = await supabaseClient.rpc("admin_get_weapon", { p_admin_token: admin_token, p_weapon_id: weaponId });
+    const curWeapon = (Array.isArray(cur) && cur.length) ? cur[0] : cur;
+    const curSkills = (curWeapon && Array.isArray(curWeapon.skills)) ? curWeapon.skills : [];
+    for(const s of curSkills){
+        await supabaseClient.rpc("admin_remove_weapon_skill", { p_admin_token: admin_token, p_weapon_id: weaponId, p_skill_id: s.id });
+    }
+    for(const s of skills){
+        const type = (s && s.type && ["attack","defense","special"].indexOf(s.type) !== -1) ? s.type : "attack";
+        await supabaseClient.rpc("admin_add_weapon_skill", {
+            p_admin_token: admin_token, p_weapon_id: weaponId,
+            p_name: s.name || "",
+            p_type: type,
+            p_damage: numVal(s.damage),
+            p_cooldown: numVal(s.cooldown),
+            p_effect: (s && s.effect) || "",
+            p_unblockable: false,
+            p_description: (s && s.description) || null,
+            p_color: "#3b82ff", p_params: {}, p_stroke_color: "#000000", p_stroke_width: 0
+        });
+    }
+}
+
+function numVal(v){
+    const n = Number(v);
+    return isFinite(n) && v != null && v !== "" ? n : 0;
+}
+
+// يستبدل مهارات المرافق بقائمة مهارات المساعد
+async function replaceCompanionSkillsFromAI(companionId){
+    const f = lastAIFields || {};
+    const skills = Array.isArray(f.skills) ? f.skills : [];
+    const admin_token = localStorage.getItem("admin_token");
+    if(!skills.length) return;
+    const { data: cur } = await supabaseClient.rpc("admin_get_companion", { p_admin_token: admin_token, p_companion_id: companionId });
+    const curC = (Array.isArray(cur) && cur.length) ? cur[0] : cur;
+    const curSkills = (curC && Array.isArray(curC.skills)) ? curC.skills : [];
+    for(const s of curSkills){
+        await supabaseClient.rpc("admin_remove_companion_skill", { p_admin_token: admin_token, p_companion_id: companionId, p_skill_id: s.id });
+    }
+    for(const s of skills){
+        const type = (s && s.type && ["attack","defense","special"].indexOf(s.type) !== -1) ? s.type : "attack";
+        await supabaseClient.rpc("admin_add_companion_skill", {
+            p_admin_token: admin_token, p_companion_id: companionId,
+            p_name: s.name || "",
+            p_type: type,
+            p_damage: numVal(s.damage),
+            p_cooldown: numVal(s.cooldown),
+            p_effect: (s && s.effect) || "",
+            p_unblockable: false,
+            p_description: (s && s.description) || null,
+            p_color: "#22c55e", p_params: {}, p_stroke_color: "#000000", p_stroke_width: 0
+        });
+    }
 }
 
 function applyAIToForm(type){
@@ -8540,6 +8777,8 @@ function aiSkillTypeChoice(sk){
 function clearAIResult(){
     lastAIFields = null;
     lastAIType = null;
+    lastAIEntityId = null;
+    lastAIExisting = null;
     pendingAISkills = null;
     renderPendingAICharacterSkills();
     renderSkillsIntoEditor("admin-weapon-skills-editor", null);
