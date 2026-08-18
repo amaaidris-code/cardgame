@@ -556,12 +556,14 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
             if(!error) rows = (data || []);
         }catch(e){ rows = []; }
         monsterSkills = rows.filter(function(s){ return s.fighter_kind === "monster"; });
+        const weaponCd = {};
+        rows.forEach(function(s){ if(s.fighter_kind === "weapon") weaponCd[String(s.skill_id || s.id)] = Number(s.cooldown_remaining || 0); });
         const pagesEl = document.getElementById("cd-player-skills-pages");
         if(!pagesEl) return;
         const myTurnNow = myTurn();
 
         if(cdView === "weapon"){
-            renderWeaponSkills(pagesEl, myTurnNow);
+            renderWeaponSkills(pagesEl, myTurnNow, weaponCd);
             return;
         }
 
@@ -589,8 +591,16 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
                 const stealAbility = s.effect && ["steal","copy","control","shadow","delay_cooldown"].indexOf(s.effect) !== -1;
                 const btn = document.createElement("button");
                 btn.dataset.skill = sid;
+                const cdLeft = Number(s.cooldown_remaining || 0);
                 btn.innerHTML = `<span class="cd-skill-emoji">${skillEmoji(s)}</span><span class="cd-skill-name">${escapeHtml(s.name)}</span>${s.cooldown ? `<em class="cd-skill-cd">CD ${s.cooldown}</em>` : ""}`;
-                btn.disabled = locked || (stealAbility && !myTurnNow);
+                if(cdLeft > 0){
+                    btn.classList.add("on-cooldown");
+                    const badge = document.createElement("span");
+                    badge.className = "cooldown-badge";
+                    badge.textContent = cdLeft;
+                    btn.appendChild(badge);
+                }
+                btn.disabled = locked || cdLeft > 0 || (stealAbility && !myTurnNow);
                 btn.onclick = function(){ if(stealAbility){ ClanDungeon.openStealPicker(sid); } else { ClanDungeon.pickSkill(sid); } };
                 div.appendChild(btn);
             });
@@ -619,7 +629,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         }
     }
 
-    function renderWeaponSkills(pagesEl, myTurnNow){
+    function renderWeaponSkills(pagesEl, myTurnNow, weaponCd){
         selectedSkill = null;
         renderTargets();
         const sks = (myWeapon && Array.isArray(myWeapon.skills)) ? myWeapon.skills : [];
@@ -640,11 +650,19 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
             div.className = "skills-page" + (i === ci ? " active" : "");
             chunk.forEach(function(s){
                 const id = s.id || s.skill_id;
+                const cdLeft = (weaponCd && Number(weaponCd[String(id)] || 0)) || 0;
                 const btn = document.createElement("button");
                 btn.dataset.skill = id;
-                btn.disabled = locked;
+                btn.disabled = locked || cdLeft > 0;
                 btn.style.setProperty("--wcolor", s.color && /^#[0-9A-Fa-f]{6}$/.test(s.color) ? s.color : "#ffffff");
                 btn.innerHTML = `<span class="cd-skill-emoji">⚔️</span><span class="cd-skill-name">${escapeHtml(s.name || 'مهارة')}</span>`;
+                if(cdLeft > 0){
+                    btn.classList.add("on-cooldown");
+                    const badge = document.createElement("span");
+                    badge.className = "cooldown-badge";
+                    badge.textContent = cdLeft;
+                    btn.appendChild(badge);
+                }
                 btn.onclick = function(){ ClanDungeon.pickWeaponSkill(id); };
                 div.appendChild(btn);
             });
