@@ -439,6 +439,7 @@ function showAdminTab(tabId){
     if(tabId === "admin-tab-weapons") loadAdminWeapons();
     if(tabId === "admin-tab-potions") loadAdminPotions();
     if(tabId === "admin-tab-companions") loadAdminCompanions();
+    if(tabId === "admin-tab-ai") loadAITargetOptions();
 
     if(tabId === "admin-tab-rules") loadAdminSkillRules();
 
