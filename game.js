@@ -6226,15 +6226,21 @@ async function addWeapon(){
     let infinite = document.getElementById("admin-weapon-infinite").checked;
     let glow = (document.getElementById("admin-weapon-glow-color") || {}).value || "#e8b93f";
     let admin_token = localStorage.getItem("admin_token");
-    let {error} = await supabaseClient.rpc("admin_add_weapon", {
+    let {data, error} = await supabaseClient.rpc("admin_add_weapon", {
         p_admin_token: admin_token, p_name: name, p_description: desc, p_image: image,
         p_skill_card_image: skillCard, p_price: price, p_max_durability: durability,
         p_stock: stock, p_infinite: infinite, p_glow_color: glow
     });
     if(error){ alert(error.message); return; }
     alert("تمت إضافة السلاح");
+    let newWeaponId = (data && Array.isArray(data) ? data[0] : data) || null;
+    const skillRows = collectSkillEditorRows("admin-weapon-skills-editor");
+    clearSkillEditorRows("admin-weapon-skills-editor");
     ["admin-weapon-name","admin-weapon-description","admin-weapon-image","admin-weapon-skillcard","admin-weapon-price","admin-weapon-durability","admin-weapon-stock"].forEach(i => { let el = document.getElementById(i); if(el) el.value = ""; });
     let inf = document.getElementById("admin-weapon-infinite"); if(inf) inf.checked = false;
+    if(newWeaponId && skillRows.length){
+        await createAISkillsForWeapon(newWeaponId, skillRows);
+    }
     loadAdminWeapons();
 }
 
@@ -7007,15 +7013,21 @@ async function addCompanion(){
     let infinite = (document.getElementById("admin-companion-infinite") || {}).checked;
     let glow = (document.getElementById("admin-companion-glow-color") || {}).value || "#22c55e";
     let admin_token = localStorage.getItem("admin_token");
-    let {error} = await supabaseClient.rpc("admin_add_companion", {
+    let {data, error} = await supabaseClient.rpc("admin_add_companion", {
         p_admin_token: admin_token, p_name: name, p_description: desc, p_image: image,
         p_skill_card_image: null, p_price: price, p_base_hp: hp, p_base_atk: atk,
         p_stock: stock, p_infinite: infinite, p_glow_color: glow
     });
     if(error){ alert(error.message); return; }
     alert("تمت إضافة المرافق");
+    let newCompanionId = (data && Array.isArray(data) ? data[0] : data) || null;
+    const skillRows = collectSkillEditorRows("admin-companion-skills-editor");
+    clearSkillEditorRows("admin-companion-skills-editor");
     ["admin-companion-name","admin-companion-description","admin-companion-image","admin-companion-hp","admin-companion-atk","admin-companion-price","admin-companion-stock"].forEach(i => { let el = document.getElementById(i); if(el) el.value = ""; });
     let inf = document.getElementById("admin-companion-infinite"); if(inf) inf.checked = false;
+    if(newCompanionId && skillRows.length){
+        await createAISkillsForCompanion(newCompanionId, skillRows);
+    }
     loadAdminCompanions();
 }
 
@@ -8288,7 +8300,9 @@ function applyLastAI(type){
         set("admin-weapon-price", f.price);
         set("admin-weapon-durability", f.max_durability);
         set("admin-weapon-stock", 10);
-        alert("تم نسخ بيانات السلاح إلى نموذج الإضافة. أضف مهاراته يدويًا بعد الحفظ من تبويب الأسلحة.");
+        renderSkillsIntoEditor("admin-weapon-skills-editor", f.skills);
+        const hasSkills = Array.isArray(f.skills) && f.skills.length;
+        alert("تم نسخ بيانات السلاح إلى نموذج الإضافة." + (hasSkills ? " مهاراته جاهزة في محرر المهارات أدناه — يمكنك تعديلها ثم الضغط على \"إضافة\"." : ""));
         showAdminTab("admin-tab-weapons");
     }else if(type === "companion"){
         set("admin-companion-name", f.name);
@@ -8298,7 +8312,9 @@ function applyLastAI(type){
         set("admin-companion-atk", f.base_atk);
         set("admin-companion-price", f.price);
         set("admin-companion-stock", 10);
-        alert("تم نسخ بيانات المرافق إلى نموذج الإضافة.");
+        renderSkillsIntoEditor("admin-companion-skills-editor", f.skills);
+        const hasSkills = Array.isArray(f.skills) && f.skills.length;
+        alert("تم نسخ بيانات المرافق إلى نموذج الإضافة." + (hasSkills ? " مهاراته جاهزة في محرر المهارات أدناه — يمكنك تعديلها ثم الضغط على \"إضافة\"." : ""));
         showAdminTab("admin-tab-companions");
     }else if(type === "potion"){
         set("admin-potion-name", f.name);
@@ -8338,16 +8354,17 @@ function applyLastAI(type){
 // يعرض المهارات المقترحة من المساعد الآلي داخل محرر مهارات نموذج الإضافة
 // كصفوف قابلة للتعديل، حتى يعدّلها الأدمن أو يضيف/يحذف قبل الضغط على "إضافة".
 function renderPendingAICharacterSkills(){
-    if(!Array.isArray(pendingAISkills) || !pendingAISkills.length){
-        clearCharacterSkillRows();
-        return;
-    }
-    pendingAISkills.forEach(s => addCharacterSkillRow(s));
+    renderSkillsIntoEditor("admin-char-skills-editor",
+        (Array.isArray(pendingAISkills) && pendingAISkills.length) ? pendingAISkills : null);
 }
 
 // محرر مهارات نموذج الإضافة: صف لكل مهارة (اسم + نوع + ضرر + تهدئة + وصف + حذف).
-function addCharacterSkillRow(skill){
-    const editor = document.getElementById("admin-char-skills-editor");
+// يعمل لأي نموذج إضافة (شخصية/وحش/سلاح/مرافق) عبر id الحاوية:
+//   admin-char-skills-editor        (شخصيات / وحوش)
+//   admin-weapon-skills-editor      (أسلحة)
+//   admin-companion-skills-editor   (مرافقون)
+function addSkillEditorRow(editorId, skill){
+    const editor = document.getElementById(editorId);
     if(!editor) return;
     const empty = editor.querySelector(".admin-skills-empty");
     if(empty) empty.remove();
@@ -8361,25 +8378,24 @@ function addCharacterSkillRow(skill){
         <input class="ai-sk-damage" type="number" step="any" placeholder="الضرر (يُقرَّب لمضاعفات 50 لضربات الهجوم)" value="${escapeAttr(sk.damage ?? "")}">
         <input class="ai-sk-cooldown" type="number" step="any" placeholder="التهدئة (أدوار)" value="${escapeAttr(sk.cooldown ?? "")}">
         <input class="ai-sk-desc" type="text" placeholder="وصف المهارة (اختياري)" value="${escapeAttr(sk.description || "")}">
-        <button type="button" class="admin-btn" onclick="removeCharacterSkillRow(this)">🗑️</button>
+        <button type="button" class="admin-btn" onclick="removeSkillEditorRow(this, '${editorId}')">🗑️</button>
     `;
     editor.appendChild(row);
 }
 
-function removeCharacterSkillRow(btn){
+function removeSkillEditorRow(btn, editorId){
     const row = btn.closest(".admin-ai-skill-editor-row");
     if(!row) return;
-    const editor = document.getElementById("admin-char-skills-editor");
+    const editor = document.getElementById(editorId);
     row.remove();
     if(editor && !editor.querySelector(".admin-ai-skill-editor-row")){
         editor.innerHTML = `<div class="admin-skills-empty">لا مهارات بعد — أضفها يدويًا أو انسخ اقتراح المساعد الذكي لملئها.</div>`;
     }
 }
 
-// يجمع المهارات من المحرر بصيغة قابلة لـ createAISkillsForCharacter
-// (يستبعد الصفوف الفارغة تمامًا).
-function collectCharacterSkillRows(){
-    const editor = document.getElementById("admin-char-skills-editor");
+// يجمع المهارات من محرر معيّن بصيغة قابلة للإنشاء (يستبعد الصفوف الفارغة).
+function collectSkillEditorRows(editorId){
+    const editor = document.getElementById(editorId);
     if(!editor) return [];
     const rows = [];
     editor.querySelectorAll(".admin-ai-skill-editor-row").forEach(row => {
@@ -8396,18 +8412,40 @@ function collectCharacterSkillRows(){
     return rows;
 }
 
-// يفرّغ محرر المهارات بالكامل (إخفاء صفوفه وإظهار رسالة "لا مهارات بعد").
-function clearCharacterSkillRows(){
-    const editor = document.getElementById("admin-char-skills-editor");
+// يفرّغ محرر مهارات معيّن بالكامل (إظهار رسالة "لا مهارات بعد").
+function clearSkillEditorRows(editorId){
+    const editor = document.getElementById(editorId);
     if(!editor) return;
     editor.innerHTML = `<div class="admin-skills-empty">لا مهارات بعد — أضفها يدويًا أو انسخ اقتراح المساعد الذكي لملئها.</div>`;
 }
 
+// يملأ محرر مهارات معيّن بمهارات واردة (من المساعد الآلي مثلًا).
+function renderSkillsIntoEditor(editorId, skills){
+    clearSkillEditorRows(editorId);
+    if(!Array.isArray(skills) || !skills.length) return;
+    skills.forEach(s => addSkillEditorRow(editorId, s));
+}
 
-// ينشئ المهارات التي اقترحها المساعد الآلي ويربطها بشخصية/وحش جديد
-// (نفس تدفق addSkillToCharacter لكن بالبيانات الواردة من الذكاء الاصطناعي).
-async function createAISkillsForCharacter(characterId, skills){
+// ===== عناصر محرر الشخصيات/الوحوش (بقيت كأسماء قديمة لعدم كسر الاستدعاءات) =====
+function addCharacterSkillRow(skill){
+    return addSkillEditorRow("admin-char-skills-editor", skill);
+}
+function removeCharacterSkillRow(btn){
+    return removeSkillEditorRow(btn, "admin-char-skills-editor");
+}
+function collectCharacterSkillRows(){
+    return collectSkillEditorRows("admin-char-skills-editor");
+}
+function clearCharacterSkillRows(){
+    return clearSkillEditorRows("admin-char-skills-editor");
+}
+
+
+// ينشئ المهارات التي اقترحها المساعد الآلي ويربطها بالهدف الجديد
+// (شخصية/وحش/سلاح/مرافق) بنفس تدفق الإضافة اليدوية لكن ببيانات AI.
+async function createSkillsForTarget(rpcName, idParam, targetId, skills, label){
     const admin_token = localStorage.getItem("admin_token");
+    if(!Array.isArray(skills) || !skills.length || !targetId) return null;
     let created = 0;
     for(const sk of skills){
         const typeChoice = aiSkillTypeChoice(sk);
@@ -8432,9 +8470,9 @@ async function createAISkillsForCharacter(characterId, skills){
 
         const {type, effect, unblockable} = skillTypeChoiceToFields(typeChoice);
 
-        const { error } = await supabaseClient.rpc("admin_add_skill", {
+        const args = {
             p_admin_token: admin_token,
-            p_character_id: characterId,
+            [idParam]: targetId,
             p_name: String(sk.name || "مهارة").slice(0, 60),
             p_type: type,
             p_damage: damageRaw,
@@ -8446,7 +8484,8 @@ async function createAISkillsForCharacter(characterId, skills){
             p_params: params,
             p_stroke_color: (sk.stroke_color && /^#[0-9A-Fa-f]{6}$/.test(sk.stroke_color)) ? sk.stroke_color : null,
             p_stroke_width: Math.max(0, Number(sk.stroke_width) || 0)
-        });
+        };
+        const { error } = await supabaseClient.rpc(rpcName, args);
         if(error){
             alert("تعذر إنشاء المهارة \"" + String(sk.name || "") + "\": " + (error.message || error));
             alert("تم إنشاء " + created + " مهارة من أصل " + skills.length + ". أكمل الباقي يدويًا في نافذة التعديل.");
@@ -8454,8 +8493,20 @@ async function createAISkillsForCharacter(characterId, skills){
         }
         created++;
     }
-    if(created) alert("✅ تم إنشاء " + created + " مهارة تلقائيًا وربطها بالشخصية.");
+    if(created) alert("✅ تم إنشاء " + created + " مهارة تلقائيًا وربطها بـ" + (label || "الهدف") + ".");
     return null;
+}
+
+async function createAISkillsForCharacter(characterId, skills){
+    return createSkillsForTarget("admin_add_skill", "p_character_id", characterId, skills, "الشخصية");
+}
+
+async function createAISkillsForWeapon(weaponId, skills){
+    return createSkillsForTarget("admin_add_weapon_skill", "p_weapon_id", weaponId, skills, "السلاح");
+}
+
+async function createAISkillsForCompanion(companionId, skills){
+    return createSkillsForTarget("admin_add_companion_skill", "p_companion_id", companionId, skills, "المرافق");
 }
 
 // يختار نوع المهارة الصحيح: نفضّل "effect" إن ذُكر (مثل steal/copy/control)
@@ -8491,6 +8542,8 @@ function clearAIResult(){
     lastAIType = null;
     pendingAISkills = null;
     renderPendingAICharacterSkills();
+    renderSkillsIntoEditor("admin-weapon-skills-editor", null);
+    renderSkillsIntoEditor("admin-companion-skills-editor", null);
     const result = document.getElementById("admin-ai-result");
     if(result) result.innerHTML = "";
     const img = document.getElementById("admin-ai-image");
