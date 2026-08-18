@@ -397,9 +397,12 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         const compVisible = cdView === "companion" && st.my_comp_alive && (st.my_comp_hp || 0) > 0;
         const faceImg = (compVisible && st.my_comp_image) ? st.my_comp_image : myPhoto;
         const faceName = compVisible ? (st.my_comp_name || "مرافق") : myName;
+        // والـ HP المنفصل للمرافق بدل HP الشخصية
+        const faceHp = compVisible ? (st.my_comp_hp || 0) : me.hp;
+        const faceMaxHp = compVisible ? (st.my_comp_max_hp || 1) : me.max_hp;
 
         const monsterHpPct = st.monster_max_hp ? Math.max(0, Math.min(100, (st.monster_hp / st.monster_max_hp) * 100)) : 0;
-        const myHpPct = me.max_hp ? Math.max(0, Math.min(100,(me.hp/me.max_hp)*100)) : 0;
+        const myHpPct = faceMaxHp ? Math.max(0, Math.min(100,(faceHp/faceMaxHp)*100)) : 0;
         const fallbackImg = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="100%" height="100%" fill="#1a1a22" rx="8"/><text x="50%" y="55%" font-size="20" text-anchor="middle" fill="#fff">👹</text></svg>')}`;
 
         const compMini = isMyCompTurn() && st.my_comp_max_hp ? `
@@ -451,7 +454,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
                     <button class="weapon-view-icon" id="cd-weapon-icon" style="display:none;" onclick="ClanDungeon.cdToggleView('weapon')" title="تبديل عرض الشخصية/السلاح">⚔️</button>
                     <button class="companion-view-icon" id="cd-companion-icon" style="display:none;" onclick="ClanDungeon.cdToggleView('companion')" title="تبديل عرض الشخصية/المرافق">🐾</button>
                     <div class="hp-bar"><div class="hp-fill cd-player-hp" style="width:${myHpPct}%"></div></div>
-                    <p>❤️ <span>${me.hp} / ${me.max_hp}</span></p>
+                    <p>❤️ <span>${faceHp} / ${faceMaxHp}</span></p>
                     <div class="used-skills" id="cd-player-used-skills"></div>
                     <div class="potion-bar" id="cd-potions"></div>
                     <div class="skills-container">
