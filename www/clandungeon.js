@@ -20,6 +20,7 @@ const ClanDungeon = (function(){
     let cdView = "player";            // player / weapon / companion (مثل PvE)
     let cdViewPinned = false;         // هل اختار اللاعب العرض يدويًا
     let pendingSteal = null;          // مهارة سرقة قيد الاختيار: { abilitySkillId, targetSkillId, targetName }
+    let myFace = "";                  // صورة الشخصية النشطة (لأيقونة العودة من وضع المرافق)
     let turnTimerInterval = null;
     let turnDeadline = null;
     let skipInFlight = false;
@@ -393,6 +394,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         }catch(e){}
         const myPhoto = (myChar && (myChar.identity_image || myChar.skill_card_image)) ? (myChar.identity_image || myChar.skill_card_image) : "";
         const myName = (myChar && myChar.name) ? myChar.name : "أنت";
+        myFace = myPhoto;
 
         // في عرض المرافق: البطاقة تعرض صورة/اسم المرافق بدل الشخصية
         const compVisible = cdView === "companion" && st.my_comp_alive && (st.my_comp_hp || 0) > 0;
@@ -843,9 +845,17 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         if(cIcon){
             const hasComp = !!(myState && myState.my_comp_alive && (myState.my_comp_hp || 0) > 0);
             cIcon.style.display = hasComp ? "" : "none";
-            cIcon.innerHTML = (hasComp && myState.my_comp_image)
-                ? `<img src="${escapeHtml(myState.my_comp_image)}" alt="">`
-                : "🐾";
+            // في وضع المرافق تُظهر الأيقونة صورة الشخصية (للرجوع إليها)،
+            // وإلا تُظهر صورة المرافق (للدخول إلى وضعه) — لا يتكرر أيقونتان.
+            if(cdView === "companion"){
+                cIcon.innerHTML = myFace ? `<img src="${escapeHtml(myFace)}" alt="">` : "👤";
+                cIcon.title = "العودة إلى الشخصية";
+            }else{
+                cIcon.innerHTML = (hasComp && myState.my_comp_image)
+                    ? `<img src="${escapeHtml(myState.my_comp_image)}" alt="">`
+                    : "🐾";
+                cIcon.title = "تبديل عرض الشخصية/المرافق";
+            }
             cIcon.classList.toggle("active", cdView === "companion");
         }
     }
