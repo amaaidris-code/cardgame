@@ -2889,6 +2889,30 @@ margin-left:8px;
 }
 
 
+/* معاينة مهارات المساعد الآلي داخل نموذج إضافة الشخصية */
+.admin-skills-preview{
+  margin:10px 0;
+  padding:10px 12px;
+  border:1px solid rgba(124,58,237,.45);
+  border-radius:10px;
+  background:rgba(124,58,237,.08);
+}
+.admin-skills-preview .admin-ai-skills-note{
+  font-size:13px;
+  color:#c4b5fd;
+  margin-bottom:6px;
+  font-weight:bold;
+}
+.admin-skills-preview ul{
+  margin:0;
+  padding-left:18px;
+  font-size:13px;
+}
+.admin-skills-preview li{
+  margin:3px 0;
+}
+
+
 .admin-edit-box{
 
 max-width:420px;

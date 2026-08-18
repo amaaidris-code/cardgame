@@ -6058,6 +6058,7 @@ async function addCharacter(){
     document.getElementById("admin-character-quote").value = "";
     document.getElementById("admin-character-glow-color").value = "#3b82ff";
     document.getElementById("admin-character-glow-locked").checked = false;
+    renderPendingAICharacterSkills();
 
 
     refreshAdminViews();
@@ -8325,6 +8326,7 @@ function applyLastAI(type){
         set("admin-character-gold-prize", f.gold_prize);
         setBool("admin-character-is-monster", type === "monster");
         pendingAISkills = (Array.isArray(f.skills) && f.skills.length) ? f.skills : null;
+        renderPendingAICharacterSkills();
         const hasSkills = pendingAISkills !== null;
         alert(type === "monster"
             ? "تم نسخ بيانات الوحش إلى نموذج الإضافة في تبويب الشخصيات (خانة \"وحش PvE\" مفعّلة)." + (hasSkills ? " بعد إضافته ستُرفَق مهاراته تلقائيًا وتفتح نافذة التعديل لمراجعتها." : "")
@@ -8332,6 +8334,26 @@ function applyLastAI(type){
         showAdminTab("admin-tab-characters");
     }
 }
+
+// يعرض المهارات المقترحة من المساعد الآلي داخل نموذج الإضافة، حتى يراها
+// الأدمن قبل الضغط على "إضافة" (تُرفق تلقائيًا بعد الحفظ وتفتح نافذة التعديل).
+function renderPendingAICharacterSkills(){
+    const boxEl = document.getElementById("admin-character-skills-preview");
+    if(!boxEl) return;
+    if(!Array.isArray(pendingAISkills) || !pendingAISkills.length){
+        boxEl.classList.add("hidden");
+        boxEl.innerHTML = "";
+        return;
+    }
+    const rows = pendingAISkills.map((s, i) => {
+        const t = aiSkillTypeChoice(s);
+        const dmg = (t === "attack" || t === "unblockable") ? (Number(s.damage) || 0) : ((t === "control" && s.params && s.params.control_count) ? ("سيطر على " + s.params.control_count) : "—");
+        return `<li><strong>${escapeHtml(s.name || ("مهارة " + (i + 1)))}</strong> · ${escapeHtml(t)} · ضرر ${dmg} · CD ${escapeHtml(s.cooldown ?? 0)}</li>`;
+    }).join("");
+    boxEl.innerHTML = `<div class="admin-ai-skills-note">✨ مهارات المساعد الآلي (تُرفق تلقائيًا عند الإضافة):</div><ul>${rows}</ul>`;
+    boxEl.classList.remove("hidden");
+}
+
 
 // ينشئ المهارات التي اقترحها المساعد الآلي ويربطها بشخصية/وحش جديد
 // (نفس تدفق addSkillToCharacter لكن بالبيانات الواردة من الذكاء الاصطناعي).
@@ -8405,6 +8427,7 @@ function clearAIResult(){
     lastAIFields = null;
     lastAIType = null;
     pendingAISkills = null;
+    renderPendingAICharacterSkills();
     const result = document.getElementById("admin-ai-result");
     if(result) result.innerHTML = "";
     const img = document.getElementById("admin-ai-image");
