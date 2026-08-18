@@ -8417,7 +8417,7 @@ async function createAISkillsForCharacter(characterId, skills){
         let damageRaw = Math.max(0, Math.round(Number(sk.damage) || 0));
         // قاعدة قاعدة البيانات: ضرر الهجوم لا بد أن يكون مضاعفًا للعدد 50،
         // فنجبره على أقرب مضاعف بدل فشل الحفظ بصمت (CHECK constraint).
-        if(typeChoice === "attack" || typeChoice === "unblockable"){
+        if(typeChoice === "attack" || typeChoice === "unblockable" || typeChoice === "special"){
             damageRaw = Math.round(damageRaw / 50) * 50;
         }
         let params = {};
