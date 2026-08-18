@@ -19,6 +19,7 @@ const ClanDungeon = (function(){
     let myPotions = [];               // الجرعات (من get_my_potions)
     let cdView = "player";            // player / weapon / companion (مثل PvE)
     let cdViewPinned = false;         // هل اختار اللاعب العرض يدويًا
+    let pendingSteal = null;          // مهارة سرقة قيد الاختيار: { abilitySkillId, targetSkillId, targetName }
     let turnTimerInterval = null;
     let turnDeadline = null;
     let skipInFlight = false;
@@ -688,7 +689,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
                 <div class="cd-steal-list">
                     ${monsterSkills.map(function(s){
                         const msid = s.skill_id || s.id;
-                        return `<button class="cd-steal-opt" onclick="ClanDungeon.castSteal('${abilitySkillId}','${msid}')"><span class="cd-skill-emoji">${skillEmoji(s)}</span> ${escapeHtml(s.name)}</button>`;
+                        return `<button class="cd-steal-opt" onclick="ClanDungeon.selectStealSkill('${abilitySkillId}','${msid}')"><span class="cd-skill-emoji">${skillEmoji(s)}</span> ${escapeHtml(s.name)}</button>`;
                     }).join("")}
                 </div>
                 <button class="cd-btn cd-leave" onclick="this.closest('.cd-steal-overlay').remove()">إلغاء</button>
@@ -697,17 +698,78 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         if(host) host.appendChild(ov);
     }
 
-    async function castSteal(abilitySkillId, targetSkillId){
-        if(isMyCompTurn()){ toast("استخدم مهارة مرافقك أولًا"); return; }
+    // بعد اختيار المهارة المسروقة: نطلب اختيار الهدف (على من نستخدمها)
+    function selectStealSkill(abilitySkillId, targetSkillId){
         const trg = monsterSkills.find(function(s){ return String(s.skill_id || s.id) === String(targetSkillId); });
-        const trgName = trg ? trg.name : "";
+        pendingSteal = { abilitySkillId: abilitySkillId, targetSkillId: targetSkillId, targetName: trg ? trg.name : "" };
+        removeStealOverlay();
+        renderStealTargets();
+    }
+
+    function removeStealTargetsMenu(){
+        const ov = document.querySelector("#clandungeon-content .cd-steal-targets");
+        if(ov) ov.remove();
+    }
+
+    function renderStealTargets(){
+        const st = myState;
+        removeStealTargetsMenu();
+        const players = (st && st.players) || [];
+        const me = getPlayerId();
+        let list = "";
+        // الوحش
+        list += `<button class="cd-steal-opt cd-target-monster" onclick="ClanDungeon.useStealOn('monster',null)"><span class="cd-skill-emoji">👹</span> ${escapeHtml(st.monster_name || "الوحش")}</button>`;
+        players.forEach(function(p){
+            if(!p.alive) return;
+            const isMe = String(p.player_id)===String(me);
+            const pLabel = isMe ? "👤 نفسك" : "🤝 لاعب";
+            list += `<button class="cd-steal-opt" onclick="ClanDungeon.useStealOn('player','${p.player_id}')"><span class="cd-skill-emoji">👤</span> ${pLabel}</button>`;
+            const compAlive = p.comp_alive && (p.comp_hp || 0) > 0;
+            if(compAlive){
+                const cFace = p.comp_image
+                    ? `<img src="${escapeHtml(p.comp_image)}" alt="" style="width:22px;height:22px;border-radius:50%;vertical-align:middle;">`
+                    : "🐾";
+                list += `<button class="cd-steal-opt" onclick="ClanDungeon.useStealOn('comp','${p.player_id}')"><span class="cd-skill-emoji">${cFace}</span> مرافق</button>`;
+            }
+        });
+        const ov = document.createElement("div");
+        ov.className = "cd-steal-overlay cd-steal-targets";
+        ov.innerHTML = `
+            <div class="cd-steal-panel">
+                <div class="cd-steal-title">🎯 على مَن تستخدم المهارة المسروقة؟</div>
+                <div class="cd-steal-list">${list}</div>
+                <button class="cd-btn cd-leave" onclick="ClanDungeon.cancelSteal()">إلغاء</button>
+            </div>`;
+        const host = document.getElementById("clandungeon-content");
+        if(host) host.appendChild(ov);
+    }
+
+    function cancelSteal(){
+        pendingSteal = null;
+        removeStealTargetsMenu();
+    }
+
+    async function useStealOn(targetKind, targetId){
+        if(!pendingSteal) return;
+        const ps = pendingSteal;
+        pendingSteal = null;
+        removeStealTargetsMenu();
+        await castSteal(ps.abilitySkillId, ps.targetSkillId, targetKind, targetId);
+    }
+
+    async function castSteal(abilitySkillId, targetSkillId, targetKind, targetId){
+        if(isMyCompTurn()){ toast("استخدم مهارة مرافقك أولًا"); return; }
+        const targetPlayerId = (targetKind === "player" || targetKind === "comp") ? targetId : null;
+        const targetComp = (targetKind === "comp");
+        const trgName = pendingStealName(abilitySkillId, targetSkillId);
         try{
             await supabaseClient.rpc("clan_dungeon_steal_or_copy_skill", {
                 p_token: getToken(), p_run_id: myRun,
                 p_ability_skill_id: abilitySkillId, p_target_skill_id: targetSkillId,
-                p_target_player_id: null
+                p_target_player_id: targetPlayerId, p_target_comp: targetComp
             });
             removeStealOverlay();
+            removeStealTargetsMenu();
             toast(trgName ? `⚡ سرقت/نسخت مهارة «${escapeHtml(trgName)}»!` : "⚡ تم تنفيذ مهارة السرقة/النسخ");
             await refreshState();
             await renderRun();
@@ -719,9 +781,18 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
             const msg = (e && e.message) ? e.message : "تعذّر تنفيذ السرقة (خطأ في الخادم)";
             toast(msg);
             removeStealOverlay();
+            removeStealTargetsMenu();
             await refreshState();
             await renderRun();
         }
+    }
+
+    function pendingStealName(abilitySkillId, targetSkillId){
+        if(monsterSkills && monsterSkills.length){
+            const t = monsterSkills.find(function(s){ return String(s.skill_id || s.id) === String(targetSkillId); });
+            if(t) return t.name;
+        }
+        return "";
     }
 
     function removeStealOverlay(){
@@ -786,8 +857,8 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
             cdView = next;
         }
         cdViewPinned = true;
-        updateIcons();
-        loadSkills();
+        // إعادة رسم المعركة بالكامل حتى تتبدل بطاقة اللاعب (صورة + HP + مهارات) للأيقونة المختارة
+        renderRun();
     }
 
     async function renderPotionBar(){
@@ -1182,6 +1253,10 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         useOnPlayer,
         clearTargetsMenu,
         openStealPicker,
+        selectStealSkill,
+        useStealOn,
+        cancelSteal,
+        renderStealTargets,
         castSteal,
         claimReward,
         sendSubMessage,
