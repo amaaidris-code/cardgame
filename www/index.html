@@ -18,7 +18,7 @@
     <link rel="icon" type="image/png" href="icon-192.png">
     <link rel="apple-touch-icon" href="apple-touch-icon.png">
 
-    <link rel="stylesheet" href="style.css?v=20260818b">
+    <link rel="stylesheet" href="style.css?v=20260818c">
 </head>
 
 <body>
@@ -511,7 +511,14 @@ lang="ar">
 
         <button onclick="addCharacter()">إضافة</button>
 
-        <div id="admin-character-skills-preview" class="admin-skills-preview hidden"></div>
+        <div class="admin-char-skills-editor-box">
+            <h4>🎴 مهارات الشخصية / الوحش</h4>
+            <p class="admin-hint">هذه المهارات تُحفظ مع الشخصية عند الضغط على "إضافة". املأها يدويًا أو انسخ اقتراح المساعد الذكي فتُعبَّأ تلقائيًا ويمكنك تعديلها.</p>
+            <div id="admin-char-skills-editor">
+                <div class="admin-skills-empty">لا مهارات بعد — أضفها يدويًا أو انسخ اقتراح المساعد الذكي لملئها.</div>
+            </div>
+            <button type="button" class="admin-btn" onclick="addCharacterSkillRow()">➕ إضافة مهارة</button>
+        </div>
 
     </div>
 
@@ -2006,7 +2013,7 @@ id="pve-companion-used-skills">
 
 <script src="clandungeon.js?v=20260818b"></script>
 
-<script src="game.js?v=20260818d"></script>
+<script src="game.js?v=20260818e"></script>
 
 <script src="battle.js?v=20260817c"></script>
 

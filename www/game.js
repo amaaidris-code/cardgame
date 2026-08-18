@@ -6058,21 +6058,24 @@ async function addCharacter(){
     document.getElementById("admin-character-quote").value = "";
     document.getElementById("admin-character-glow-color").value = "#3b82ff";
     document.getElementById("admin-character-glow-locked").checked = false;
-    renderPendingAICharacterSkills();
+    clearCharacterSkillRows();
 
 
     refreshAdminViews();
 
 
-    // إن كانت البيانات من المساعد الآلي تتضمن مهارات، أنشئها واربطها بهذه
-    // الشخصية فورًا ثم افتح نافذة التعديل (بعد تحديث الكاش) لمراجعة المهارات.
+    // أنشئ واربط المهارات الموجودة في محرر المهارات بنموذج الإضافة (إن وجدت)
+    // ثم افتح نافذة التعديل (بعد تحديث الكاش) لمراجعة المهارات.
     let newCharId = (data && Array.isArray(data) ? data[0] : data) || null;
-    if(newCharId && Array.isArray(pendingAISkills) && pendingAISkills.length){
-        await createAISkillsForCharacter(newCharId, pendingAISkills);
-        pendingAISkills = null;
+    const skillRows = collectCharacterSkillRows();
+    if(newCharId && skillRows.length){
+        await createAISkillsForCharacter(newCharId, skillRows);
+        clearCharacterSkillRows();
         await loadAdminPanel();
         await openEditCharacterModal(newCharId);
     }
+
+    pendingAISkills = null;
 
 
 }
@@ -8329,29 +8332,78 @@ function applyLastAI(type){
         renderPendingAICharacterSkills();
         const hasSkills = pendingAISkills !== null;
         alert(type === "monster"
-            ? "تم نسخ بيانات الوحش إلى نموذج الإضافة في تبويب الشخصيات (خانة \"وحش PvE\" مفعّلة)." + (hasSkills ? " بعد إضافته ستُرفَق مهاراته تلقائيًا وتفتح نافذة التعديل لمراجعتها." : "")
-            : "تم نسخ بيانات الشخصية إلى نموذج الإضافة." + (hasSkills ? " بعد إضافتها ستُرفَق مهاراتها تلقائيًا وتفتح نافذة التعديل لمراجعتها." : ""));
+            ? "تم نسخ بيانات الوحش إلى نموذج الإضافة في تبويب الشخصيات (خانة \"وحش PvE\" مفعّلة)." + (hasSkills ? " مهاراته جاهزة في محرر المهارات أدناه — يمكنك تعديلها ثم الضغط على \"إضافة\"." : "")
+            : "تم نسخ بيانات الشخصية إلى نموذج الإضافة." + (hasSkills ? " مهاراتها جاهزة في محرر المهارات أدناه — يمكنك تعديلها ثم الضغط على \"إضافة\"." : ""));
         showAdminTab("admin-tab-characters");
     }
 }
 
-// يعرض المهارات المقترحة من المساعد الآلي داخل نموذج الإضافة، حتى يراها
-// الأدمن قبل الضغط على "إضافة" (تُرفق تلقائيًا بعد الحفظ وتفتح نافذة التعديل).
+// يعرض المهارات المقترحة من المساعد الآلي داخل محرر مهارات نموذج الإضافة
+// كصفوف قابلة للتعديل، حتى يعدّلها الأدمن أو يضيف/يحذف قبل الضغط على "إضافة".
 function renderPendingAICharacterSkills(){
-    const boxEl = document.getElementById("admin-character-skills-preview");
-    if(!boxEl) return;
     if(!Array.isArray(pendingAISkills) || !pendingAISkills.length){
-        boxEl.classList.add("hidden");
-        boxEl.innerHTML = "";
+        clearCharacterSkillRows();
         return;
     }
-    const rows = pendingAISkills.map((s, i) => {
-        const t = aiSkillTypeChoice(s);
-        const dmg = (t === "attack" || t === "unblockable") ? (Number(s.damage) || 0) : ((t === "control" && s.params && s.params.control_count) ? ("سيطر على " + s.params.control_count) : "—");
-        return `<li><strong>${escapeHtml(s.name || ("مهارة " + (i + 1)))}</strong> · ${escapeHtml(t)} · ضرر ${dmg} · CD ${escapeHtml(s.cooldown ?? 0)}</li>`;
-    }).join("");
-    boxEl.innerHTML = `<div class="admin-ai-skills-note">✨ مهارات المساعد الآلي (تُرفق تلقائيًا عند الإضافة):</div><ul>${rows}</ul>`;
-    boxEl.classList.remove("hidden");
+    pendingAISkills.forEach(s => addCharacterSkillRow(s));
+}
+
+// محرر مهارات نموذج الإضافة: صف لكل مهارة (اسم + نوع + ضرر + تهدئة + وصف + حذف).
+function addCharacterSkillRow(skill){
+    const editor = document.getElementById("admin-char-skills-editor");
+    if(!editor) return;
+    const empty = editor.querySelector(".admin-skills-empty");
+    if(empty) empty.remove();
+    const sk = skill || {};
+    const row = document.createElement("div");
+    row.className = "admin-skill-edit-row admin-ai-skill-editor-row";
+    const t = aiSkillTypeChoice(sk);
+    row.innerHTML = `
+        <input class="ai-sk-name" type="text" placeholder="اسم المهارة (إلزامي)" value="${escapeAttr(sk.name || "")}">
+        <select class="ai-sk-type">${skillTypeOptionsHtml(t)}</select>
+        <input class="ai-sk-damage" type="number" step="any" placeholder="الضرر (يُقرَّب لمضاعفات 50 لضربات الهجوم)" value="${escapeAttr(sk.damage ?? "")}">
+        <input class="ai-sk-cooldown" type="number" step="any" placeholder="التهدئة (أدوار)" value="${escapeAttr(sk.cooldown ?? "")}">
+        <input class="ai-sk-desc" type="text" placeholder="وصف المهارة (اختياري)" value="${escapeAttr(sk.description || "")}">
+        <button type="button" class="admin-btn" onclick="removeCharacterSkillRow(this)">🗑️</button>
+    `;
+    editor.appendChild(row);
+}
+
+function removeCharacterSkillRow(btn){
+    const row = btn.closest(".admin-ai-skill-editor-row");
+    if(!row) return;
+    const editor = document.getElementById("admin-char-skills-editor");
+    row.remove();
+    if(editor && !editor.querySelector(".admin-ai-skill-editor-row")){
+        editor.innerHTML = `<div class="admin-skills-empty">لا مهارات بعد — أضفها يدويًا أو انسخ اقتراح المساعد الذكي لملئها.</div>`;
+    }
+}
+
+// يجمع المهارات من المحرر بصيغة قابلة لـ createAISkillsForCharacter
+// (يستبعد الصفوف الفارغة تمامًا).
+function collectCharacterSkillRows(){
+    const editor = document.getElementById("admin-char-skills-editor");
+    if(!editor) return [];
+    const rows = [];
+    editor.querySelectorAll(".admin-ai-skill-editor-row").forEach(row => {
+        const name = (row.querySelector(".ai-sk-name") || {}).value || "";
+        if(!name.trim()) return;
+        rows.push({
+            name: name.trim(),
+            type: (row.querySelector(".ai-sk-type") || {}).value || "attack",
+            damage: Number((row.querySelector(".ai-sk-damage") || {}).value) || 0,
+            cooldown: Number((row.querySelector(".ai-sk-cooldown") || {}).value) || 0,
+            description: ((row.querySelector(".ai-sk-desc") || {}).value || "").trim()
+        });
+    });
+    return rows;
+}
+
+// يفرّغ محرر المهارات بالكامل (إخفاء صفوفه وإظهار رسالة "لا مهارات بعد").
+function clearCharacterSkillRows(){
+    const editor = document.getElementById("admin-char-skills-editor");
+    if(!editor) return;
+    editor.innerHTML = `<div class="admin-skills-empty">لا مهارات بعد — أضفها يدويًا أو انسخ اقتراح المساعد الذكي لملئها.</div>`;
 }
 
 
@@ -8428,7 +8480,10 @@ function aiSkillTypeChoice(sk){
         "lifesteal": "lifesteal", "reflect": "reflect",
         "seal": "seal", "unseal": "unseal", "poison": "poison",
         "shadow": "shadow", "hp_boost": "hp_boost", "atk_boost": "atk_boost",
-        "delay_cooldown": "delay_cooldown"
+        "delay_cooldown": "delay_cooldown",
+        "unblockable_reflect": "unblockable_reflect",
+        "consecutive_turns": "consecutive_turns",
+        "absorb_atk": "absorb_atk", "absorb_hp": "absorb_hp"
     };
     return typeAliases[t] || "attack";
 }

@@ -2913,6 +2913,95 @@ margin-left:8px;
 }
 
 
+/* محرر مهارات نموذج إضافة الشخصية/الوحش (صفوف قابلة للتعديل) */
+.admin-char-skills-editor-box{
+  margin:12px 0 4px;
+  padding:12px;
+  border:1px solid rgba(124,58,237,.45);
+  border-radius:10px;
+  background:rgba(124,58,237,.06);
+}
+.admin-char-skills-editor-box h4{
+  color:#c4b5fd;
+  font-size:14px;
+  margin:0 0 4px;
+}
+.admin-char-skills-editor-box .admin-hint{
+  font-size:12px;
+}
+.admin-char-skills-editor-box .form-box{
+  padding:0;
+  background:transparent;
+  border:none;
+}
+.admin-char-skills-editor-box > .admin-btn{
+  margin-top:8px;
+  width:100%;
+}
+.admin-skills-empty{
+  font-size:12px;
+  color:#999;
+  padding:6px 0;
+}
+.admin-ai-skill-editor-row{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  flex-wrap:wrap;
+  background:#1b1b1b;
+  border:1px solid #333;
+  border-radius:10px;
+  padding:8px;
+  margin-bottom:8px;
+}
+.admin-ai-skill-editor-row .ai-sk-name{
+  flex:1 1 100%;
+  min-width:120px;
+  padding:8px;
+  border-radius:6px;
+  border:1px solid #444;
+  background:#121212;
+  color:#fff;
+  font-size:13px;
+}
+.admin-ai-skill-editor-row .ai-sk-type{
+  flex:1 1 100%;
+  min-width:90px;
+  padding:8px;
+  border-radius:6px;
+  border:1px solid #444;
+  background:#121212;
+  color:#fff;
+  font-size:13px;
+}
+.admin-ai-skill-editor-row .ai-sk-damage,
+.admin-ai-skill-editor-row .ai-sk-cooldown{
+  flex:1;
+  min-width:80px;
+  padding:8px;
+  border-radius:6px;
+  border:1px solid #444;
+  background:#121212;
+  color:#fff;
+  font-size:13px;
+}
+.admin-ai-skill-editor-row .ai-sk-desc{
+  flex:1 1 100%;
+  min-width:120px;
+  padding:8px;
+  border-radius:6px;
+  border:1px solid #444;
+  background:#121212;
+  color:#fff;
+  font-size:13px;
+}
+.admin-ai-skill-editor-row .admin-btn{
+  flex-shrink:0;
+  padding:8px 12px;
+  font-size:13px;
+}
+
+
 .admin-edit-box{
 
 max-width:420px;
