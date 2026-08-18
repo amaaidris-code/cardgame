@@ -6058,19 +6058,16 @@ async function addCharacter(){
     document.getElementById("admin-character-quote").value = "";
     document.getElementById("admin-character-glow-color").value = "#3b82ff";
     document.getElementById("admin-character-glow-locked").checked = false;
-    clearCharacterSkillRows();
 
 
-    refreshAdminViews();
-
-
-    // أنشئ واربط المهارات الموجودة في محرر المهارات بنموذج الإضافة (إن وجدت)
-    // ثم افتح نافذة التعديل (بعد تحديث الكاش) لمراجعة المهارات.
+    // اقرأ المهارات من محرر المهارات أولًا ثم فرّغه، حتى لا نفقد الصفوف
+    // قبل ربطها بالشخصية (كان المسح يحدث قبل الجمع فيُضاع كل المهارات).
     let newCharId = (data && Array.isArray(data) ? data[0] : data) || null;
     const skillRows = collectCharacterSkillRows();
+    clearCharacterSkillRows();
+    refreshAdminViews();
     if(newCharId && skillRows.length){
         await createAISkillsForCharacter(newCharId, skillRows);
-        clearCharacterSkillRows();
         await loadAdminPanel();
         await openEditCharacterModal(newCharId);
     }
