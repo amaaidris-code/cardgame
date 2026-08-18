@@ -821,10 +821,10 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         const me = getPlayerId();
         let html = '<div class="cd-targets-label">🎯 اختر الهدف:</div>';
         html += `<button class="cd-target cd-target-monster" onclick="ClanDungeon.useOnMonster()">👹 الوحش (${st.monster_name || "وحش"})</button>`;
-players.forEach(function(p){
+        players.forEach(function(p){
             if(!p.alive) return;
             const isMe = String(p.player_id)===String(me);
-            html += `<button class="cd-target" onclick="ClanDungeon.useOnPlayer('${p.player_id}')">${isMe?"👤 yourself":"🤝 Player"}</button>`;
+            html += `<button class="cd-target" onclick="ClanDungeon.useOnPlayer('${p.player_id}')">${isMe?"👤 نفسك":"🤝 لاعب"}</button>`;
             html += `<button class="cd-target cd-target-companion" onclick="ClanDungeon.useOnComp('${p.player_id}')">🐾 مرافق</button>`;
         });
         el.innerHTML = html;

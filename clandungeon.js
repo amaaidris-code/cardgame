@@ -239,6 +239,12 @@ const ClanDungeon = (function(){
                 const { data, error } = await supabaseClient.rpc("clan_dungeon_get_state", { p_token: getToken(), p_run_id: myRun });
                 if(error){ b.innerHTML = '<div class="chat-empty">⚠️ ' + escapeHtml(error.message) + '</div>'; return; }
                 myState = Array.isArray(data) ? data[0] : data;
+                updateIcons();
+                // Ensure companion icon reflects initial state after state load
+                if (myState && myState.status === "active") {
+                    // Force refresh after battle starts
+                    setTimeout(updateIcons, 500);
+                }
             }catch(e){ b.innerHTML = '<div class="chat-empty">⚠️ ' + escapeHtml(e.message||e) + '</div>'; return; }
         }
         const st = myState;
@@ -554,7 +560,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         selectedSkill = null;
         renderTargets();
 
-        const locked = (cdView === "companion") ? !compTurn : !myTurnNow;
+        const locked = !myTurnNow;
         const pages = chunkSkills(skills, 4);
         let currentIndex = Number(pagesEl.dataset.activePage || 0);
         currentIndex = Math.max(0, Math.min(currentIndex, pages.length - 1));
@@ -563,12 +569,13 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
             const div = document.createElement("div");
             div.className = "skills-page" + (i === currentIndex ? " active" : "");
             chunk.forEach(function(s){
+                const sid = s.skill_id || s.id;
                 const stealAbility = s.effect && ["steal","copy","control","shadow","delay_cooldown"].indexOf(s.effect) !== -1;
                 const btn = document.createElement("button");
-                btn.dataset.skill = s.skill_id;
+                btn.dataset.skill = sid;
                 btn.innerHTML = `<span class="cd-skill-emoji">${skillEmoji(s)}</span><span class="cd-skill-name">${escapeHtml(s.name)}</span>${s.cooldown ? `<em class="cd-skill-cd">CD ${s.cooldown}</em>` : ""}`;
                 btn.disabled = locked || (stealAbility && !myTurnNow);
-                btn.onclick = function(){ if(stealAbility){ ClanDungeon.openStealPicker(s.skill_id); } else { ClanDungeon.pickSkill(s.skill_id); } };
+                btn.onclick = function(){ if(stealAbility){ ClanDungeon.openStealPicker(sid); } else { ClanDungeon.pickSkill(sid); } };
                 div.appendChild(btn);
             });
             pagesEl.appendChild(div);
@@ -667,7 +674,8 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
                 <div class="cd-steal-title">🎯 اختر مهارة من الوحش لسَرقتها/نسخها</div>
                 <div class="cd-steal-list">
                     ${monsterSkills.map(function(s){
-                        return `<button class="cd-steal-opt" onclick="ClanDungeon.castSteal('${abilitySkillId}','${s.skill_id}')"><span class="cd-skill-emoji">${skillEmoji(s)}</span> ${escapeHtml(s.name)}</button>`;
+                        const msid = s.skill_id || s.id;
+                        return `<button class="cd-steal-opt" onclick="ClanDungeon.castSteal('${abilitySkillId}','${msid}')"><span class="cd-skill-emoji">${skillEmoji(s)}</span> ${escapeHtml(s.name)}</button>`;
                     }).join("")}
                 </div>
                 <button class="cd-btn cd-leave" onclick="this.closest('.cd-steal-overlay').remove()">إلغاء</button>
@@ -817,6 +825,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
             if(!p.alive) return;
             const isMe = String(p.player_id)===String(me);
             html += `<button class="cd-target" onclick="ClanDungeon.useOnPlayer('${p.player_id}')">${isMe?"👤 نفسك":"🤝 لاعب"}</button>`;
+            html += `<button class="cd-target cd-target-companion" onclick="ClanDungeon.useOnComp('${p.player_id}')">🐾 مرافق</button>`;
         });
         el.innerHTML = html;
     }
@@ -837,6 +846,24 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         selectedSkill = null;
         renderTargets();
         await doUse(skillId, targetId, isWeapon);
+    }
+
+    async function useOnComp(targetId){
+        if(!selectedSkill) return;
+        const skillId = selectedSkill;
+        const isWeapon = selectedWeaponSkill;
+        selectedSkill = null;
+        renderTargets();
+        try{
+            await supabaseClient.rpc("clan_dungeon_cast_on_companion", {
+                p_token: getToken(), p_run_id: myRun, p_skill_id: skillId,
+                p_target_player_id: targetId
+            });
+        }catch(e){
+            toast(e.message || e);
+        }
+        await refreshState();
+        await renderRun();
     }
 
     async function doUse(skillId, targetPlayerId, isWeapon){
