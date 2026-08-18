@@ -8214,7 +8214,6 @@ let lastAIExisting = null; // بيانات الكيان الحالي (لكي ي�
 let pendingAISkills = null; // مهارات المساعد المحفوظة للربط بشخصية تُضاف من النموذج مباشرة
 
 async function loadAITargetOptions(){
-    const type = (document.getElementById("admin-ai-type") || {}).value || "character";
     const target = document.getElementById("admin-ai-target");
     if(!target) return;
     target.innerHTML = '<option value="">— وضع: إنشاء جديد —</option>';
@@ -8223,25 +8222,33 @@ async function loadAITargetOptions(){
     const admin_token = localStorage.getItem("admin_token");
     if(!admin_token) return;
     try{
-        let list = [];
-        if(type === "character" || type === "monster"){
-            const { data } = await supabaseClient.from("characters").select("id, name, is_monster").order("name");
-            if(data) list = (type === "monster")
-                ? data.filter(c => c.is_monster)
-                : data.filter(c => !c.is_monster);
-        }else{
-            const rpcName = type === "weapon" ? "admin_list_weapons"
-                : type === "potion" ? "admin_list_potions"
-                : type === "companion" ? "admin_list_companions" : null;
-            if(rpcName){
-                const { data, error } = await supabaseClient.rpc(rpcName, { p_admin_token: admin_token });
-                if(error) throw error;
-                list = Array.isArray(data) ? data : [];
+        const opts = [];
+        const addGroup = (label, items) => {
+            if(items && items.length){
+                opts.push(`<optgroup label="${escapeAttr(label)}">`);
+                for(const t of items){
+                    opts.push(`<option value="${escapeAttr(t._type + ":" + t.id)}">${escapeHtml(t.name || "بلا اسم")}</option>`);
+                }
+                opts.push(`</optgroup>`);
             }
+        };
+        const toArray = (d) => Array.isArray(d) ? d : (d ? [d] : []);
+        const { data: chars } = await supabaseClient.from("characters").select("id, name, is_monster").order("name");
+        if(chars){
+            addGroup("🎭 شخصيات", chars.filter(c => !c.is_monster).map(c => ({ id: c.id, name: c.name, _type: "character" })));
+            addGroup("👹 وحوش (PvE)", chars.filter(c => c.is_monster).map(c => ({ id: c.id, name: c.name, _type: "monster" })));
         }
-        if(list.length){
-            target.innerHTML = '<option value="">— وضع: إنشاء جديد —</option>' + list.map(t =>
-                `<option value="${escapeAttr(t.id)}">${escapeHtml(t.name || "بلا اسم")}</option>`).join("");
+        const { data: weapons, error: e1 } = await supabaseClient.rpc("admin_list_weapons", { p_admin_token: admin_token });
+        if(e1) throw e1;
+        addGroup("⚔️ أسلحة", toArray(weapons).map(t => ({ id: t.id, name: t.name, _type: "weapon" })));
+        const { data: potions, error: e2 } = await supabaseClient.rpc("admin_list_potions", { p_admin_token: admin_token });
+        if(e2) throw e2;
+        addGroup("🧪 جرعات", toArray(potions).map(t => ({ id: t.id, name: t.name, _type: "potion" })));
+        const { data: companions, error: e3 } = await supabaseClient.rpc("admin_list_companions", { p_admin_token: admin_token });
+        if(e3) throw e3;
+        addGroup("👥 مرافقون", toArray(companions).map(t => ({ id: t.id, name: t.name, _type: "companion" })));
+        if(opts.length){
+            target.innerHTML = '<option value="">— وضع: إنشاء جديد —</option>' + opts.join("");
         }
     }catch(e){
         console.error(e);
@@ -8250,11 +8257,21 @@ async function loadAITargetOptions(){
 
 async function onAITargetChange(){
     const sel = document.getElementById("admin-ai-target");
-    const id = sel ? sel.value : "";
+    const val = sel ? sel.value : "";
+    let type = "";
+    let id = "";
+    if(val && val.indexOf(":") !== -1){
+        type = val.slice(0, val.indexOf(":"));
+        id = val.slice(val.indexOf(":") + 1);
+    }
     lastAIEntityId = id || null;
     lastAIExisting = null;
-    if(!id) return;
-    const type = (document.getElementById("admin-ai-type") || {}).value || "character";
+    if(!id){ return; }
+    if(sel && type){
+        const typeSel = document.getElementById("admin-ai-type");
+        if(typeSel && typeSel.value !== type) typeSel.value = type;
+        lastAIType = type;
+    }
     const admin_token = localStorage.getItem("admin_token");
     try{
         if(type === "character" || type === "monster"){
