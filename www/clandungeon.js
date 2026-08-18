@@ -393,6 +393,11 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         const myPhoto = (myChar && (myChar.identity_image || myChar.skill_card_image)) ? (myChar.identity_image || myChar.skill_card_image) : "";
         const myName = (myChar && myChar.name) ? myChar.name : "أنت";
 
+        // في عرض المرافق: البطاقة تعرض صورة/اسم المرافق بدل الشخصية
+        const compVisible = cdView === "companion" && st.my_comp_alive && (st.my_comp_hp || 0) > 0;
+        const faceImg = (compVisible && st.my_comp_image) ? st.my_comp_image : myPhoto;
+        const faceName = compVisible ? (st.my_comp_name || "مرافق") : myName;
+
         const monsterHpPct = st.monster_max_hp ? Math.max(0, Math.min(100, (st.monster_hp / st.monster_max_hp) * 100)) : 0;
         const myHpPct = me.max_hp ? Math.max(0, Math.min(100,(me.hp/me.max_hp)*100)) : 0;
         const fallbackImg = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="100%" height="100%" fill="#1a1a22" rx="8"/><text x="50%" y="55%" font-size="20" text-anchor="middle" fill="#fff">👹</text></svg>')}`;
@@ -441,8 +446,8 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
                     <div class="vs-divider"><span class="vs-line vs-line-left"></span><span class="vs-text">VS</span><span class="vs-line vs-line-right"></span></div>
                 </div>
                 <div class="battle-card player-card">
-                    <img class="battle-image" src="${escapeHtml(myPhoto)}" alt="" onerror="this.onerror=null;this.src='${fallbackImg}'">
-                    <h3>${escapeHtml(myName)}</h3>
+                    <img class="battle-image" src="${escapeHtml(faceImg)}" alt="" onerror="this.onerror=null;this.src='${fallbackImg}'">
+                    <h3>${escapeHtml(faceName)}</h3>
                     <button class="weapon-view-icon" id="cd-weapon-icon" style="display:none;" onclick="ClanDungeon.cdToggleView('weapon')" title="تبديل عرض الشخصية/السلاح">⚔️</button>
                     <button class="companion-view-icon" id="cd-companion-icon" style="display:none;" onclick="ClanDungeon.cdToggleView('companion')" title="تبديل عرض الشخصية/المرافق">🐾</button>
                     <div class="hp-bar"><div class="hp-fill cd-player-hp" style="width:${myHpPct}%"></div></div>
@@ -685,6 +690,9 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
     }
 
     async function castSteal(abilitySkillId, targetSkillId){
+        if(isMyCompTurn()){ toast("استخدم مهارة مرافقك أولًا"); return; }
+        const trg = monsterSkills.find(function(s){ return String(s.skill_id || s.id) === String(targetSkillId); });
+        const trgName = trg ? trg.name : "";
         try{
             await supabaseClient.rpc("clan_dungeon_steal_or_copy_skill", {
                 p_token: getToken(), p_run_id: myRun,
@@ -692,13 +700,19 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
                 p_target_player_id: null
             });
             removeStealOverlay();
+            toast(trgName ? `⚡ سرقت/نسخت مهارة «${escapeHtml(trgName)}»!` : "⚡ تم تنفيذ مهارة السرقة/النسخ");
             await refreshState();
             await renderRun();
+            if(isMyCompTurn()){
+                toast("🐾 الآن دور مرافقك! اختر مهارته واضغط هدفًا");
+            }
             if(myState && myState.turn_phase === "monster") await actMonster();
         }catch(e){
-            toast(e.message || e);
+            const msg = (e && e.message) ? e.message : "تعذّر تنفيذ السرقة (خطأ في الخادم)";
+            toast(msg);
             removeStealOverlay();
             await refreshState();
+            await renderRun();
         }
     }
 
@@ -810,24 +824,52 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         renderTargets();
     }
 
+    function removeTargetsMenu(){
+        const ov = document.querySelector("#clandungeon-content .cd-targets-menu");
+        if(ov) ov.remove();
+    }
+
+    function clearTargetsMenu(){
+        removeTargetsMenu();
+        selectedSkill = null;
+        selectedWeaponSkill = false;
+        const btns = document.querySelectorAll(".cd-skill-btn");
+        btns.forEach(function(b){ b.classList.remove("cd-selected"); });
+    }
+
     function renderTargets(){
         const st = myState;
-        const el = document.getElementById("cd-targets");
-        if(!el) return;
-        if(!selectedSkill){ selectedWeaponSkill = false; el.innerHTML = ""; return; }
-        const members = {};
-        // نعيد بناء أسماء الأعضاء
+        if(!selectedSkill){ selectedWeaponSkill = false; return; }
+        removeTargetsMenu();
         const players = (st && st.players) || [];
         const me = getPlayerId();
-        let html = '<div class="cd-targets-label">🎯 اختر الهدف:</div>';
-        html += `<button class="cd-target cd-target-monster" onclick="ClanDungeon.useOnMonster()">👹 الوحش (${st.monster_name || "وحش"})</button>`;
+        let list = "";
+        // الوحش
+        list += `<button class="cd-steal-opt cd-target-monster" onclick="ClanDungeon.useOnMonster()"><span class="cd-skill-emoji">👹</span> ${escapeHtml(st.monster_name || "الوحش")}</button>`;
+        // اللاعبون ومرافقوهم
         players.forEach(function(p){
             if(!p.alive) return;
             const isMe = String(p.player_id)===String(me);
-            html += `<button class="cd-target" onclick="ClanDungeon.useOnPlayer('${p.player_id}')">${isMe?"👤 نفسك":"🤝 لاعب"}</button>`;
-            html += `<button class="cd-target cd-target-companion" onclick="ClanDungeon.useOnComp('${p.player_id}')">🐾 مرافق</button>`;
+            const pLabel = isMe ? "👤 نفسك" : "🤝 لاعب";
+            list += `<button class="cd-steal-opt" onclick="ClanDungeon.useOnPlayer('${p.player_id}')"><span class="cd-skill-emoji">👤</span> ${pLabel}</button>`;
+            const compAlive = p.comp_alive && (p.comp_hp || 0) > 0;
+            if(compAlive){
+                const cFace = p.comp_image
+                    ? `<img src="${escapeHtml(p.comp_image)}" alt="" style="width:22px;height:22px;border-radius:50%;vertical-align:middle;">`
+                    : "🐾";
+                list += `<button class="cd-steal-opt" onclick="ClanDungeon.useOnComp('${p.player_id}')"><span class="cd-skill-emoji">${cFace}</span> مرافق</button>`;
+            }
         });
-        el.innerHTML = html;
+        const ov = document.createElement("div");
+        ov.className = "cd-steal-overlay cd-targets-menu";
+        ov.innerHTML = `
+            <div class="cd-steal-panel">
+                <div class="cd-steal-title">🎯 اختر الهدف:</div>
+                <div class="cd-steal-list">${list}</div>
+                <button class="cd-btn cd-leave" onclick="ClanDungeon.clearTargetsMenu()">إلغاء</button>
+            </div>`;
+        const host = document.getElementById("clandungeon-content");
+        if(host) host.appendChild(ov);
     }
 
     async function useOnMonster(){
@@ -835,7 +877,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         const skillId = selectedSkill;
         const isWeapon = selectedWeaponSkill;
         selectedSkill = null;
-        renderTargets();
+        removeTargetsMenu();
         await doUse(skillId, null, isWeapon);
     }
 
@@ -844,7 +886,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         const skillId = selectedSkill;
         const isWeapon = selectedWeaponSkill;
         selectedSkill = null;
-        renderTargets();
+        removeTargetsMenu();
         await doUse(skillId, targetId, isWeapon);
     }
 
@@ -853,7 +895,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         const skillId = selectedSkill;
         const isWeapon = selectedWeaponSkill;
         selectedSkill = null;
-        renderTargets();
+        removeTargetsMenu();
         try{
             await supabaseClient.rpc("clan_dungeon_cast_on_companion", {
                 p_token: getToken(), p_run_id: myRun, p_skill_id: skillId,
@@ -1130,6 +1172,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         useCdPotion,
         useOnMonster,
         useOnPlayer,
+        clearTargetsMenu,
         openStealPicker,
         castSteal,
         claimReward,
