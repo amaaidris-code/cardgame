@@ -16,8 +16,8 @@ const GEMINI_MODELS = [
 const SCHEMAS = {
   character: '{"name":"string","anime":"string","hp":"number 40..1000","atk":"number 40..1000","quote":"string","power_name":"string","power_description":"string","gold_prize":"number 0..5000"}',
   monster: '{"name":"string","anime":"string","hp":"number 100..2000","atk":"number 80..1000","quote":"string","power_name":"string","power_description":"string","gold_prize":"number 0..5000"}',
-  weapon: '{"name":"string","description":"string","price":"number 100..10000","max_durability":"number 1..200","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy| empty string","description":"string optional"}]}',
-  companion: '{"name":"string","description":"string","price":"number 0..20000","base_hp":"number 50..500","base_atk":"number 20..300","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy| empty string","description":"string optional"}]}',
+  weapon: '{"name":"string","description":"string","price":"number 100..10000","max_durability":"number 1..200","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number of turns 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy| empty string","description":"string optional"}]}',
+  companion: '{"name":"string","description":"string","price":"number 0..20000","base_hp":"number 50..500","base_atk":"number 20..300","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number of turns 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy| empty string","description":"string optional"}]}',
   potion: '{"name":"string","description":"string","effect_type":"heal|heal_percent|reset_cooldown|atk_boost|shield|skill","effect_value":"number 0..10000","price":"number 0..5000"}'
 };
 
@@ -28,7 +28,8 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
       "You are the assistant for a mobile card-battle game. The admin gives you the CURRENT data of an " +
       "existing " + entityType + " (below) and a request about how to adjust it (name, stats, skills) in " +
       "Arabic or English. Reply with ONLY valid JSON matching the requested type. Do NOT wrap in markdown. " +
-      "Do NOT invent fields outside the schema. Keep every field from the CURRENT data that the request " +
+      "Do NOT invent fields outside the schema. IMPORTANT: skill 'cooldown' is measured in TURNS, not seconds. " +
+      "Keep every field from the CURRENT data that the request " +
       "does not change — only change the fields implied by the request. If a field is missing from current " +
       "data, keep the same key name with a sensible value. Text fields may be in the same language as the request.\n\n" +
       "Requested type: " + entityType + "\nSchema (use these keys):\n" + schema
@@ -38,7 +39,9 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
     "You are the assistant for a mobile card-battle game. The admin gives you a short " +
     "description (name, stats, skills) in Arabic or English. You must reply with ONLY valid JSON " +
     "matching the requested type. Do NOT wrap in markdown. Do NOT invent fields outside the schema. " +
-    "Use sensible balanced numbers. Text fields may be in the same language as the request.\n\n" +
+    "Use sensible balanced numbers. IMPORTANT: skill 'cooldown' is measured in TURNS, not seconds " +
+    "(e.g. cooldown 1 means the skill can be reused after the fighter takes 1 of their own turns). " +
+    "Text fields may be in the same language as the request.\n\n" +
     "Requested type: " + entityType + "\nSchema (use these keys):\n" + schema
   );
 }
