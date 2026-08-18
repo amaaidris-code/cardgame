@@ -8301,7 +8301,7 @@ function applyLastAI(type){
         alert("تم نسخ بيانات الجرعة إلى نموذج الإضافة.");
         showAdminTab("admin-tab-potions");
     }else{
-        // character أو monster
+        // character أو monster (نموذج الإضافة مشترك في تبويب الشخصيات)
         set("admin-character-name", f.name);
         set("admin-character-anime", f.anime || "");
         set("admin-character-image", f.image);
@@ -8312,8 +8312,10 @@ function applyLastAI(type){
         set("admin-character-quote", f.quote);
         set("admin-character-gold-prize", f.gold_prize);
         setBool("admin-character-is-monster", type === "monster");
-        alert("تم نسخ بيانات الشخصية إلى نموذج الإضافة.");
-        showAdminTab(type === "monster" ? "admin-tab-monsters" : "admin-tab-characters");
+        alert(type === "monster"
+            ? "تم نسخ بيانات الوحش إلى نموذج الإضافة في تبويب الشخصيات (خانة \"وحش PvE\" مفعّلة). اضغط إضافة."
+            : "تم نسخ بيانات الشخصية إلى نموذج الإضافة.");
+        showAdminTab("admin-tab-characters");
     }
 }
 

@@ -24,6 +24,9 @@ const ClanDungeon = (function(){
     let turnTimerInterval = null;
     let turnDeadline = null;
     let skipInFlight = false;
+    let lastHeartbeatTs = 0;                 // منع إرسال نبضة في كل دورة poll
+    let membersCache = { clanId: null, at: 0, map: {} };
+    let activeCharCache = { runId: null, char: null };
 
     function getToken(){ return localStorage.getItem("player_token"); }
     function getPlayerId(){ return localStorage.getItem("player_id"); }
@@ -388,10 +391,18 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         const myCompTurn = isMyCompTurn();
 
         let myChar = null;
-        try{
-            const oc = await supabaseClient.rpc("get_my_active_character", { p_token: getToken() });
-            if(oc && oc.data && oc.data[0]) myChar = oc.data[0];
-        }catch(e){}
+        // الشخصية النشطة لا تتغير أثناء معركة واحدة؛ نجلبها مرة واحدة فقط للغارة
+        if(activeCharCache.runId === myRun && activeCharCache.char){
+            myChar = activeCharCache.char;
+        } else {
+            try{
+                const oc = await supabaseClient.rpc("get_my_active_character", { p_token: getToken() });
+                if(oc && oc.data && oc.data[0]){
+                    myChar = oc.data[0];
+                    activeCharCache = { runId: myRun, char: myChar };
+                }
+            }catch(e){}
+        }
         const myPhoto = (myChar && (myChar.identity_image || myChar.skill_card_image)) ? (myChar.identity_image || myChar.skill_card_image) : "";
         const myName = (myChar && myChar.name) ? myChar.name : "أنت";
         myFace = myPhoto;
@@ -439,7 +450,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         b.innerHTML = `
             <div id="clandungeon-toast" class="cd-toast hidden"></div>
             <div class="cd-turn-banner ${myTurnNow?'cd-turn-mine':''}">
-                <span class="cd-exit" onclick="ClanDungeon.leaveRun()" title="خروج / حذف الغارة">🚪</span>
+                <button class="cd-exit" onclick="ClanDungeon.leaveRun()" title="الخروج من الغارة والعودة لقائمة الغارات">🚪 الخروج</button>
                 <span class="cd-turn-label">${turnLabel}</span>
                 ${hasDeadline ? `<span id="cd-turn-timer" class="cd-turn-timer"></span>` : ""}
             </div>
@@ -1218,6 +1229,8 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         try{
             await supabaseClient.rpc("clan_dungeon_leave", { p_token: getToken(), p_run_id: myRun });
         }catch(e){}
+        activeCharCache = { runId: null, char: null };
+        lastHeartbeatTs = 0;
         myRun = null;
         myState = null;
         if(raceTimer){ clearInterval(raceTimer); raceTimer = null; }
@@ -1231,8 +1244,9 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
 
     function stateKey(st){
         if(!st) return "";
+        const inLobby = st.status === "lobby" || st.status === "race";
         const parts = [st.status, st.turn_phase, st.turn_player_id || "none", st.monster_index, st.monster_hp, (st.monster_hp>0&&st.turn_phase==="monster")?"M":""];
-        (st.players || []).forEach(function(p){ parts.push(p.player_id, p.hp, p.alive, p.present?1:0); });
+        (st.players || []).forEach(function(p){ parts.push(p.player_id, p.hp, p.alive, inLobby ? (p.present?1:0) : 0); });
         return parts.join("|");
     }
 
@@ -1255,7 +1269,13 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
 
     async function refreshState(){
         if(!myRun) return null;
-        supabaseClient.rpc("clan_dungeon_heartbeat", { p_token: getToken(), p_run_id: myRun }).then(function(){}).catch(function(){});
+        // نبضة خلال 12 ثانية كافية لاعتبار اللاعب حاضرًا؛ أرسلها بوتيرة أقل
+        // (كل ~9 ثوانٍ) بدلًا من كل دورة poll لتخفيف أعباء الكتابة على السيرفر.
+        const nowTs = Date.now();
+        if(nowTs - lastHeartbeatTs >= 9000){
+            lastHeartbeatTs = nowTs;
+            supabaseClient.rpc("clan_dungeon_heartbeat", { p_token: getToken(), p_run_id: myRun }).then(function(){}).catch(function(){});
+        }
         const { data, error } = await supabaseClient.rpc("clan_dungeon_get_state", { p_token: getToken(), p_run_id: myRun });
         if(error) throw error;
         myState = Array.isArray(data) ? data[0] : data;
@@ -1263,11 +1283,14 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
     }
 
     async function getMemberNames(){
+        const nowTs = Date.now();
+        if(membersCache.clanId === curClanId && nowTs - membersCache.at < 30000) return membersCache.map;
         const map = {};
         try{
             const { data, error } = await supabaseClient.rpc("clan_list_members", { p_token: getToken(), p_clan_id: curClanId });
             if(!error && data) data.forEach(function(m){ map[m.player_id] = m.username; });
         }catch(e){}
+        membersCache = { clanId: curClanId, at: nowTs, map: map };
         return map;
     }
 

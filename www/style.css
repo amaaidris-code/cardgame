@@ -6275,7 +6275,14 @@ box-shadow: 0 6px 24px rgba(0,0,0,0.5), 0 0 18px rgba(255,120,0,0.4);
 #clandungeon-screen .cd-turn-banner.cd-turn-mine{ border-color:rgba(53,196,111,.5); }
 #clandungeon-screen .cd-turn-label{ flex:1; font-size:13px; color:#ffe9a6; text-align:center; }
 #clandungeon-screen .cd-turn-timer{ font-size:13px; color:#ffd76b; }
-#clandungeon-screen .cd-exit{ cursor:pointer; font-size:15px; padding:2px 4px; opacity:.8; }
+#clandungeon-screen .cd-exit{
+  flex-shrink:0; cursor:pointer; border:1px solid rgba(198,40,40,.55);
+  background:linear-gradient(160deg,#c62828,#8e1f1f); color:#fff;
+  font-size:11px; padding:5px 9px; border-radius:8px; opacity:.92;
+  white-space:nowrap;
+}
+#clandungeon-screen .cd-btn.cd-exit{ border:1px solid rgba(198,40,40,.55); }
+#clandungeon-screen .cd-exit:hover{ opacity:1; }
 
 /* right-side player HP column */
 #clandungeon-screen .cd-players-side{
