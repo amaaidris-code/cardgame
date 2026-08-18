@@ -405,10 +405,14 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         const myHpPct = faceMaxHp ? Math.max(0, Math.min(100,(faceHp/faceMaxHp)*100)) : 0;
         const fallbackImg = `data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="100%" height="100%" fill="#1a1a22" rx="8"/><text x="50%" y="55%" font-size="20" text-anchor="middle" fill="#fff">👹</text></svg>')}`;
 
-        const compMini = isMyCompTurn() && st.my_comp_max_hp ? `
-            <div class="cd-own-comp ${st.my_comp_alive?'':'cd-dead'}">
-                <span class="cd-own-comp-name">🐾 ${escapeHtml(st.my_comp_name || "مرافق")}</span>
-                <span class="cd-own-comp-hp">${st.my_comp_alive ? (st.my_comp_hp + "/" + st.my_comp_max_hp) : "☠️ سقط"}</span>
+        // HP منفصل للمرافق يُعرض أسفل بطاقة اللاعب دائمًا عندما يمتلك المرافق
+        const compAliveNow = st.my_comp_alive && (st.my_comp_hp || 0) > 0;
+        const compHpPct = (st.my_comp_max_hp || 0) ? Math.max(0, Math.min(100, ((st.my_comp_hp || 0) / st.my_comp_max_hp) * 100)) : 0;
+        const compHpBlock = (st.my_comp_max_hp && st.my_comp_max_hp > 0) ? `
+            <div class="cd-arena-comp ${compAliveNow ? '' : 'cd-comp-dead'}">
+                <span class="cd-arena-comp-name">🐾 ${escapeHtml(st.my_comp_name || "مرافق")}</span>
+                <div class="hp-bar cd-comp-hp-wrap"><div class="hp-fill cd-comp-hp" style="width:${compHpPct}%"></div></div>
+                <span class="cd-arena-comp-hp">${compAliveNow ? ((st.my_comp_hp || 0) + "/" + st.my_comp_max_hp) : "☠️ سقط"}</span>
             </div>` : "";
 
         const sidePlayers = players.map(function(p){
@@ -455,6 +459,7 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
                     <button class="companion-view-icon" id="cd-companion-icon" style="display:none;" onclick="ClanDungeon.cdToggleView('companion')" title="تبديل عرض الشخصية/المرافق">🐾</button>
                     <div class="hp-bar"><div class="hp-fill cd-player-hp" style="width:${myHpPct}%"></div></div>
                     <p>❤️ <span>${faceHp} / ${faceMaxHp}</span></p>
+                    ${compHpBlock}
                     <div class="used-skills" id="cd-player-used-skills"></div>
                     <div class="potion-bar" id="cd-potions"></div>
                     <div class="skills-container">
