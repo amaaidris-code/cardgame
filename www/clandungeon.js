@@ -765,11 +765,12 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         const targetComp = (targetKind === "comp");
         const trgName = pendingStealName(abilitySkillId, targetSkillId);
         try{
-            await supabaseClient.rpc("clan_dungeon_steal_or_copy_skill", {
+            const { error } = await supabaseClient.rpc("clan_dungeon_steal_or_copy_skill", {
                 p_token: getToken(), p_run_id: myRun,
                 p_ability_skill_id: abilitySkillId, p_target_skill_id: targetSkillId,
                 p_target_player_id: targetPlayerId, p_target_comp: targetComp
             });
+            if(error) throw error;
             removeStealOverlay();
             removeStealTargetsMenu();
             toast(trgName ? `⚡ سرقت/نسخت مهارة «${escapeHtml(trgName)}»!` : "⚡ تم تنفيذ مهارة السرقة/النسخ");
@@ -892,7 +893,8 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
     async function useCdPotion(potionId){
         if(!myTurn()){ toast("ليس دورك الآن"); return; }
         try{
-            await supabaseClient.rpc("clan_dungeon_use_potion", { p_token: getToken(), p_run_id: myRun, p_potion_id: potionId });
+            const { error } = await supabaseClient.rpc("clan_dungeon_use_potion", { p_token: getToken(), p_run_id: myRun, p_potion_id: potionId });
+            if(error) throw error;
             await refreshState();
             await renderRun();
         }catch(e){ toast(e.message || e); await refreshState(); }
@@ -986,10 +988,11 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
         selectedSkill = null;
         removeTargetsMenu();
         try{
-            await supabaseClient.rpc("clan_dungeon_cast_on_companion", {
+            const { error } = await supabaseClient.rpc("clan_dungeon_cast_on_companion", {
                 p_token: getToken(), p_run_id: myRun, p_skill_id: skillId,
                 p_target_player_id: targetId
             });
+            if(error) throw error;
         }catch(e){
             toast(e.message || e);
         }
@@ -1000,22 +1003,27 @@ const myReady = players.some(function(p){ return String(p.player_id)===String(ge
     async function doUse(skillId, targetPlayerId, isWeapon){
         const weaponFlag = (isWeapon === undefined) ? selectedWeaponSkill : isWeapon;
         try{
+            let err = null;
             if(weaponFlag){
-                await supabaseClient.rpc("clan_dungeon_use_weapon_skill", {
+                const res = await supabaseClient.rpc("clan_dungeon_use_weapon_skill", {
                     p_token: getToken(), p_run_id: myRun, p_skill_id: skillId,
                     p_target_player_id: targetPlayerId
                 });
+                if(res.error) err = res.error;
             } else if(isMyCompTurn()){
-                await supabaseClient.rpc("clan_dungeon_use_companion_skill", {
+                const res = await supabaseClient.rpc("clan_dungeon_use_companion_skill", {
                     p_token: getToken(), p_run_id: myRun, p_skill_id: skillId,
                     p_target_player_id: targetPlayerId
                 });
+                if(res.error) err = res.error;
             } else {
-                await supabaseClient.rpc("clan_dungeon_use_skill", {
+                const res = await supabaseClient.rpc("clan_dungeon_use_skill", {
                     p_token: getToken(), p_run_id: myRun, p_skill_id: skillId,
                     p_target_player_id: targetPlayerId
                 });
+                if(res.error) err = res.error;
             }
+            if(err) throw err;
             selectedWeaponSkill = false;
             await refreshState();
             await renderRun();

@@ -198,6 +198,8 @@ lang="ar">
 
     <button class="admin-tab-btn" data-admin-tab="admin-tab-companions" onclick="showAdminTab('admin-tab-companions')">👥 المرافقون</button>
 
+    <button class="admin-tab-btn" data-admin-tab="admin-tab-ai" onclick="showAdminTab('admin-tab-ai')">🤖 المساعد الذكي</button>
+
 </div>
 
 
@@ -390,6 +392,50 @@ lang="ar">
     <div id="admin-companion-skill-requests">
         جاري التحميل...
     </div>
+
+</div>
+
+
+<!-- ===== التبويب: المساعد الذكي ===== -->
+<div id="admin-tab-ai" class="admin-tab">
+
+    <div id="admin-ai-result"></div>
+
+    <hr>
+
+    <h3>🤖 المساعد الذكي — توليد محتوى</h3>
+
+    <div class="form-box admin-add-form">
+
+        <label>نوع الكيان
+            <select id="admin-ai-type">
+                <option value="character">🎭 شخصية</option>
+                <option value="monster">👹 وحش (PvE)</option>
+                <option value="weapon">⚔️ سلاح</option>
+                <option value="companion">👥 مرافق</option>
+                <option value="potion">🧪 جرعة</option>
+            </select>
+        </label>
+
+        <label>الوصف (بالعربي أو بالإنجليزي)
+            <textarea id="admin-ai-prompt" rows="4" placeholder="مثال: اصنع وحش نار اسمه «تنين اللهب»، 500 HP، 300 هجوم، مهارة «نَفَس النار» تسبب 150 ضرر بكولداون 3 ثوانٍ"></textarea>
+        </label>
+
+        <label>صورة (اختياري) — تُرفع إلى الخادم ثم تُستعمل للكيان
+            <input id="admin-ai-image" type="text" placeholder="رابط صورة (أو ارفع من الجهاز)">
+            <input id="admin-ai-image-file" type="file" accept="image/*" onchange="uploadAIImage()">
+        </label>
+
+        <button class="upload-status" id="admin-ai-spinner" style="display:none;">⏳ جاري توليد المحتوى...</button>
+
+        <button class="admin-btn" onclick="generateWithAI()">✨ توليد</button>
+        <button class="admin-btn" onclick="clearAIResult()">🧹 مسح</button>
+
+    </div>
+
+    <p class="admin-hint">
+        سيولّد المساعد محتوى مقترحًا هنا. بعد مراجعته، اضغط «نسخ للوحة الإضافة» لملء نموذج الإضافة الحالي للكيان، ثم احفظه كالمعتاد.
+    </p>
 
 </div>
 

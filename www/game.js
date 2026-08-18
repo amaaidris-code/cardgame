@@ -8173,6 +8173,163 @@ function reloadGame(){
 
 
 // ========================================
+// المساعد الذكي (AI Assistant) — توليد محتوى
+// ========================================
+// يستدعي Edge Function "admin-ai" (Gemini) بجلسة الأدمن، ثم يعرض الاقتراح
+// ويمكّن نسخه إلى نماذج الإضافة الحالية دون كتابة مباشرة في قاعدة البيانات.
+
+function uploadAIImage(){
+    uploadCharacterImage("admin-ai-image-file", "admin-ai-image", "admin-ai-image", { crop: false });
+}
+
+let lastAIFields = null;
+let lastAIType = null;
+
+async function generateWithAI(){
+    const type = (document.getElementById("admin-ai-type") || {}).value || "character";
+    const promptEl = document.getElementById("admin-ai-prompt");
+    const prompt = promptEl ? promptEl.value.trim() : "";
+    if(!prompt){
+        alert("اكتب وصفًا للكيان أولًا (اسم، إحصائيات، مهارات).");
+        return;
+    }
+    const imageUrl = ((document.getElementById("admin-ai-image") || {}).value || "").trim();
+    const adminToken = localStorage.getItem("admin_token");
+    if(!adminToken){ alert("يجب تسجيل الدخول كأدمن أولاً."); return; }
+
+    const spinner = document.getElementById("admin-ai-spinner");
+    const result = document.getElementById("admin-ai-result");
+    if(spinner) spinner.style.display = "block";
+    if(result) result.innerHTML = "";
+
+    try{
+        const res = await fetch(SUPABASE_URL + "/functions/v1/admin-ai", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ admin_token: adminToken, entity_type: type, prompt, image_url: imageUrl })
+        });
+        const json = await res.json();
+        if(!res.ok || !json.ok){
+            throw new Error((json && json.error) || "فشل التوليد");
+        }
+        renderAIResult(json);
+    }catch(e){
+        if(result){
+            result.innerHTML = `<div class="admin-hint" style="color:#f87171;">❌ ${escapeHtml(e && e.message ? e.message : "خطأ في الاتصال بالمساعد")}</div>`;
+        }
+    }finally{
+        if(spinner) spinner.style.display = "none";
+    }
+}
+
+function renderAIResult(json){
+    lastAIFields = json.fields || {};
+    lastAIType = json.entity_type || "character";
+    const result = document.getElementById("admin-ai-result");
+    if(!result) return;
+    const type = lastAIType;
+    const f = lastAIFields;
+    const img = json.image_url || f.image || "";
+    const skillRows = (Array.isArray(f.skills) && f.skills.length)
+        ? f.skills.map((s, i) => `
+            <li>${i+1}. ${escapeHtml(s.name)} — ${escapeHtml(s.type || "")} · ضرر ${escapeHtml(s.damage ?? 0)} · CD ${escapeHtml(s.cooldown ?? 0)} ${s.effect ? "· " + escapeHtml(s.effect) : ""}</li>`).join("")
+        : "<li>—</li>";
+
+    result.innerHTML = `
+        <div class="admin-card">
+            <h4>✍️ اقتراح المساعد — ${type === "monster" ? "وحش" : type === "weapon" ? "سلاح" : type === "companion" ? "مرافق" : type === "potion" ? "جرعة" : "شخصية"}</h4>
+            ${img ? `<img src="${escapeHtml(img)}" style="width:64px;height:64px;object-fit:cover;border-radius:10px;float:left;margin:0 0 8px 8px;">` : ""}
+            <p><strong>الاسم:</strong> ${escapeHtml(f.name || "")}</p>
+            ${f.hp != null ? `<p><strong>HP:</strong> ${escapeHtml(f.hp)}</p>` : ""}
+            ${f.atk != null ? `<p><strong>ATK:</strong> ${escapeHtml(f.atk)}</p>` : ""}
+            ${f.base_hp != null ? `<p><strong>HP:</strong> ${escapeHtml(f.base_hp)}</p>` : ""}
+            ${f.base_atk != null ? `<p><strong>ATK:</strong> ${escapeHtml(f.base_atk)}</p>` : ""}
+            ${f.price != null ? `<p><strong>السعر:</strong> ${escapeHtml(f.price)}</p>` : ""}
+            ${f.max_durability != null ? `<p><strong>المتانة:</strong> ${escapeHtml(f.max_durability)}</p>` : ""}
+            ${f.effect_type ? `<p><strong>التأثير:</strong> ${escapeHtml(f.effect_type)} (${escapeHtml(f.effect_value ?? 0)})</p>` : ""}
+            ${f.power_name ? `<p><strong>المهارة المميزة:</strong> ${escapeHtml(f.power_name)}</p>` : ""}
+            ${f.power_description ? `<p><strong>وصف المهارة:</strong> ${escapeHtml(f.power_description)}</p>` : ""}
+            ${f.quote ? `<p><strong>الاقتباس:</strong> ${escapeHtml(f.quote)}</p>` : ""}
+            ${f.gold_prize != null ? `<p><strong>الجائزة:</strong> ${escapeHtml(f.gold_prize)} ذهب</p>` : ""}
+            ${f.description ? `<p><strong>الوصف:</strong> ${escapeHtml(f.description)}</p>` : ""}
+            ${f.skills ? `<p><strong>المهارات:</strong></p><ul>${skillRows}</ul>` : ""}
+            <div style="margin-top:10px;">
+                <button class="admin-btn" onclick="applyAIToForm('${type}')">📋 نسخ للوحة الإضافة</button>
+            </div>
+        </div>`;
+}
+
+function applyAIToForm(type){
+    applyLastAI(type);
+}
+
+function applyLastAI(type){
+    const f = lastAIFields || {};
+    const set = (id, v) => { const el = document.getElementById(id); if(el) el.value = (v == null ? "" : v); };
+    const setBool = (id, v) => { const el = document.getElementById(id); if(el) el.checked = !!v; };
+
+    if(type === "weapon"){
+        set("admin-weapon-name", f.name);
+        set("admin-weapon-description", f.description);
+        set("admin-weapon-image", f.image);
+        set("admin-weapon-price", f.price);
+        set("admin-weapon-durability", f.max_durability);
+        set("admin-weapon-stock", 10);
+        alert("تم نسخ بيانات السلاح إلى نموذج الإضافة. أضف مهاراته يدويًا بعد الحفظ من تبويب الأسلحة.");
+        showAdminTab("admin-tab-weapons");
+    }else if(type === "companion"){
+        set("admin-companion-name", f.name);
+        set("admin-companion-description", f.description);
+        set("admin-companion-image", f.image);
+        set("admin-companion-hp", f.base_hp);
+        set("admin-companion-atk", f.base_atk);
+        set("admin-companion-price", f.price);
+        set("admin-companion-stock", 10);
+        alert("تم نسخ بيانات المرافق إلى نموذج الإضافة.");
+        showAdminTab("admin-tab-companions");
+    }else if(type === "potion"){
+        set("admin-potion-name", f.name);
+        set("admin-potion-description", f.description);
+        set("admin-potion-image", f.image);
+        set("admin-potion-effect-value", f.effect_value);
+        const et = document.getElementById("admin-potion-effect-type");
+        if(et && f.effect_type && ["heal","heal_percent","reset_cooldown","atk_boost","shield","skill"].indexOf(f.effect_type) !== -1){
+            et.value = f.effect_type;
+        }
+        set("admin-potion-price", f.price);
+        set("admin-potion-stock", 10);
+        alert("تم نسخ بيانات الجرعة إلى نموذج الإضافة.");
+        showAdminTab("admin-tab-potions");
+    }else{
+        // character أو monster
+        set("admin-character-name", f.name);
+        set("admin-character-anime", f.anime || "");
+        set("admin-character-image", f.image);
+        set("admin-character-hp", f.hp);
+        set("admin-character-atk", f.atk);
+        set("admin-power-name", f.power_name);
+        set("admin-power-description", f.power_description);
+        set("admin-character-quote", f.quote);
+        set("admin-character-gold-prize", f.gold_prize);
+        setBool("admin-character-is-monster", type === "monster");
+        alert("تم نسخ بيانات الشخصية إلى نموذج الإضافة.");
+        showAdminTab(type === "monster" ? "admin-tab-monsters" : "admin-tab-characters");
+    }
+}
+
+function clearAIResult(){
+    lastAIFields = null;
+    lastAIType = null;
+    const result = document.getElementById("admin-ai-result");
+    if(result) result.innerHTML = "";
+    const img = document.getElementById("admin-ai-image");
+    if(img) img.value = "";
+    const file = document.getElementById("admin-ai-image-file");
+    if(file) file.value = "";
+}
+
+
+// ========================================
 // تسجيل Service Worker (تثبيت PWA)
 // ========================================
 if("serviceWorker" in navigator){
