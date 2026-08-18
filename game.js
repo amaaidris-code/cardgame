@@ -8359,10 +8359,15 @@ function renderPendingAICharacterSkills(){
 // (نفس تدفق addSkillToCharacter لكن بالبيانات الواردة من الذكاء الاصطناعي).
 async function createAISkillsForCharacter(characterId, skills){
     const admin_token = localStorage.getItem("admin_token");
+    let created = 0;
     for(const sk of skills){
         const typeChoice = aiSkillTypeChoice(sk);
-        const damageRaw = Math.max(0, Number(sk.damage) || 0);
-        let damage = damageRaw;
+        let damageRaw = Math.max(0, Math.round(Number(sk.damage) || 0));
+        // قاعدة قاعدة البيانات: ضرر الهجوم لا بد أن يكون مضاعفًا للعدد 50،
+        // فنجبره على أقرب مضاعف بدل فشل الحفظ بصمت (CHECK constraint).
+        if(typeChoice === "attack" || typeChoice === "unblockable"){
+            damageRaw = Math.round(damageRaw / 50) * 50;
+        }
         let params = {};
         try{
             if(sk.params && typeof sk.params === "object") params = Object.assign({}, sk.params);
@@ -8370,7 +8375,7 @@ async function createAISkillsForCharacter(characterId, skills){
 
         if(typeChoice === "control"){
             params.control_count = damageRaw;
-            damage = 0;
+            damageRaw = 0;
         }
         if(typeChoice === "poison" && params.poison_turns == null){
             params.poison_turns = 2;
@@ -8383,7 +8388,7 @@ async function createAISkillsForCharacter(characterId, skills){
             p_character_id: characterId,
             p_name: String(sk.name || "مهارة").slice(0, 60),
             p_type: type,
-            p_damage: damage,
+            p_damage: damageRaw,
             p_cooldown: Math.max(0, Number(sk.cooldown) || 0),
             p_effect: effect,
             p_unblockable: unblockable,
@@ -8393,8 +8398,14 @@ async function createAISkillsForCharacter(characterId, skills){
             p_stroke_color: (sk.stroke_color && /^#[0-9A-Fa-f]{6}$/.test(sk.stroke_color)) ? sk.stroke_color : null,
             p_stroke_width: Math.max(0, Number(sk.stroke_width) || 0)
         });
-        if(error) return error; // نوقف ونترك الباقي للتعديل اليدوي
+        if(error){
+            alert("تعذر إنشاء المهارة \"" + String(sk.name || "") + "\": " + (error.message || error));
+            alert("تم إنشاء " + created + " مهارة من أصل " + skills.length + ". أكمل الباقي يدويًا في نافذة التعديل.");
+            return error;
+        }
+        created++;
     }
+    if(created) alert("✅ تم إنشاء " + created + " مهارة تلقائيًا وربطها بالشخصية.");
     return null;
 }
 
