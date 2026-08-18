@@ -70,24 +70,37 @@ function extractJson(text: string): any {
 }
 
 Deno.serve(async (req) => {
+  // CORS: يسمح لتطبيق الويب على Cloudflare Pages بالاتصال بالدالة
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
+  };
+  const json = (body: any, status: number) =>
+    new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", ...corsHeaders } });
+
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { status: 200, headers: corsHeaders });
+  }
+
   try {
-    if (req.method !== "POST") return new Response("method not allowed", { status: 405 });
+    if (req.method !== "POST") return json({ ok: false, error: "method not allowed" }, 405);
     const body = await req.json();
     const { admin_token, entity_type, prompt, image_url, existing, entity_id } = body || {};
 
     if (!admin_token || !prompt || !entity_type) {
-      return new Response(JSON.stringify({ ok: false, error: "bad request" }), { status: 400 });
+      return json({ ok: false, error: "bad request" }, 400);
     }
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
     const { data: adminId, error: authErr } = await supabase.rpc("admin_id_from_token", { p_token: admin_token });
     if (authErr || !adminId) {
-      return new Response(JSON.stringify({ ok: false, error: "غير مصرح" }), { status: 401 });
+      return json({ ok: false, error: "غير مصرح" }, 401);
     }
 
     const apiKey = Deno.env.get("GEMINI_API_KEY");
     if (!apiKey) {
-      return new Response(JSON.stringify({ ok: false, error: "GEMINI_API_KEY not configured" }), { status: 500 });
+      return json({ ok: false, error: "GEMINI_API_KEY not configured" }, 500);
     }
 
     const fullPrompt = image_url ? "Image: " + image_url + "\n\nDescription:\n" + prompt : prompt;
@@ -95,12 +108,9 @@ Deno.serve(async (req) => {
     const raw = await callGemini(apiKey, fullPrompt, entity_type, isEdit, isEdit ? existing : null);
     const fields = extractJson(raw);
 
-    return new Response(JSON.stringify({ ok: true, entity_type, fields, image_url: image_url || null, isEdit, entity_id: entity_id || null }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" }
-    });
+    return json({ ok: true, entity_type, fields, image_url: image_url || null, isEdit, entity_id: entity_id || null }, 200);
   } catch (e) {
     const msg = (e && e.message) ? e.message : "خطأ في توليد المحتوى";
-    return new Response(JSON.stringify({ ok: false, error: msg }), { status: 502 });
+    return json({ ok: false, error: msg }, 502);
   }
 });
