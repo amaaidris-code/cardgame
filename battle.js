@@ -1716,10 +1716,14 @@ async function startDungeonMonster(monsterId){
 
     renderUsedSkillsUI("pve");
 
-    hideBattleResult("pve");
+hideBattleResult("pve");
+
 
     await runIntroSequence("pve");
 
+    // شروع العداد السباق — يبدأ العد التنازلي ويظهر الزر الأحمر،
+    // ويُفعّل نظام الأدوار ليبدأ اللاعب بضربته الأولى.
+    await startCountdownAndRace("pve");
 }
 
 
