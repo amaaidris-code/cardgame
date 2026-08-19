@@ -48,10 +48,12 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
         "- Always return exactly 3 skills, in this order:\n" +
         "  1. A basic normal attack: type \"attack\", damage 100, cooldown 0, with a short natural name/description for this character.\n" +
         "  2. A block/defense skill: type \"defense\", damage 1 (it blocks 1 incoming attack), cooldown 2, with a natural name/description.\n" +
-        "  3. ONE unique signature skill of this character — any type EXCEPT a plain \"attack\" normal attack and EXCEPT \"defense\".\n" +
-        "     Pick the famous ability the character truly uses in its anime/manhwa/manga (e.g. Goku: Kamehameha, " +
-        "Ichigo: Getsuga Tensho, Sun Jin-woo: Shadow Exchange, Sung Jin-woo: Shadow Exchange). Its 'damage' is forced to 150 " +
-        "and its 'cooldown' is forced to 2 (effect/count skills keep damage 1); choose its type and effect to match that ability, " +
+"  3. ONE unique signature skill of this character — a DAMAGING move, type \"special\" (or an unblockable/poison attack). " +
+        "     NEVER make it a control/steal/copy/freeze/stun/reflect/shadow ability (those count-style abilities keep damage 1 and are " +
+        "     only allowed in earlier slots). Pick the famous damaging ability the character truly uses in its anime/manhwa/manga " +
+        "(e.g. Goku: Kamehameha, " +
+        "Ichigo: Getsuga Tensho, Luffy: Gum-Gum Red Roc, Light: none, Sung Jin-woo: Monarch's Domain). Its 'damage' is forced to 150 " +
+        "and its 'cooldown' is forced to 2; choose its type and effect to match that ability, " +
         "and write its name/description from the anime.\n" +
         "- Every skill name and description must match the character's real abilities from the anime/manhwa.\n"
       : "";
@@ -286,7 +288,10 @@ function enforceDefaultCharacterTemplate(fields: any): any {
     };
     const divisionTypes: Record<string, boolean> = { defense: true, block: true };
     if (countEffects[effect3] || countEffects[typ3] || divisionTypes[effect3] || divisionTypes[typ3]) {
-      skill3.damage = Math.max(1, Number(skill3.damage) || 1);
+      // مهارة تأثير/عدّ (control/steal/copy/freeze/reflect/defense...) لا تصلح للخانة
+      // الثالثة التي يجب أن تكون مهارة ضرر مميزة بضرر 150: نُحوّلها إلى special بضرر 150
+      // ونتخلص من تأثير العدّ (بدل تركها control بضرر 150 أو بضرر 1 ضعيف).
+      skill3 = Object.assign({}, skill3, { type: "special", damage: 150, effect: "" });
     } else {
       skill3.damage = 150;
     }

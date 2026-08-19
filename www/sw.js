@@ -1,4 +1,4 @@
-const CACHE = 'cardgame-v3';
+const CACHE = 'cardgame-v4';
 const APP_SHELL = [
   '/',
   '/index.html',
