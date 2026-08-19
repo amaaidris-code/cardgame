@@ -14,8 +14,8 @@ const GEMINI_MODELS = [
 
 const GROQ_MODELS = [
   Deno.env.get("GROQ_MODEL"),
-  "llama-3.3-70b-versatile",
-  "llama-3.1-8b-instant"
+  "openai/gpt-oss-120b",
+  "groq/compound-mini"
 ].filter((m): m is string => !!m && m.trim() !== "");
 
 const CEREBRAS_MODELS = [
@@ -79,7 +79,7 @@ function buildFullPrompt(prompt: string, entityType: string, isEdit: boolean, ex
 async function callGemini(apiKey: string, systemText: string, fullPrompt: string): Promise<string> {
   const body = {
     contents: [{ role: "user", parts: [{ text: systemText + "\n\n" + fullPrompt }] }],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
+    generationConfig: { temperature: 0.7, maxOutputTokens: 2048, responseMimeType: "application/json" }
   };
   let lastErr = "";
   const attempts: string[] = [];
@@ -124,7 +124,8 @@ async function callOpenAICompat(provider: string, apiKey: string, baseUrl: strin
       { role: "user", content: fullPrompt }
     ],
     temperature: 0.7,
-    max_tokens: 2048
+    max_tokens: 2048,
+    response_format: { type: "json_object" }
   };
   let lastErr = "";
   const attempts: string[] = [];
@@ -207,7 +208,20 @@ function extractJson(text: string): any {
   const start = clean.indexOf("{");
   const end = clean.lastIndexOf("}");
   if (start !== -1 && end !== -1 && end > start) clean = clean.slice(start, end + 1);
-  return JSON.parse(clean);
+  const attempt = (s: string) => {
+    try { return JSON.parse(s); } catch { return undefined; }
+  };
+  const first = attempt(clean);
+  if (first !== undefined) return first;
+  const fixed = clean
+    .replace(/([{,]\s*)'([^']+)'\s*:/g, "$1\"$2\":")
+    .replace(/([{,]\s*)([A-Za-z_$][\w$]*)\s*:/g, '$1"$2":')
+    .replace(/:\s*'([^']*)'/g, ':"$1"');
+  const second = attempt(fixed);
+  if (second !== undefined) return second;
+  const err: any = new Error("خطأ في تحليل JSON: " + clean.slice(0, 300));
+  err.details = clean.slice(0, 1000);
+  throw err;
 }
 
 // يفرض قواعد أرقام المهارات على أي JSON قادم من النموذج مهما قال المساعد:
@@ -277,9 +291,9 @@ Deno.serve(async (req) => {
     const requestText = buildFullPrompt(fullPrompt, entity_type, isEdit, isEdit ? existing : null);
     const raw = await generateText(systemText, requestText);
     const parsed = extractJson(raw);
-    return json({ ok: true, entity_type, fields: normalizeSkillNumbers(parsed), image_url: image_url || null, isEdit, entity_id: entity_id || null }, 200);
+    return json({ ok: true, v: "25", entity_type, fields: normalizeSkillNumbers(parsed), image_url: image_url || null, isEdit, entity_id: entity_id || null }, 200);
   } catch (e) {
     const msg = (e && e.message) ? e.message : "خطأ في توليد المحتوى";
-    return json({ ok: false, error: msg }, 502);
+    return json({ ok: false, v: "25", error: msg }, 502);
   }
 });
