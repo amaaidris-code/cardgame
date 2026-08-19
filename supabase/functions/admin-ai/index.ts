@@ -3,14 +3,25 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 
-// قائمة نماذج متاحة حاليًا في Gemini. نجرّب النموذج المضبوط في الإعدادات أولًا
-// (GEMINI_MODEL)، ثم نتنقل تلقائيًا إلى أحدث نماذج متاحة إن كان المضبوط قديمًا
-// أو محذوفًا من خوادم Google (مثل gemini-1.5-flash).
+// قوائم النماذج المتاحة عند كل مزوّد. نجرّب النموذج المضبوط في الإعدادات أولًا
+// ثم نتنقل إلى نماذج أخرى، ثم إلى مزوّد آخر (Gemini → Groq → Cerebras).
 const GEMINI_MODELS = [
   Deno.env.get("GEMINI_MODEL"),
   "gemini-3.6-flash",
   "gemini-2.5-flash",
   "gemini-2.0-flash"
+].filter((m): m is string => !!m && m.trim() !== "");
+
+const GROQ_MODELS = [
+  Deno.env.get("GROQ_MODEL"),
+  "llama-3.3-70b-versatile",
+  "llama-3.1-8b-instant"
+].filter((m): m is string => !!m && m.trim() !== "");
+
+const CEREBRAS_MODELS = [
+  Deno.env.get("CEREBRAS_MODEL"),
+  "llama-3.3-70b",
+  "llama-3.1-8b-instant"
 ].filter((m): m is string => !!m && m.trim() !== "");
 
 const SCHEMAS = {
@@ -55,17 +66,21 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
   );
 }
 
-async function callGemini(apiKey: string, prompt: string, entityType: string, isEdit: boolean, existing: any): Promise<string> {
-  let fullPrompt = prompt;
+// يبني النص الكامل للنموذج (تعليمات + السياق الحالي عند التعديل + الطلب)
+function buildFullPrompt(prompt: string, entityType: string, isEdit: boolean, existing: any): string {
   if (isEdit && existing) {
-    fullPrompt = "CURRENT DATA of the existing " + entityType + ":\n" +
+    return "CURRENT DATA of the existing " + entityType + ":\n" +
       JSON.stringify(existing) + "\n\nRequest:\n" + prompt;
   }
+  return prompt;
+}
+
+// ينادي Gemini API (بروتوكول توليد المحتوى الخاص بـ Google)
+async function callGemini(apiKey: string, systemText: string, fullPrompt: string): Promise<string> {
   const body = {
-    contents: [{ role: "user", parts: [{ text: systemPrompt(entityType, isEdit) + "\n\n" + fullPrompt }] }],
+    contents: [{ role: "user", parts: [{ text: systemText + "\n\n" + fullPrompt }] }],
     generationConfig: { temperature: 0.7, maxOutputTokens: 2048 }
   };
-
   let lastErr = "";
   const attempts: string[] = [];
   for (const model of GEMINI_MODELS) {
@@ -78,9 +93,9 @@ async function callGemini(apiKey: string, prompt: string, entityType: string, is
       });
       if (!res.ok) {
         const text = await res.text();
-        attempts.push(model + " -> HTTP " + res.status + ": " + text.slice(0, 300));
+        attempts.push("gemini:" + model + " -> HTTP " + res.status + ": " + text.slice(0, 300));
         lastErr = "Gemini " + res.status + " (" + model + "): " + text;
-        // نموذج غير موجود أو تم إيقافه → جرّب النموذج التالي
+        // نموذج غير موجود أو تم إيقافه أو بلغت الحصة القصوى → جرّب النموذج التالي
         if (res.status === 404 || res.status === 429 || /not found|deprecated|disabled/i.test(text)) continue;
         break;
       }
@@ -88,16 +103,101 @@ async function callGemini(apiKey: string, prompt: string, entityType: string, is
       const out = (json && json.candidates && json.candidates[0] && json.candidates[0].content &&
         json.candidates[0].content.parts && json.candidates[0].content.parts[0] && json.candidates[0].content.parts[0].text) || "";
       if (out) return out;
-      attempts.push(model + " -> empty response");
+      attempts.push("gemini:" + model + " -> empty response");
       lastErr = "Gemini returned empty response";
       continue;
     } catch (err) {
-      attempts.push(model + " -> " + ((err && err.message) ? err.message : String(err)).slice(0, 300));
+      attempts.push("gemini:" + model + " -> " + ((err && err.message) ? err.message : String(err)).slice(0, 300));
       lastErr = (err && err.message) ? err.message : String(err);
       continue;
     }
   }
   throw new Error((lastErr || "كل نماذج Gemini غير متاحة حاليًا") + " || Attempts: " + JSON.stringify(attempts));
+}
+
+// ينادي أي مزوّد متوافق مع بروتوكول OpenAI Chat Completions (Groq / Cerebras)
+async function callOpenAICompat(provider: string, apiKey: string, baseUrl: string, models: string[], systemText: string, fullPrompt: string): Promise<string> {
+  const body = {
+    model: "",
+    messages: [
+      { role: "system", content: systemText },
+      { role: "user", content: fullPrompt }
+    ],
+    temperature: 0.7,
+    max_tokens: 2048
+  };
+  let lastErr = "";
+  const attempts: string[] = [];
+  for (const model of models) {
+    body.model = model;
+    try {
+      const res = await fetch(baseUrl + "/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + apiKey
+        },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        attempts.push(provider + ":" + model + " -> HTTP " + res.status + ": " + text.slice(0, 300));
+        lastErr = provider + " " + res.status + " (" + model + "): " + text;
+        if (res.status === 404 || res.status === 429 || res.status === 400 || /not found|model/i.test(text)) continue;
+        break;
+      }
+      const json = await res.json();
+      const out = (json && json.choices && json.choices[0] && json.choices[0].message && json.choices[0].message.content) || "";
+      if (out) return out;
+      attempts.push(provider + ":" + model + " -> empty response");
+      lastErr = provider + " returned empty response";
+      continue;
+    } catch (err) {
+      attempts.push(provider + ":" + model + " -> " + ((err && err.message) ? err.message : String(err)).slice(0, 300));
+      lastErr = (err && err.message) ? err.message : String(err);
+      continue;
+    }
+  }
+  throw new Error((lastErr || provider + " غير متاح") + " || Attempts: " + JSON.stringify(attempts));
+}
+
+// يجرب المزوّدين بالترتيب: Gemini ثم Groq ثم Cerebras، ويعيد أول نص ناجح
+async function generateText(systemText: string, fullPrompt: string): Promise<string> {
+  const attempts: string[] = [];
+  const errors: string[] = [];
+
+  const geminiKey = Deno.env.get("GEMINI_API_KEY");
+  if (geminiKey) {
+    try { return await callGemini(geminiKey, systemText, fullPrompt); }
+    catch (e) {
+      const msg = (e && e.message) ? e.message : String(e);
+      errors.push(msg);
+      attempts.push("gemini");
+    }
+  }
+
+  const groqKey = Deno.env.get("GROQ_API_KEY");
+  if (groqKey) {
+    try { return await callOpenAICompat("groq", groqKey, "https://api.groq.com/openai/v1", GROQ_MODELS, systemText, fullPrompt); }
+    catch (e) {
+      errors.push((e && e.message) ? e.message : String(e));
+      attempts.push("groq");
+    }
+  }
+
+  const cerebrasKey = Deno.env.get("CEREBRAS_API_KEY");
+  if (cerebrasKey) {
+    try { return await callOpenAICompat("cerebras", cerebrasKey, "https://api.cerebras.ai/v1", CEREBRAS_MODELS, systemText, fullPrompt); }
+    catch (e) {
+      errors.push((e && e.message) ? e.message : String(e));
+      attempts.push("cerebras");
+    }
+  }
+
+  throw new Error(
+    "لم ينجح أي مزوّد (" + (attempts.join(", ") || "لا مزوّدات مكوّنة") + ")." +
+    " | Details: " + JSON.stringify(errors)
+  );
 }
 
 function extractJson(text: string): any {
@@ -171,14 +271,11 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "غير مصرح" }, 401);
     }
 
-    const apiKey = Deno.env.get("GEMINI_API_KEY");
-    if (!apiKey) {
-      return json({ ok: false, error: "GEMINI_API_KEY not configured" }, 500);
-    }
-
     const fullPrompt = image_url ? "Image: " + image_url + "\n\nDescription:\n" + prompt : prompt;
     const isEdit = !!(existing && (typeof existing === "object"));
-    const raw = await callGemini(apiKey, fullPrompt, entity_type, isEdit, isEdit ? existing : null);
+    const systemText = systemPrompt(entity_type, isEdit);
+    const requestText = buildFullPrompt(fullPrompt, entity_type, isEdit, isEdit ? existing : null);
+    const raw = await generateText(systemText, requestText);
     const parsed = extractJson(raw);
     return json({ ok: true, entity_type, fields: normalizeSkillNumbers(parsed), image_url: image_url || null, isEdit, entity_id: entity_id || null }, 200);
   } catch (e) {
