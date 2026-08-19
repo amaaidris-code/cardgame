@@ -57,9 +57,15 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
         "     Pick the effect that matches the character: e.g. Kakashi → Sharingan Copy (copy), Asta → unblockable attack, " +
         "     Shinobu → poison, Sung Jin-woo → Monarch's Domain (shadow), a vampire/healer → lifesteal. " +
         "     NEVER a plain normal attack, NEVER a plain block (those are slots 1 and 2), and NEVER an empty 'effect'. " +
+        "     ALSO NEVER a generic/ordinary defensive effect for this slot — 'shield', 'heal', 'absorb', or 'defense' are routine effects used elsewhere and do NOT qualify as this character's signature ability. " +
+        "     The signature effect must be one of the distinctive ones listed above (poison, lifesteal, unblockable, steal, copy, control, freeze/stun, reflect, seal, shadow, atk_boost, hp_boost). " +
+        "     The skill's NAME and DESCRIPTION must come from the character's REAL famous ability (use the WEB INFO above when available) — e.g. Kakashi → Sharingan Copy, Asta → an unblockable sword strike, Sung Jin-woo → Monarch's Domain, Shinobu → a poison blade. " +
+        "     NEVER invent generic names like 'القوة الخارقة' or 'درع الجدار'; name it after the character's actual technique. " +
         "     If the admin EXPLICITLY requests a specific effect for this slot (poison, lifesteal, steal, copy, freeze, reflect, shadow, ...), use EXACTLY that effect. " +
         "     Its 'cooldown' is forced to 2; choose its type and effect to match that ability, " +
-        "     and write its name/description from the anime.\n" +
+        "     and write its name/description from the anime. " +
+        "     If the WEB INFO names a specific weapon, sword, or technique, use THAT exact weapon/technique name translated into Arabic as the skill name (e.g. Asta → 'سيف السحر الأسود' أو 'ممتص السحر'، Ichigo → 'زانغيتسو'، Zoro → 'سانتورييو'). " +
+        "     NEVER reduce it to a generic description like 'هجوم قوي' أو 'ضربة سيف' — name the actual move or weapon.\n" +
         "- Every skill name and description must match the character's real abilities from the anime/manhwa.\n"
       : "";
   if (isEdit) {
@@ -275,36 +281,48 @@ function enforceDefaultCharacterTemplate(fields: any): any {
   let skill3 = norm(skills[2]);
   const t3 = String(skill3.type || "").trim().toLowerCase();
   const e3 = String(skill3.effect || "").trim().toLowerCase();
+  // المهارات التأثيرية التميّزية التي تصلح للخانة الثالثة (المهارة المميزة).
+  // تأثيرات عادية مثل shield/heal/absorb/defense لا تصلح — تُستبدل بغيرها.
   const countEffects: Record<string, boolean> = {
     control: true, steal: true, copy: true, freeze: true, "stun": true,
     seal: true, unseal: true, reflect: true, shadow: true,
     delay_cooldown: true, hp_boost: true, atk_boost: true,
-    consecutive_turns: true, absorb_atk: true, absorb_hp: true
+    consecutive_turns: true, absorb_atk: true, absorb_hp: true,
+    unblockable_reflect: true
   };
+  const sigDamageEffects: Record<string, boolean> = { poison: true, lifesteal: true, unblockable: true };
   const divisionTypes: Record<string, boolean> = { defense: true, block: true };
   const isCountSkill = countEffects[e3] || countEffects[t3] || divisionTypes[e3] || divisionTypes[t3];
+  const isSigDamage = sigDamageEffects[e3] || sigDamageEffects[t3];
   const isPlainBlock = (t3 === "defense" || t3 === "block") && e3 === "";
-  if (isPlainBlock) {
-    // حظر عادي لا يصلح للخانة الثالثة (الخانة 2 هي الدفاع): نحوّله إلى مهارة ضرر مميزة.
-    skill3 = Object.assign({}, skill3, { type: "special", damage: 150, effect: "" });
+  const isGenericEffect = e3 !== "" && !countEffects[e3] && !sigDamageEffects[e3] && !divisionTypes[e3];
+  if (isPlainBlock || isGenericEffect) {
+    // حظر عادي أو تأثير عادي (shield/heal/absorb/غير معروف) لا يصلح كمهارة مميزة:
+    // نستبدله تلقائيًا بتأثير مميز حقيقي ذي ضرر قوي.
+    skill3 = Object.assign({}, skill3, { type: "special" });
+    const fallbackEffects = ["poison", "lifesteal", "unblockable"];
+    const chosen = fallbackEffects[Math.floor(Math.random() * fallbackEffects.length)];
+    if (chosen === "unblockable") { skill3.unblockable = true; skill3.effect = ""; }
+    else skill3.effect = chosen;
+    skill3.damage = 150;
   } else if (isCountSkill) {
     // مهارة تأثير/عدّ تليق بالشخصية (كاكاشي → copy، أستا → reflect...):
     // نحتفظ بالتأثير ونُفرض عددها على 1 بالضبط (ليست 150).
     skill3.damage = 1;
-  } else {
+  } else if (isSigDamage) {
     // مهارة ضرر مميزة (special/unblockable/poison/هجوم قوي): تُفرض على 150،
-    // والهجوم العادي العادي أو النوع الفارغ يُرقّى إلى special ليظل مهارة مميزة.
+    // والهجوم العادي أو النوع الفارغ يُرقّى إلى special ليظل مهارة مميزة.
     skill3.damage = 150;
     if (t3 === "attack" || t3 === "") skill3.type = "special";
-    // الخانة الثالثة لا يجوز أن تبقى ضررًا صافيًا بلا تأثير — حينها لا تختلف عن
-    // الهجوم العادي (الخانة 1). إن لم يعيّن المساعد تأثيرًا نختار تلقائيًا
-    // تأثير ضرر حقيقيًا من تأثيرات النظام ليتمايز عنها.
-    if (String(skill3.effect || "").trim() === "") {
-      const fallbackEffects = ["poison", "lifesteal", "unblockable"];
-      const chosen = fallbackEffects[Math.floor(Math.random() * fallbackEffects.length)];
-      if (chosen === "unblockable") { skill3.unblockable = true; skill3.effect = ""; }
-      else skill3.effect = chosen;
-    }
+  } else {
+    // انتهت المهارة بلا تأثير مميز (ضرر صافي بلا تأثير أو نوع فارغ): نختار
+    // تلقائيًا تأثير ضرر حقيقيًا من تأثيرات النظام ليتمايز عن الهجوم العادي.
+    skill3 = Object.assign({}, skill3, { type: "special" });
+    const fallbackEffects = ["poison", "lifesteal", "unblockable"];
+    const chosen = fallbackEffects[Math.floor(Math.random() * fallbackEffects.length)];
+    if (chosen === "unblockable") { skill3.unblockable = true; skill3.effect = ""; }
+    else skill3.effect = chosen;
+    skill3.damage = 150;
   }
   skill3.cooldown = 2;
   fields.skills = [skill1, skill2, skill3];
@@ -320,7 +338,8 @@ function normalizeSkillNumbers(fields: any): any {
     control: true, steal: true, copy: true, freeze: true, "stun": true,
     seal: true, unseal: true, reflect: true, shadow: true,
     delay_cooldown: true, hp_boost: true, atk_boost: true,
-    consecutive_turns: true, absorb_atk: true, absorb_hp: true
+    consecutive_turns: true, absorb_atk: true, absorb_hp: true,
+    unblockable_reflect: true
   };
   const divisionTypes: Record<string, boolean> = { defense: true, block: true };
   fields.skills = fields.skills.map((s: any) => {
@@ -401,20 +420,20 @@ function isLatinDominant(s: any): boolean {
 }
 
 // يستخرج اسمًا لاتينيًا محتملًا من طلب الأدمن (مثل Goku أو Sung Jin-woo)
+// نأخذ أول كلمة ليست كلمة ربط بترتيب ورودها في النص (الاسم عادةً يسبقه تعديلات)
 function extractName(prompt: string): string | null {
   const words = (prompt || "").match(/[A-Za-z][A-Za-z0-9\-']{1,}(?:\s+[A-Za-z][A-Za-z0-9\-']{1,}){0,2}/g) || [];
-  const stop = /^(character|create|from|make|skill|type|attack|defense|special|with|the|hero|villain|anime|manhwa|manga|of|for|in|monster|his|her|and|fight|powers)$/i;
+  const stop = /^(character|create|from|make|skill|type|attack|defense|special|with|the|hero|villain|anime|manhwa|manga|of|for|in|monster|his|her|and|fight|powers|called|named|known|shows|series|clover)$/i;
   const names = words.map(w => w.trim()).filter(w => w.length >= 2 && !stop.test(w));
-  names.sort((a, b) => b.length - a.length);
   return names[0] || null;
 }
 
 // يبحث عن معلومات حقيقية عن الشخصية في ويكيبيديا (عربي ثم إنجليزي) ليعرف
 // المساعد قدراتها الفعلية بدل الاعتماد على ذاكرته فقط.
 async function researchCharacterInfo(prompt: string): Promise<string | null> {
-  const queries: string[] = [prompt];
   const name = extractName(prompt);
-  if (name && !queries.includes(name)) queries.push(name);
+  // نجرّب اسم الشخصية أولًا (صفحتها الخاصة أدق من صفحة العمل/الأنمي)، ثم النص الكامل
+  const queries: string[] = [name, prompt, name].filter((q): q is string => !!q && q.trim() !== "").filter((q, i, a) => a.indexOf(q) === i);
   for (const q of queries) {
     if (!q) continue;
     for (const wiki of ["ar", "en"]) {
