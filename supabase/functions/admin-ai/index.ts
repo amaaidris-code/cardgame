@@ -46,6 +46,7 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
       ? "\n\nNEW CHARACTER DEFAULT TEMPLATE (apply these ONLY when the admin does not specify the stats or the " +
         "skills for a brand-new character; override them ONLY if the admin explicitly asks for different numbers):\n" +
         "- Stats: hp = 100, atk = 100, level = 1. Do NOT invent higher stats.\n" +
+        "- EVERY text value MUST be written in ARABIC: the character name (transliterate Latin names, e.g. Goku → غوكو), anime title, quote, power_name, power_description, and every skill name & description. Only the technical fields stay in English ('type', 'damage', 'cooldown', 'effect').\n" +
         "- Always return exactly 3 skills, in this order:\n" +
         "  1. A basic normal attack: type \"attack\", damage 100, cooldown 0, with a short natural name/description for this character.\n" +
         "  2. A block/defense skill: type \"defense\", damage 1 (it blocks 1 incoming attack), cooldown 2, with a natural name/description.\n" +
@@ -80,6 +81,7 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
     "description (name, stats, skills) in Arabic or English. You must reply with ONLY valid JSON " +
     "matching the requested type. Do NOT wrap in markdown. Do NOT invent fields outside the schema. " +
     "Use sensible balanced numbers.\n" + skillRules + charDefaults +
+    "Write ALL human-readable text fields (name, anime, quote, power name/description, skill names & descriptions) in Arabic unless the admin clearly requests another language.\n" +
     "If the admin asks for skills (attacks/block/abilities), ALWAYS include them in the 'skills' array — " +
     "this works for characters, monsters, weapons and companions alike. " +
     "Text fields may be in the same language as the request.\n\n" +
@@ -390,6 +392,79 @@ function applyRequestedEffectToSkill(fields: any, slotIndex: number, hint: { eff
   fields.skills[slotIndex] = sk;
 }
 
+// هل النص أغلب أحرفه لاتينية (اكتشاف أسماء المهارات والوصف الإنجليزي)
+function isLatinDominant(s: any): boolean {
+  const t = String(s || "");
+  const arabic = (t.match(/[\u0600-\u06FF]/g) || []).length;
+  const latin = (t.match(/[A-Za-z]/g) || []).length;
+  return latin > arabic && latin > 3;
+}
+
+// يستخرج اسمًا لاتينيًا محتملًا من طلب الأدمن (مثل Goku أو Sung Jin-woo)
+function extractName(prompt: string): string | null {
+  const words = (prompt || "").match(/[A-Za-z][A-Za-z0-9\-']{1,}(?:\s+[A-Za-z][A-Za-z0-9\-']{1,}){0,2}/g) || [];
+  const stop = /^(character|create|from|make|skill|type|attack|defense|special|with|the|hero|villain|anime|manhwa|manga|of|for|in|monster|his|her|and|fight|powers)$/i;
+  const names = words.map(w => w.trim()).filter(w => w.length >= 2 && !stop.test(w));
+  names.sort((a, b) => b.length - a.length);
+  return names[0] || null;
+}
+
+// يبحث عن معلومات حقيقية عن الشخصية في ويكيبيديا (عربي ثم إنجليزي) ليعرف
+// المساعد قدراتها الفعلية بدل الاعتماد على ذاكرته فقط.
+async function researchCharacterInfo(prompt: string): Promise<string | null> {
+  const queries: string[] = [prompt];
+  const name = extractName(prompt);
+  if (name && !queries.includes(name)) queries.push(name);
+  for (const q of queries) {
+    if (!q) continue;
+    for (const wiki of ["ar", "en"]) {
+      try {
+        const url = "https://" + wiki + ".wikipedia.org/w/api.php?action=query&list=search&srsearch=" +
+          encodeURIComponent(q) + "&srnamespace=0&srlimit=1&format=json";
+        const res = await fetch(url, { headers: { "User-Agent": "CardGameAdminAI/1.0" } });
+        if (!res.ok) continue;
+        const j = await res.json();
+        const hit = j && j.query && j.query.search && j.query.search[0];
+        if (!hit || !hit.title) continue;
+        const rest = "https://" + wiki + ".wikipedia.org/api/rest_v1/page/summary/" +
+          encodeURIComponent(String(hit.title).replace(/ /g, "_"));
+        const r2 = await fetch(rest, { headers: { "User-Agent": "CardGameAdminAI/1.0" } });
+        if (!r2.ok) continue;
+        const s = await r2.json();
+        const extract = s && (s.extract || "").trim();
+        if (!extract || extract.length < 80) continue;
+        return (s.title || hit.title) + ": " + extract.slice(0, 1200);
+      } catch { }
+    }
+  }
+  return null;
+}
+
+// يضمن أن كل النصوص القابلة للقراءة عربية: لو ظهرت نصوص لاتينية (أسماء مهارات
+// إنجليزية مثلًا) نعيد توليد الحقول النصية نفسها بالعربية مع الحفاظ الحرفي
+// على الأرقام والأنواع (type/damage/cooldown/effect) دون إضافة أو حذف مهارات.
+async function arabicizeFields(fields: any): Promise<any> {
+  if (!fields || typeof fields !== "object") return fields;
+  const latinTexts: string[] = [];
+  const push = (v: any) => { if (isLatinDominant(v)) latinTexts.push(String(v)); };
+  push(fields.name); push(fields.anime); push(fields.quote);
+  push(fields.power_name); push(fields.power_description);
+  if (Array.isArray(fields.skills)) {
+    for (const sk of fields.skills) {
+      if (sk && typeof sk === "object") { push(sk.name); push(sk.description); }
+    }
+  }
+  if (latinTexts.length === 0) return fields;
+  const original = JSON.stringify(fields);
+  const sys = "You convert anime/card-game data to Arabic. Take the JSON below and rewrite ONLY the human-readable text fields into natural Arabic: the character name (transliterated), anime title, quote, power_name, power_description, and every skill name & description. Preserve the JSON structure, all keys, and every numeric/type/effect/cooldown/unblockable value EXACTLY as they are. Do NOT add or remove skills. Respond with ONLY valid JSON.";
+  try {
+    const out = await generateText(sys, "JSON:\n" + original);
+    const parsed = extractJson(out);
+    if (parsed && typeof parsed === "object") return parsed;
+  } catch { }
+  return fields;
+}
+
 Deno.serve(async (req) => {
   // CORS: يسمح لتطبيق الويب على Cloudflare Pages بالاتصال بالدالة
   const corsHeaders = {
@@ -423,7 +498,12 @@ Deno.serve(async (req) => {
       image_url ? "Character image: " + image_url : null,
       background_url ? "Background photo for the character's skill pages: " + background_url : null
     ].filter(Boolean).join("\n");
-    const finalPrompt = fullPrompt ? fullPrompt + "\n\nDescription:\n" + prompt : prompt;
+    // بحث فعلي عن معلومات الشخصية في ويكيبيديا ليستند إليها المساعد
+    // ولا يختلق قدراتها من ذاكرته.
+    let research = null;
+    try { research = await researchCharacterInfo(prompt); } catch (e) { research = null; }
+    const finalPrompt = (research ? "WEB INFO about this character (use it to make the data accurate):\n" + research + "\n\n" : "") +
+      (fullPrompt ? fullPrompt + "\n\nDescription:\n" + prompt : prompt);
     const isEdit = !!(existing && (typeof existing === "object"));
     const systemText = systemPrompt(entity_type, isEdit);
     const requestText = buildFullPrompt(finalPrompt, entity_type, isEdit, isEdit ? existing : null);
@@ -448,6 +528,14 @@ Deno.serve(async (req) => {
     // الخلفية المرفوعة من الأدمن تفوز كذلك على أي خلفية يقترحها النموذج.
     if (background_url && fields && typeof fields === "object") {
       fields.background = background_url;
+    }
+    // ضمان العربية لكل النصوص القابلة للقراءة (أسماء وأوصاف مهارات...)
+    // لو ظهرت أي نصوص إنجليزية (شائع من النماذج) نعدّل توليدها بالعربية.
+    if (fields && typeof fields === "object") {
+      try {
+        fields = await arabicizeFields(fields);
+        fields = normalizeSkillNumbers(fields);
+      } catch (e) {}
     }
     return json({ ok: true, v: "26", entity_type, fields, image_url: image_url || null, background_url: background_url || null, isEdit, entity_id: entity_id || null }, 200);
   } catch (e) {
