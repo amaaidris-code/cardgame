@@ -25,9 +25,9 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
   const schema = SCHEMAS[entityType] || SCHEMAS.character;
   const skillRules =
     "SKILL NUMBER RULES (apply these defaults on every skill):\n" +
-    "- Non-damage/effect skills — control, steal, copy, freeze/stun, seal, unseal, reflect, shadow, delay_cooldown, hp_boost, atk_boost: their 'damage' field is a COUNT, always default it to 1 unless the admin says otherwise.\n" +
+    "- Non-damage/effect skills — control, steal, copy, freeze/stun, seal, unseal, reflect, unblockable_reflect, shadow, delay_cooldown, hp_boost, atk_boost: their 'damage' field is a COUNT, always default it to 1 unless the admin says otherwise.\n" +
     "- Damage skills — normal attack, unblockable, poison, lifesteal/absorb, special: their 'damage' must be at least 100 (default 100 if unspecified) and a multiple of 50.\n" +
-    "- Defense/block skills: 'damage' = how many attacks it can block, use 1-3.\n" +
+    "- Defense/block skills: 'damage' = how many attacks it can block, use 1 unless the admin says otherwise.\n" +
     "- 'cooldown' is measured in TURNS, not seconds (cooldown 1 = reusable after the fighter takes 1 of their own turns).\n";
   if (isEdit) {
     return (
