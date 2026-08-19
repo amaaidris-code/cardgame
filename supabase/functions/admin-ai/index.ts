@@ -36,9 +36,9 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
   const schema = SCHEMAS[entityType] || SCHEMAS.character;
   const skillRules =
     "SKILL NUMBER RULES (apply these defaults on every skill):\n" +
-    "- Non-damage/effect skills — control, steal, copy, freeze/stun, seal, unseal, reflect, unblockable_reflect, shadow, delay_cooldown, hp_boost, atk_boost: their 'damage' field is a COUNT, always default it to 1 unless the admin says otherwise.\n" +
+    "- Non-damage/effect skills — control, steal, copy, freeze/stun, seal, unseal, reflect, unblockable_reflect, shadow, delay_cooldown, hp_boost, atk_boost: their 'damage' field is a COUNT and the system forces it to exactly 1.\n" +
     "- Damage skills — normal attack, unblockable, poison, lifesteal/absorb, special: their 'damage' must be at least 100 (default 100 if unspecified) and a multiple of 50.\n" +
-    "- Defense/block skills: 'damage' = how many attacks it can block, use 1 unless the admin says otherwise.\n" +
+    "- Defense/block skills: 'damage' = how many attacks it can block, the system forces it to exactly 1.\n" +
     "- 'cooldown' is measured in TURNS, not seconds (cooldown 1 = reusable after the fighter takes 1 of their own turns).\n";
   const charDefaults =
     (entityType === "character" && !isEdit)
@@ -48,13 +48,14 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
         "- Always return exactly 3 skills, in this order:\n" +
         "  1. A basic normal attack: type \"attack\", damage 100, cooldown 0, with a short natural name/description for this character.\n" +
         "  2. A block/defense skill: type \"defense\", damage 1 (it blocks 1 incoming attack), cooldown 2, with a natural name/description.\n" +
-"  3. ONE unique signature skill of this character — a DAMAGING move, type \"special\" (or an unblockable/poison attack). " +
-        "     NEVER make it a control/steal/copy/freeze/stun/reflect/shadow ability (those count-style abilities keep damage 1 and are " +
-        "     only allowed in earlier slots). Pick the famous damaging ability the character truly uses in its anime/manhwa/manga " +
-        "(e.g. Goku: Kamehameha, " +
-        "Ichigo: Getsuga Tensho, Luffy: Gum-Gum Red Roc, Light: none, Sung Jin-woo: Monarch's Domain). Its 'damage' is forced to 150 " +
-        "and its 'cooldown' is forced to 2; choose its type and effect to match that ability, " +
-        "and write its name/description from the anime.\n" +
+"  3. ONE unique signature skill of this character — the famous ability it truly uses in its anime/manhwa/manga. " +
+        "     It can be EITHER a powerful damaging move (type \"special\", or unblockable/poison — the system forces its damage to 150) " +
+        "     OR an effect move the character is known for (control/steal/copy/freeze/stun/reflect/shadow — the system forces its damage to 1). " +
+        "     Pick the one that matches the character: e.g. Goku → Kamehameha (damage), Kakashi → Sharingan Copy (copy), " +
+        "     Asta → reflect or unblockable attack (damage), Shinobu → poison (damage), Sung Jin-woo → Monarch's domain. " +
+        "     NEVER a plain normal attack (that is slot 1) and NEVER a plain block (that is slot 2). " +
+        "     Its 'cooldown' is forced to 2; choose its type and effect to match that ability, " +
+        "     and write its name/description from the anime.\n" +
         "- Every skill name and description must match the character's real abilities from the anime/manhwa.\n"
       : "";
   if (isEdit) {
@@ -244,9 +245,10 @@ function extractJson(text: string): any {
 // يفرض القالب الافتراضي للشخصيات الجديدة برمجيًا على أي JSON قادم من النموذج،
 // حتى لو تجاهل المساعد التعليمات: يضمن 3 مهارات بالترتيب الصحيح —
 // 1) هجوم عادي (attack، ضرر 100، تهدئة 0)  2) دفاع/صد (defense، صدّ 1، تهدئة 2)
-// 3) مهارة مميزة (ليست هجومًا عاديًا ولا دفاعًا). تُطبَّق على أول 3 مهارات فقط،
-// وتصحّح فقط الخانات التي أخطأ النموذج في نوعها — فلو طلب الأدمن مهارات مختلفة
-// صراحة تُحترم (لا نفرض الضرر/التقليل على مهارة ليست من النوع المتوقع).
+// 3) مهارة مميزة يختارها المساعد لتناسب الشخصية: إمّا مهارة ضرر (special/unblockable/poison
+//    تُفرض على 150) أو مهارة تأثير/عدّ تناسب الشخصية (copy/reflect/control/steal... تُفرض على 1).
+// تُطبَّق على أول 3 مهارات فقط، وتصحّح فقط الخانات التي أخطأ النموذج في نوعها —
+// فلو طلب الأدمن مهارات مختلفة صراحة تُحترم (لا نفرض الضرر/التقليل على مهارة ليست من النوع المتوقع).
 function enforceDefaultCharacterTemplate(fields: any): any {
   if (!fields || typeof fields !== "object" || !Array.isArray(fields.skills)) return fields;
   const skills = fields.skills;
@@ -265,36 +267,27 @@ function enforceDefaultCharacterTemplate(fields: any): any {
   let skill3 = norm(skills[2]);
   const t3 = String(skill3.type || "").trim().toLowerCase();
   const e3 = String(skill3.effect || "").trim().toLowerCase();
-  const isUnblockable = t3 === "unblockable" || e3 === "unblockable";
-  const isPoison = e3 === "poison" || t3 === "poison";
-  const isPlainNormal = t3 === "attack" || t3 === "defense" || t3 === "";
-  // الهجوم الذي لا يُصدّ أو السم يُفرض على ضرر 150 — سواء كان النموذج
-  // أخطأ في النوع أو أعطاه النوع الصحيح مباشرة.
-  if (isUnblockable || isPoison) {
-    skill3.damage = 150;
+  const countEffects: Record<string, boolean> = {
+    control: true, steal: true, copy: true, freeze: true, "stun": true,
+    seal: true, unseal: true, reflect: true, shadow: true,
+    delay_cooldown: true, hp_boost: true, atk_boost: true,
+    consecutive_turns: true, absorb_atk: true, absorb_hp: true
+  };
+  const divisionTypes: Record<string, boolean> = { defense: true, block: true };
+  const isCountSkill = countEffects[e3] || countEffects[t3] || divisionTypes[e3] || divisionTypes[t3];
+  const isPlainBlock = (t3 === "defense" || t3 === "block") && e3 === "";
+  if (isPlainBlock) {
+    // حظر عادي لا يصلح للخانة الثالثة (الخانة 2 هي الدفاع): نحوّله إلى مهارة ضرر مميزة.
+    skill3 = Object.assign({}, skill3, { type: "special", damage: 150, effect: "" });
+  } else if (isCountSkill) {
+    // مهارة تأثير/عدّ تليق بالشخصية (كاكاشي → copy، أستا → reflect...):
+    // نحتفظ بالتأثير ونُفرض عددها على 1 بالضبط (ليست 150).
+    skill3.damage = 1;
   } else {
-    // المهارة الثالثة لا يمكن أن تكون هجومًا عاديًا أو دفاعًا عاديًا:
-    // أي نوع من هذين (حتى مع تأثير) يُحوَّل إلى special ليبقى مهارة مميزة.
-    if (isPlainNormal) {
-      skill3 = Object.assign({}, skill3, { type: "special" });
-    }
-    const effect3 = String(skill3.effect || "").trim().toLowerCase();
-    const typ3 = String(skill3.type || "").trim().toLowerCase();
-    const countEffects: Record<string, boolean> = {
-      control: true, steal: true, copy: true, freeze: true, "stun": true,
-      seal: true, unseal: true, reflect: true, shadow: true,
-      delay_cooldown: true, hp_boost: true, atk_boost: true,
-      consecutive_turns: true, absorb_atk: true, absorb_hp: true
-    };
-    const divisionTypes: Record<string, boolean> = { defense: true, block: true };
-    if (countEffects[effect3] || countEffects[typ3] || divisionTypes[effect3] || divisionTypes[typ3]) {
-      // مهارة تأثير/عدّ (control/steal/copy/freeze/reflect/defense...) لا تصلح للخانة
-      // الثالثة التي يجب أن تكون مهارة ضرر مميزة بضرر 150: نُحوّلها إلى special بضرر 150
-      // ونتخلص من تأثير العدّ (بدل تركها control بضرر 150 أو بضرر 1 ضعيف).
-      skill3 = Object.assign({}, skill3, { type: "special", damage: 150, effect: "" });
-    } else {
-      skill3.damage = 150;
-    }
+    // مهارة ضرر مميزة (special/unblockable/poison/هجوم قوي): تُفرض على 150،
+    // والهجوم العادي العادي أو النوع الفارغ يُرقّى إلى special ليظل مهارة مميزة.
+    skill3.damage = 150;
+    if (t3 === "attack" || t3 === "") skill3.type = "special";
   }
   skill3.cooldown = 2;
   fields.skills = [skill1, skill2, skill3];
@@ -302,7 +295,7 @@ function enforceDefaultCharacterTemplate(fields: any): any {
 }
 
 // يفرض قواعد أرقام المهارات على أي JSON قادم من النموذج مهما قال المساعد:
-// مهارات التأثير/العدّ (control/steal/copy/freeze/reflect/defense...) = 1 على الأقل،
+// مهارات التأثير/العدّ (control/steal/copy/freeze/reflect/defense...) = 1 بالضبط،
 // ومهارات الضرر (هجوم/خاص/سم...) = 100 على الأقل ومضاعفات 50.
 function normalizeSkillNumbers(fields: any): any {
   if (!fields || !Array.isArray(fields.skills)) return fields;
@@ -321,9 +314,9 @@ function normalizeSkillNumbers(fields: any): any {
     if (sk.damage == null || sk.damage === "" || !isFinite(damage)) damage = 0;
     damage = Math.max(0, Math.round(damage));
     if (divisionTypes[eff] || divisionTypes[typ]) {
-      damage = Math.max(1, damage);
+      damage = 1;
     } else if (countEffects[eff] || countEffects[typ]) {
-      damage = Math.max(1, damage);
+      damage = 1;
     } else {
       damage = Math.max(100, damage);
       damage = Math.round(damage / 50) * 50;
