@@ -8402,7 +8402,7 @@ async function applyAIEdit(){
                 p_character_id: id,
                 p_name: f.name ?? existing.name ?? "",
                 p_anime: f.anime ?? existing.anime ?? "",
-                p_image: f.image ?? existing.identity_image ?? existing.image ?? lastAIImageUrl ?? "",
+                p_image: lastAIImageUrl || f.image || existing.identity_image || existing.image || "",
                 p_hp: num(f.hp, existing.hp ?? 100),
                 p_atk: num(f.atk, existing.atk ?? 100),
                 p_level: num(f.level, existing.level ?? 1),
@@ -8421,7 +8421,7 @@ async function applyAIEdit(){
                 p_admin_token: admin_token, p_weapon_id: id,
                 p_name: f.name ?? existing.name ?? "",
                 p_description: f.description ?? existing.description ?? "",
-                p_image: f.image ?? existing.image ?? lastAIImageUrl ?? "",
+                p_image: lastAIImageUrl || f.image || existing.image || "",
                 p_skill_card_image: existing.skill_card_image ?? "",
                 p_price: num(f.price, existing.price ?? 0),
                 p_max_durability: num(f.max_durability, existing.max_durability ?? 0),
@@ -8438,7 +8438,7 @@ async function applyAIEdit(){
                 p_admin_token: admin_token, p_potion_id: id,
                 p_name: f.name ?? existing.name ?? "",
                 p_description: f.description ?? existing.description ?? "",
-                p_image: f.image ?? existing.image ?? lastAIImageUrl ?? "",
+                p_image: lastAIImageUrl || f.image || existing.image || "",
                 p_effect_type: et,
                 p_effect_value: num(f.effect_value, existing.effect_value ?? 0),
                 p_effect_skill_id: null,
@@ -8454,7 +8454,7 @@ async function applyAIEdit(){
                 p_admin_token: admin_token, p_companion_id: id,
                 p_name: f.name ?? existing.name ?? "",
                 p_description: f.description ?? existing.description ?? "",
-                p_image: f.image ?? existing.image ?? lastAIImageUrl ?? "",
+                p_image: lastAIImageUrl || f.image || existing.image || "",
                 p_skill_card_image: existing.skill_card_image ?? null,
                 p_price: num(f.price, existing.price ?? 0),
                 p_base_hp: num(f.base_hp, existing.base_hp ?? 100),
@@ -8553,7 +8553,7 @@ function applyLastAI(type){
     if(type === "weapon"){
         set("admin-weapon-name", f.name);
         set("admin-weapon-description", f.description);
-        set("admin-weapon-image", f.image || lastAIImageUrl);
+        set("admin-weapon-image", lastAIImageUrl || f.image);
         set("admin-weapon-price", f.price);
         set("admin-weapon-durability", f.max_durability);
         set("admin-weapon-stock", 10);
@@ -8564,7 +8564,7 @@ function applyLastAI(type){
     }else if(type === "companion"){
         set("admin-companion-name", f.name);
         set("admin-companion-description", f.description);
-        set("admin-companion-image", f.image || lastAIImageUrl);
+        set("admin-companion-image", lastAIImageUrl || f.image);
         set("admin-companion-hp", f.base_hp);
         set("admin-companion-atk", f.base_atk);
         set("admin-companion-price", f.price);
@@ -8576,7 +8576,7 @@ function applyLastAI(type){
     }else if(type === "potion"){
         set("admin-potion-name", f.name);
         set("admin-potion-description", f.description);
-        set("admin-potion-image", f.image || lastAIImageUrl);
+        set("admin-potion-image", lastAIImageUrl || f.image);
         set("admin-potion-effect-value", f.effect_value);
         const et = document.getElementById("admin-potion-effect-type");
         if(et && f.effect_type && ["heal","heal_percent","reset_cooldown","atk_boost","shield","skill"].indexOf(f.effect_type) !== -1){
@@ -8590,7 +8590,7 @@ function applyLastAI(type){
         // character أو monster (نموذج الإضافة مشترك في تبويب الشخصيات)
         set("admin-character-name", f.name);
         set("admin-character-anime", f.anime || "");
-        set("admin-character-image", f.image || lastAIImageUrl);
+        set("admin-character-image", lastAIImageUrl || f.image);
         set("admin-character-hp", f.hp);
         set("admin-character-atk", f.atk);
         set("admin-power-name", f.power_name);

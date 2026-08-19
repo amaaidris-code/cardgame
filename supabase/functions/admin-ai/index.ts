@@ -291,7 +291,13 @@ Deno.serve(async (req) => {
     const requestText = buildFullPrompt(fullPrompt, entity_type, isEdit, isEdit ? existing : null);
     const raw = await generateText(systemText, requestText);
     const parsed = extractJson(raw);
-    return json({ ok: true, v: "25", entity_type, fields: normalizeSkillNumbers(parsed), image_url: image_url || null, isEdit, entity_id: entity_id || null }, 200);
+    const fields = normalizeSkillNumbers(parsed);
+    // الصورة المرفوعة من الأدمن دائمًا تفوز على أي رابط تولّده النموذج،
+    // حتى لا يظهر الاقتراح صورة ثم لا تُطبّق على النموذج.
+    if (image_url && fields && typeof fields === "object") {
+      fields.image = image_url;
+    }
+    return json({ ok: true, v: "26", entity_type, fields, image_url: image_url || null, isEdit, entity_id: entity_id || null }, 200);
   } catch (e) {
     const msg = (e && e.message) ? e.message : "خطأ في توليد المحتوى";
     return json({ ok: false, v: "25", error: msg }, 502);
