@@ -8350,7 +8350,11 @@ async function generateWithAI(){
         }
         const res = await fetch(SUPABASE_URL + "/functions/v1/admin-ai", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: {
+                "Content-Type": "application/json",
+                "apikey": SUPABASE_KEY,
+                "Authorization": "Bearer " + SUPABASE_KEY
+            },
             body: JSON.stringify(body)
         });
         const json = await res.json();

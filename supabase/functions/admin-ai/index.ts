@@ -57,7 +57,7 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
         "     Pick the effect that matches the character: e.g. Kakashi → Sharingan Copy (copy), Asta → unblockable attack, " +
         "     Shinobu → poison, Sung Jin-woo → Monarch's Domain (shadow), a vampire/healer → lifesteal. " +
         "     NEVER a plain normal attack, NEVER a plain block (those are slots 1 and 2), and NEVER an empty 'effect'. " +
-        "     ALSO NEVER a generic/ordinary defensive effect for this slot — 'shield', 'heal', 'absorb', or 'defense' are routine effects used elsewhere and do NOT qualify as this character's signature ability. " +
+        "     ALSO NEVER a plain normal attack (slot 1), NEVER a plain block/defense (slot 2), NEVER 'shield' — those are ordinary effects used elsewhere and do NOT qualify as this character's signature ability. " +
         "     The signature effect must be one of the distinctive ones listed above (poison, lifesteal, unblockable, steal, copy, control, freeze/stun, reflect, seal, shadow, atk_boost, hp_boost). " +
         "     The skill's NAME and DESCRIPTION must come from the character's REAL famous ability (use the WEB INFO above when available) — e.g. Kakashi → Sharingan Copy, Asta → an unblockable sword strike, Sung Jin-woo → Monarch's Domain, Shinobu → a poison blade. " +
         "     NEVER invent generic names like 'القوة الخارقة' or 'درع الجدار'; name it after the character's actual technique. " +
@@ -281,8 +281,8 @@ function enforceDefaultCharacterTemplate(fields: any): any {
   let skill3 = norm(skills[2]);
   const t3 = String(skill3.type || "").trim().toLowerCase();
   const e3 = String(skill3.effect || "").trim().toLowerCase();
-  // المهارات التأثيرية التميّزية التي تصلح للخانة الثالثة (المهارة المميزة).
-  // تأثيرات عادية مثل shield/heal/absorb/defense لا تصلح — تُستبدل بغيرها.
+  // الحظر الوحيد للخانة الثالثة: مهارة الهجوم العادي (slot 1) أو مهارة الصد/الدفاع العادي (slot 2).
+  // أي شيء آخر (shield, heal, absorb, defense مع تأثير، إلخ) مسموح به كمهارة مميزة.
   const countEffects: Record<string, boolean> = {
     control: true, steal: true, copy: true, freeze: true, "stun": true,
     seal: true, unseal: true, reflect: true, shadow: true,
@@ -292,20 +292,18 @@ function enforceDefaultCharacterTemplate(fields: any): any {
   };
   const sigDamageEffects: Record<string, boolean> = { poison: true, lifesteal: true, unblockable: true };
   const divisionTypes: Record<string, boolean> = { defense: true, block: true };
-  const isCountSkill = countEffects[e3] || countEffects[t3] || divisionTypes[e3] || divisionTypes[t3];
-  const isSigDamage = sigDamageEffects[e3] || sigDamageEffects[t3];
+  const isPlainAttack = (t3 === "attack" || t3 === "") && e3 === "";
   const isPlainBlock = (t3 === "defense" || t3 === "block") && e3 === "";
-  const isGenericEffect = e3 !== "" && !countEffects[e3] && !sigDamageEffects[e3] && !divisionTypes[e3];
-  if (isPlainBlock || isGenericEffect) {
-    // حظر عادي أو تأثير عادي (shield/heal/absorb/غير معروف) لا يصلح كمهارة مميزة:
-    // نستبدله تلقائيًا بتأثير مميز حقيقي ذي ضرر قوي.
+  if (isPlainAttack || isPlainBlock) {
+    // هجوم عادي أو دفاع/صد عادي — لا تصلح كمهارة مميزة (هذه الخانتان 1 و 2).
+    // نستبدلها تلقائيًا بتأثير مميز حقيقي ذي ضرر قوي.
     skill3 = Object.assign({}, skill3, { type: "special" });
     const fallbackEffects = ["poison", "lifesteal", "unblockable"];
     const chosen = fallbackEffects[Math.floor(Math.random() * fallbackEffects.length)];
     if (chosen === "unblockable") { skill3.unblockable = true; skill3.effect = ""; }
     else skill3.effect = chosen;
     skill3.damage = 150;
-  } else if (isCountSkill) {
+  } else if (countEffects[e3] || countEffects[t3] || divisionTypes[e3] || divisionTypes[t3]) {
     // مهارة تأثير/عدّ تليق بالشخصية (كاكاشي → copy، أستا → reflect...):
     // نحتفظ بالتأثير ونُفرض عددها على 1 بالضبط (ليست 150).
     skill3.damage = 1;
