@@ -25,8 +25,8 @@ const CEREBRAS_MODELS = [
 ].filter((m): m is string => !!m && m.trim() !== "");
 
 const SCHEMAS = {
-  character: '{"name":"string","anime":"string","hp":"number 40..1000","atk":"number 40..1000","quote":"string","power_name":"string","power_description":"string","gold_prize":"number 0..5000","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number of turns 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy| empty string","description":"string optional"}]}',
-  monster: '{"name":"string","anime":"string","hp":"number 100..2000","atk":"number 80..1000","quote":"string","power_name":"string","power_description":"string","gold_prize":"number 0..5000","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number of turns 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy| empty string","description":"string optional"}]}',
+  character: '{"name":"string","anime":"string","hp":"number 40..1000","atk":"number 40..1000","level":"number 1..1000 (default 1)","quote":"string","power_name":"string","power_description":"string","gold_prize":"number 0..5000","glow_color":"hex color string like #ff0000 (optional)","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number of turns 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy| empty string","description":"string optional"}]}',
+  monster: '{"name":"string","anime":"string","hp":"number 100..2000","atk":"number 80..1000","level":"number 1..1000 (default 1)","quote":"string","power_name":"string","power_description":"string","gold_prize":"number 0..5000","glow_color":"hex color string like #ff0000 (optional)","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number of turns 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy| empty string","description":"string optional"}]}',
   weapon: '{"name":"string","description":"string","price":"number 100..10000","max_durability":"number 1..200","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number of turns 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy| empty string","description":"string optional"}]}',
   companion: '{"name":"string","description":"string","price":"number 0..20000","base_hp":"number 50..500","base_atk":"number 20..300","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number of turns 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy| empty string","description":"string optional"}]}',
   potion: '{"name":"string","description":"string","effect_type":"heal|heal_percent|reset_cooldown|atk_boost|shield|skill","effect_value":"number 0..10000","price":"number 0..5000"}'
@@ -40,6 +40,21 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
     "- Damage skills — normal attack, unblockable, poison, lifesteal/absorb, special: their 'damage' must be at least 100 (default 100 if unspecified) and a multiple of 50.\n" +
     "- Defense/block skills: 'damage' = how many attacks it can block, use 1 unless the admin says otherwise.\n" +
     "- 'cooldown' is measured in TURNS, not seconds (cooldown 1 = reusable after the fighter takes 1 of their own turns).\n";
+  const charDefaults =
+    (entityType === "character" && !isEdit)
+      ? "\n\nNEW CHARACTER DEFAULT TEMPLATE (apply these ONLY when the admin does not specify the stats or the " +
+        "skills for a brand-new character; override them ONLY if the admin explicitly asks for different numbers):\n" +
+        "- Stats: hp = 100, atk = 100, level = 1. Do NOT invent higher stats.\n" +
+        "- Always return exactly 3 skills, in this order:\n" +
+        "  1. A basic normal attack: type \"attack\", damage 100, cooldown 0, with a short natural name/description for this character.\n" +
+        "  2. A block/defense skill: type \"defense\", damage 1 (it blocks 1 incoming attack), cooldown 2, with a natural name/description.\n" +
+        "  3. ONE unique signature skill of this character — any type EXCEPT a plain \"attack\" normal attack and EXCEPT \"defense\".\n" +
+        "     Pick the famous ability the character truly uses in its anime/manhwa/manga (e.g. Goku: Kamehameha, " +
+        "Ichigo: Getsuga Tensho, Sun Jin-woo: Shadow Exchange, Sung Jin-woo: Shadow Exchange). Its 'damage' is forced to 150 " +
+        "and its 'cooldown' is forced to 2 (effect/count skills keep damage 1); choose its type and effect to match that ability, " +
+        "and write its name/description from the anime.\n" +
+        "- Every skill name and description must match the character's real abilities from the anime/manhwa.\n"
+      : "";
   if (isEdit) {
     return (
       "You are the assistant for a mobile card-battle game. The admin gives you the CURRENT data of an " +
@@ -58,7 +73,7 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
     "You are the assistant for a mobile card-battle game. The admin gives you a short " +
     "description (name, stats, skills) in Arabic or English. You must reply with ONLY valid JSON " +
     "matching the requested type. Do NOT wrap in markdown. Do NOT invent fields outside the schema. " +
-    "Use sensible balanced numbers.\n" + skillRules +
+    "Use sensible balanced numbers.\n" + skillRules + charDefaults +
     "If the admin asks for skills (attacks/block/abilities), ALWAYS include them in the 'skills' array — " +
     "this works for characters, monsters, weapons and companions alike. " +
     "Text fields may be in the same language as the request.\n\n" +
@@ -224,6 +239,63 @@ function extractJson(text: string): any {
   throw err;
 }
 
+// يفرض القالب الافتراضي للشخصيات الجديدة برمجيًا على أي JSON قادم من النموذج،
+// حتى لو تجاهل المساعد التعليمات: يضمن 3 مهارات بالترتيب الصحيح —
+// 1) هجوم عادي (attack، ضرر 100، تهدئة 0)  2) دفاع/صد (defense، صدّ 1، تهدئة 2)
+// 3) مهارة مميزة (ليست هجومًا عاديًا ولا دفاعًا). تُطبَّق على أول 3 مهارات فقط،
+// وتصحّح فقط الخانات التي أخطأ النموذج في نوعها — فلو طلب الأدمن مهارات مختلفة
+// صراحة تُحترم (لا نفرض الضرر/التقليل على مهارة ليست من النوع المتوقع).
+function enforceDefaultCharacterTemplate(fields: any): any {
+  if (!fields || typeof fields !== "object" || !Array.isArray(fields.skills)) return fields;
+  const skills = fields.skills;
+  if (skills.length < 3) return fields;
+  const norm = (sk: any) => (sk && typeof sk === "object") ? Object.assign({}, sk) : {};
+  const skill1 = norm(skills[0]);
+  const t1 = String(skill1.type || "").trim().toLowerCase();
+  if (t1 === "attack" || t1 === "") {
+    Object.assign(skill1, { type: "attack", damage: 100, cooldown: 0, effect: skill1.effect || "" });
+  }
+  const skill2 = norm(skills[1]);
+  const t2 = String(skill2.type || "").trim().toLowerCase();
+  if (t2 === "defense" || t2 === "block" || t2 === "") {
+    Object.assign(skill2, { type: "defense", damage: 1, cooldown: 2, effect: "" });
+  }
+  let skill3 = norm(skills[2]);
+  const t3 = String(skill3.type || "").trim().toLowerCase();
+  const e3 = String(skill3.effect || "").trim().toLowerCase();
+  const isUnblockable = t3 === "unblockable" || e3 === "unblockable";
+  const isPoison = e3 === "poison" || t3 === "poison";
+  const isPlainNormal = t3 === "attack" || t3 === "defense" || t3 === "";
+  // الهجوم الذي لا يُصدّ أو السم يُفرض على ضرر 150 — سواء كان النموذج
+  // أخطأ في النوع أو أعطاه النوع الصحيح مباشرة.
+  if (isUnblockable || isPoison) {
+    skill3.damage = 150;
+  } else {
+    // المهارة الثالثة لا يمكن أن تكون هجومًا عاديًا أو دفاعًا عاديًا:
+    // أي نوع من هذين (حتى مع تأثير) يُحوَّل إلى special ليبقى مهارة مميزة.
+    if (isPlainNormal) {
+      skill3 = Object.assign({}, skill3, { type: "special" });
+    }
+    const effect3 = String(skill3.effect || "").trim().toLowerCase();
+    const typ3 = String(skill3.type || "").trim().toLowerCase();
+    const countEffects: Record<string, boolean> = {
+      control: true, steal: true, copy: true, freeze: true, "stun": true,
+      seal: true, unseal: true, reflect: true, shadow: true,
+      delay_cooldown: true, hp_boost: true, atk_boost: true,
+      consecutive_turns: true, absorb_atk: true, absorb_hp: true
+    };
+    const divisionTypes: Record<string, boolean> = { defense: true, block: true };
+    if (countEffects[effect3] || countEffects[typ3] || divisionTypes[effect3] || divisionTypes[typ3]) {
+      skill3.damage = Math.max(1, Number(skill3.damage) || 1);
+    } else {
+      skill3.damage = 150;
+    }
+  }
+  skill3.cooldown = 2;
+  fields.skills = [skill1, skill2, skill3];
+  return fields;
+}
+
 // يفرض قواعد أرقام المهارات على أي JSON قادم من النموذج مهما قال المساعد:
 // مهارات التأثير/العدّ (control/steal/copy/freeze/reflect/defense...) = 1 على الأقل،
 // ومهارات الضرر (هجوم/خاص/سم...) = 100 على الأقل ومضاعفات 50.
@@ -273,7 +345,7 @@ Deno.serve(async (req) => {
   try {
     if (req.method !== "POST") return json({ ok: false, error: "method not allowed" }, 405);
     const body = await req.json();
-    const { admin_token, entity_type, prompt, image_url, existing, entity_id } = body || {};
+    const { admin_token, entity_type, prompt, image_url, background_url, existing, entity_id } = body || {};
 
     if (!admin_token || !prompt || !entity_type) {
       return json({ ok: false, error: "bad request" }, 400);
@@ -285,19 +357,33 @@ Deno.serve(async (req) => {
       return json({ ok: false, error: "غير مصرح" }, 401);
     }
 
-    const fullPrompt = image_url ? "Image: " + image_url + "\n\nDescription:\n" + prompt : prompt;
+    const fullPrompt = [
+      image_url ? "Character image: " + image_url : null,
+      background_url ? "Background photo for the character's skill pages: " + background_url : null
+    ].filter(Boolean).join("\n");
+    const finalPrompt = fullPrompt ? fullPrompt + "\n\nDescription:\n" + prompt : prompt;
     const isEdit = !!(existing && (typeof existing === "object"));
     const systemText = systemPrompt(entity_type, isEdit);
-    const requestText = buildFullPrompt(fullPrompt, entity_type, isEdit, isEdit ? existing : null);
+    const requestText = buildFullPrompt(finalPrompt, entity_type, isEdit, isEdit ? existing : null);
     const raw = await generateText(systemText, requestText);
     const parsed = extractJson(raw);
-    const fields = normalizeSkillNumbers(parsed);
+    let fields = normalizeSkillNumbers(parsed);
+    // الشخصيات الجديدة فقط: صحّح قالب المهارات الافتراضي برمجيًا لو أخطأ النموذج
+    // (هجوم عادي 100/تهدئة 0، صد 1/تهدئة 2، مهارة مميزة) — لا تطبق على التعديل أو الوحوش
+    if (!isEdit && entity_type === "character" && fields && typeof fields === "object") {
+      fields = enforceDefaultCharacterTemplate(fields);
+      fields = normalizeSkillNumbers(fields);
+    }
     // الصورة المرفوعة من الأدمن دائمًا تفوز على أي رابط تولّده النموذج،
     // حتى لا يظهر الاقتراح صورة ثم لا تُطبّق على النموذج.
     if (image_url && fields && typeof fields === "object") {
       fields.image = image_url;
     }
-    return json({ ok: true, v: "26", entity_type, fields, image_url: image_url || null, isEdit, entity_id: entity_id || null }, 200);
+    // الخلفية المرفوعة من الأدمن تفوز كذلك على أي خلفية يقترحها النموذج.
+    if (background_url && fields && typeof fields === "object") {
+      fields.background = background_url;
+    }
+    return json({ ok: true, v: "26", entity_type, fields, image_url: image_url || null, background_url: background_url || null, isEdit, entity_id: entity_id || null }, 200);
   } catch (e) {
     const msg = (e && e.message) ? e.message : "خطأ في توليد المحتوى";
     return json({ ok: false, v: "25", error: msg }, 502);

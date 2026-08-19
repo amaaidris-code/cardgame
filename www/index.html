@@ -450,6 +450,11 @@ lang="ar">
             <input id="admin-ai-image-file" type="file" accept="image/*" onchange="uploadAIImage()">
         </label>
 
+        <label>خلفية صفحات المهارات (اختياري) — تُرفع إلى الخادم ثم تُستعمل كخلفية لصفحات مهارات الشخصية
+            <input id="admin-ai-background" type="text" placeholder="رابط خلفية (أو ارفع من الجهاز)">
+            <input id="admin-ai-background-file" type="file" accept="image/*" onchange="uploadAIBackground()">
+        </label>
+
         <button class="upload-status" id="admin-ai-spinner" style="display:none;">⏳ جاري توليد المحتوى...</button>
 
         <button class="admin-btn" onclick="generateWithAI()">✨ توليد</button>

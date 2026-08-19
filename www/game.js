@@ -6069,6 +6069,13 @@ async function addCharacter(){
     refreshAdminViews();
     if(newCharId && skillRows.length){
         await createAISkillsForCharacter(newCharId, skillRows);
+    }
+    if(newCharId && pendingAIBackground){
+        const bg = pendingAIBackground;
+        pendingAIBackground = null;
+        await applyAIBackgroundToCharacter(newCharId, bg);
+    }
+    if(newCharId && skillRows.length){
         await loadAdminPanel();
         await openEditCharacterModal(newCharId);
     }
@@ -8207,12 +8214,18 @@ function uploadAIImage(){
     uploadCharacterImage("admin-ai-image-file", "admin-ai-image", "admin-ai-image", { crop: false });
 }
 
+function uploadAIBackground(){
+    uploadCharacterImage("admin-ai-background-file", "admin-ai-background", "admin-ai-background", { crop: false });
+}
+
 let lastAIFields = null;
 let lastAIType = null;
 let lastAIImageUrl = null; // رابط الصورة المعروض في الاقتراح (حتى يُنسخ للـنموذج)
+let lastAIBackgroundUrl = null; // رابط خلفية صفحات المهارات في الاقتراح (حتى يُطبق على الشخصية)
 let lastAIEntityId = null; // id الكيان الحالي عند تعديل كيان موجود
 let lastAIExisting = null; // بيانات الكيان الحالي (لكي يعدّلها المساعد ويطبّقها)
 let pendingAISkills = null; // مهارات المساعد المحفوظة للربط بشخصية تُضاف من النموذج مباشرة
+let pendingAIBackground = null; // خلفية صفحات المهارات المحفوظة لتُطبق على شخصية تُضاف من النموذج
 
 async function loadAITargetOptions(){
     const target = document.getElementById("admin-ai-target");
@@ -8303,6 +8316,7 @@ async function generateWithAI(){
         return;
     }
     const imageUrl = ((document.getElementById("admin-ai-image") || {}).value || "").trim();
+    const backgroundUrl = ((document.getElementById("admin-ai-background") || {}).value || "").trim();
     const adminToken = localStorage.getItem("admin_token");
     if(!adminToken){ alert("يجب تسجيل الدخول كأدمن أولاً."); return; }
 
@@ -8316,7 +8330,8 @@ async function generateWithAI(){
             admin_token: adminToken,
             entity_type: type,
             prompt,
-            image_url: imageUrl
+            image_url: imageUrl,
+            background_url: backgroundUrl
         };
         if(lastAIEntityId && lastAIExisting){
             body.existing = lastAIExisting;
@@ -8347,11 +8362,13 @@ function renderAIResult(json){
     lastAIType = json.entity_type || "character";
     lastAIEntityId = json.isEdit && json.entity_id ? json.entity_id : lastAIEntityId;
     lastAIImageUrl = json.image_url || (lastAIFields.image || null);
+    lastAIBackgroundUrl = json.background_url || (lastAIFields.background || null);
     const result = document.getElementById("admin-ai-result");
     if(!result) return;
     const type = lastAIType;
     const f = lastAIFields;
     const img = json.image_url || f.image || "";
+    const bg = json.background_url || f.background || "";
     const skillRows = (Array.isArray(f.skills) && f.skills.length)
         ? f.skills.map((s, i) => `
             <li>${i+1}. ${escapeHtml(s.name)} — ${escapeHtml(s.type || "")} · ضرر ${escapeHtml(s.damage ?? 0)} · CD ${escapeHtml(s.cooldown ?? 0)} ${s.effect ? "· " + escapeHtml(s.effect) : ""}</li>`).join("")
@@ -8361,6 +8378,8 @@ function renderAIResult(json){
         <div class="admin-card">
             <h4>✍️ اقتراح المساعد — ${type === "monster" ? "وحش" : type === "weapon" ? "سلاح" : type === "companion" ? "مرافق" : type === "potion" ? "جرعة" : "شخصية"}</h4>
             ${img ? `<img src="${escapeHtml(img)}" style="width:64px;height:64px;object-fit:cover;border-radius:10px;float:left;margin:0 0 8px 8px;">` : ""}
+            ${bg ? `<p><strong>خلفية الصفحات:</strong> <img src="${escapeHtml(bg)}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;vertical-align:middle;"> <a href="${escapeHtml(bg)}" target="_blank" rel="noopener">فتح</a></p>` : ""}
+            ${f.glow_color ? `<p><strong>لون التوهج:</strong> <span style="display:inline-block;width:16px;height:16px;border-radius:50%;background:${escapeHtml(f.glow_color)};vertical-align:middle;"></span> <code>${escapeHtml(f.glow_color)}</code></p>` : ""}
             <p><strong>الاسم:</strong> ${escapeHtml(f.name || "")}</p>
             ${f.hp != null ? `<p><strong>HP:</strong> ${escapeHtml(f.hp)}</p>` : ""}
             ${f.atk != null ? `<p><strong>ATK:</strong> ${escapeHtml(f.atk)}</p>` : ""}
@@ -8397,6 +8416,9 @@ async function applyAIEdit(){
 
     try{
         if(type === "character" || type === "monster"){
+            const glowColor = (f.glow_color && /^#[0-9A-Fa-f]{6}$/.test(f.glow_color))
+                ? f.glow_color
+                : (existing.glow_color || "#3b82ff");
             await supabaseClient.rpc("admin_save_character", {
                 p_admin_token: admin_token,
                 p_character_id: id,
@@ -8412,9 +8434,14 @@ async function applyAIEdit(){
                 p_is_monster: type === "monster",
                 p_gold_prize: num(f.gold_prize, existing.gold_prize ?? 0),
                 p_admin_only: !!existing.admin_only,
-                p_glow_color: existing.glow_color || "#3b82ff",
+                p_glow_color: glowColor,
                 p_glow_locked: !!existing.glow_locked
             });
+            // طبق خلفية صفحات المهارات المرفوعة على كل صفحات مهارات الشخصية
+            const bgUrl = lastAIBackgroundUrl || f.background || "";
+            if(bgUrl){
+                await applyAIBackgroundToCharacter(id, bgUrl);
+            }
             await refreshAdminViews();
         }else if(type === "weapon"){
             await supabaseClient.rpc("admin_save_weapon", {
@@ -8476,6 +8503,29 @@ async function applyAIEdit(){
     }catch(e){
         alert("فشل تطبيق التعديل: " + (e && e.message ? e.message : "خطأ غير معروف"));
         console.error(e);
+    }
+}
+
+// يطبق خلفية صفحات المهارات المرفوعة/المقترحة على كل صفحات مهارات الشخصية
+// (كل 4 مهارات = صفحة)، بالاتصال المباشر بنفس إجراء الحفظ المستخدم في نافذة التعديل
+async function applyAIBackgroundToCharacter(characterId, bgUrl){
+    const admin_token = localStorage.getItem("admin_token");
+    if(!admin_token || !bgUrl) return;
+    try{
+        const skills = await loadCharacterSkillsForAdmin(characterId);
+        const numPages = Math.max(1, Math.ceil((Array.isArray(skills) ? skills.length : 0) / 4));
+        for(let p = 0; p < numPages; p++){
+            await supabaseClient.rpc("admin_set_character_skill_page_background", {
+                p_admin_token: admin_token,
+                p_character_id: characterId,
+                p_page_index: p,
+                p_image_url: bgUrl
+            });
+        }
+        GameCache.clear("skill_page_bgs_" + characterId);
+    }catch(e){
+        console.error(e);
+        throw e;
     }
 }
 
@@ -8597,6 +8647,10 @@ function applyLastAI(type){
         set("admin-power-description", f.power_description);
         set("admin-character-quote", f.quote);
         set("admin-character-gold-prize", f.gold_prize);
+        if(f.glow_color && /^#[0-9A-Fa-f]{6}$/.test(f.glow_color)){
+            set("admin-character-glow-color", f.glow_color);
+        }
+        pendingAIBackground = lastAIBackgroundUrl || f.background || null;
         setBool("admin-character-is-monster", type === "monster");
         pendingAISkills = (Array.isArray(f.skills) && f.skills.length) ? f.skills : null;
         renderPendingAICharacterSkills();
@@ -8798,9 +8852,11 @@ function clearAIResult(){
     lastAIFields = null;
     lastAIType = null;
     lastAIImageUrl = null;
+    lastAIBackgroundUrl = null;
     lastAIEntityId = null;
     lastAIExisting = null;
     pendingAISkills = null;
+    pendingAIBackground = null;
     renderPendingAICharacterSkills();
     renderSkillsIntoEditor("admin-weapon-skills-editor", null);
     renderSkillsIntoEditor("admin-companion-skills-editor", null);
@@ -8810,6 +8866,10 @@ function clearAIResult(){
     if(img) img.value = "";
     const file = document.getElementById("admin-ai-image-file");
     if(file) file.value = "";
+    const bg = document.getElementById("admin-ai-background");
+    if(bg) bg.value = "";
+    const bgFile = document.getElementById("admin-ai-background-file");
+    if(bgFile) bgFile.value = "";
 }
 
 
