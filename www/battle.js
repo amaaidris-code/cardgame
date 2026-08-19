@@ -1667,6 +1667,8 @@ async function startDungeonMonster(monsterId){
     // إعادة ضبط حالة النزال كاملة قبل بدء الوحش الجديد: بدون هذا يبقى
     // battle.finished نشطًا من نهاية النزال السابق فتُجمَّد جميع الأدوار
     // (لا يستطيع اللاعب الحركة ولا يعمل الخصم)
+    resetBattleVisuals("pve");
+
     battle.phase = "idle";
 
     battle.finished = false;
