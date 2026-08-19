@@ -23,12 +23,18 @@ const SCHEMAS = {
 
 function systemPrompt(entityType: string, isEdit: boolean): string {
   const schema = SCHEMAS[entityType] || SCHEMAS.character;
+  const skillRules =
+    "SKILL NUMBER RULES (apply these defaults on every skill):\n" +
+    "- Non-damage/effect skills — control, steal, copy, freeze/stun, seal, unseal, reflect, shadow, delay_cooldown, hp_boost, atk_boost: their 'damage' field is a COUNT, always default it to 1 unless the admin says otherwise.\n" +
+    "- Damage skills — normal attack, unblockable, poison, lifesteal/absorb, special: their 'damage' must be at least 100 (default 100 if unspecified) and a multiple of 50.\n" +
+    "- Defense/block skills: 'damage' = how many attacks it can block, use 1-3.\n" +
+    "- 'cooldown' is measured in TURNS, not seconds (cooldown 1 = reusable after the fighter takes 1 of their own turns).\n";
   if (isEdit) {
     return (
       "You are the assistant for a mobile card-battle game. The admin gives you the CURRENT data of an " +
       "existing " + entityType + " (below) and a request about how to adjust it (name, stats, skills) in " +
       "Arabic or English. Reply with ONLY valid JSON matching the requested type. Do NOT wrap in markdown. " +
-      "Do NOT invent fields outside the schema. IMPORTANT: skill 'cooldown' is measured in TURNS, not seconds. " +
+      "Do NOT invent fields outside the schema.\n" + skillRules +
       "If the admin asks to add/change skills, include them in the 'skills' array (works for characters, monsters, " +
       "weapons and companions). " +
       "Keep every field from the CURRENT data that the request " +
@@ -41,8 +47,7 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
     "You are the assistant for a mobile card-battle game. The admin gives you a short " +
     "description (name, stats, skills) in Arabic or English. You must reply with ONLY valid JSON " +
     "matching the requested type. Do NOT wrap in markdown. Do NOT invent fields outside the schema. " +
-    "Use sensible balanced numbers. IMPORTANT: skill 'cooldown' is measured in TURNS, not seconds " +
-    "(e.g. cooldown 1 means the skill can be reused after the fighter takes 1 of their own turns). " +
+    "Use sensible balanced numbers.\n" + skillRules +
     "If the admin asks for skills (attacks/block/abilities), ALWAYS include them in the 'skills' array — " +
     "this works for characters, monsters, weapons and companions alike. " +
     "Text fields may be in the same language as the request.\n\n" +
