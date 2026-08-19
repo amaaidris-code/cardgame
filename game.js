@@ -3082,7 +3082,7 @@ function typeChoiceToEffect(choice){
     switch(choice){
         case "attack":
         case "defense":
-            return null;
+        case "special":
         case "unblockable":
             return null;
         default:
@@ -4572,6 +4572,10 @@ function skillTypeChoiceToFields(typeChoice){
 
         type = "defense";
 
+    } else if(typeChoice === "special"){
+
+        type = "special";
+
     } else if(typeChoice === "steal"){
 
         type = "special";
@@ -4731,6 +4735,8 @@ function skillFieldsToTypeChoice(skill){
 
     if(skill.type === "defense") return "defense";
 
+    if(skill.type === "special") return "special";
+
     return "attack";
 
 }
@@ -4741,6 +4747,7 @@ function skillTypeOptionsHtml(selected){
 
     const options = [
         ["attack", "⚔️ هجوم عادي"],
+        ["special", "🌟 مهارة مميزة (هجوم قوي)"],
         ["defense", "🛡️ دفاع"],
         ["steal", "🗡️ مفترس (سرقة مهارة)"],
         ["copy", "📋 نسخ (نسخ مهارة الخصم واستخدامها)"],
@@ -4772,6 +4779,7 @@ function skillTypeOptionsHtml(selected){
 function potionSkillTypeLabel(choice){
     const map = {
         attack: "هجوم عادي",
+        special: "مهارة مميزة",
         defense: "دفاع",
         steal: "مفترس",
         copy: "نسخ",
@@ -4835,6 +4843,8 @@ function skillTypeLabel(skill){
     if(skill.effect === "shadow") return "الظل";
 
     if(skill.type === "defense") return "دفاع";
+
+    if(skill.type === "special") return "مهارة مميزة";
 
     return "هجوم";
 
