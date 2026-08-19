@@ -266,7 +266,7 @@ function extractJson(text: string): any {
 //    تُفرض على 150) أو مهارة تأثير/عدّ تناسب الشخصية (copy/reflect/control/steal... تُفرض على 1).
 // تُطبَّق على أول 3 مهارات فقط، وتصحّح فقط الخانات التي أخطأ النموذج في نوعها —
 // فلو طلب الأدمن مهارات مختلفة صراحة تُحترم (لا نفرض الضرر/التقليل على مهارة ليست من النوع المتوقع).
-function enforceDefaultCharacterTemplate(fields: any): any {
+function enforceDefaultCharacterTemplate(fields: any, excludedEffects: string[] = []): any {
   if (!fields || typeof fields !== "object" || !Array.isArray(fields.skills)) return fields;
   const skills = fields.skills;
   if (skills.length < 3) return fields;
@@ -302,7 +302,8 @@ function enforceDefaultCharacterTemplate(fields: any): any {
     // هجوم عادي أو دفاع/صد عادي — لا تصلح كمهارة مميزة (هذه الخانتان 1 و 2).
     // نستبدلها تلقائيًا بتأثير مميز حقيقي ذي ضرر قوي.
     skill3 = Object.assign({}, skill3, { type: "special" });
-    const fallbackEffects = ["poison", "lifesteal", "unblockable"];
+    const fallbackEffects = ["poison", "lifesteal", "unblockable"]
+        .filter(e => !excludedEffects.includes(e));
     const chosen = fallbackEffects[Math.floor(Math.random() * fallbackEffects.length)];
     if (chosen === "unblockable") { skill3.unblockable = true; skill3.effect = ""; }
     else skill3.effect = chosen;
@@ -320,7 +321,8 @@ function enforceDefaultCharacterTemplate(fields: any): any {
     // انتهت المهارة بلا تأثير مميز (ضرر صافي بلا تأثير أو نوع فارغ): نختار
     // تلقائيًا تأثير ضرر حقيقيًا من تأثيرات النظام ليتمايز عن الهجوم العادي.
     skill3 = Object.assign({}, skill3, { type: "special" });
-    const fallbackEffects = ["poison", "lifesteal", "unblockable"];
+    const fallbackEffects = ["poison", "lifesteal", "unblockable"]
+        .filter(e => !excludedEffects.includes(e));
     const chosen = fallbackEffects[Math.floor(Math.random() * fallbackEffects.length)];
     if (chosen === "unblockable") { skill3.unblockable = true; skill3.effect = ""; }
     else skill3.effect = chosen;
