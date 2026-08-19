@@ -32,8 +32,11 @@ const SCHEMAS = {
   potion: '{"name":"string","description":"string","effect_type":"heal|heal_percent|reset_cooldown|atk_boost|shield|skill","effect_value":"number 0..10000","price":"number 0..5000"}'
 };
 
-function systemPrompt(entityType: string, isEdit: boolean): string {
+function systemPrompt(entityType: string, isEdit: boolean, useArabic: boolean): string {
   const schema = SCHEMAS[entityType] || SCHEMAS.character;
+  const langNote = useArabic
+    ? "Write ALL human-readable text fields (name, anime, quote, power name/description, skill names & descriptions) in Arabic unless the admin clearly requests another language."
+    : "Write ALL human-readable text fields (name, anime, quote, power name/description, skill names & descriptions) in English, matching the language of the admin's request.";
   const skillRules =
     "SKILL NUMBER RULES (apply these defaults on every skill):\n" +
     "- Non-damage/effect skills — control, steal, copy, freeze/stun, seal, unseal, reflect, unblockable_reflect, shadow, delay_cooldown, hp_boost, atk_boost: their 'damage' field is a COUNT and the system forces it to exactly 1.\n" +
@@ -46,7 +49,7 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
       ? "\n\nNEW CHARACTER DEFAULT TEMPLATE (apply these ONLY when the admin does not specify the stats or the " +
         "skills for a brand-new character; override them ONLY if the admin explicitly asks for different numbers):\n" +
         "- Stats: hp = 100, atk = 100, level = 1. Do NOT invent higher stats.\n" +
-        "- EVERY text value MUST be written in ARABIC: the character name (transliterate Latin names, e.g. Goku → غوكو), anime title, quote, power_name, power_description, and every skill name & description. Only the technical fields stay in English ('type', 'damage', 'cooldown', 'effect').\n" +
+        "- EVERY text value MUST be written in " + (useArabic ? "ARABIC" : "ENGLISH") + ": the character name (transliterate Latin names, e.g. Goku → غوكو if Arabic, Goku if English), anime title, quote, power_name, power_description, and every skill name & description. Only the technical fields stay in English ('type', 'damage', 'cooldown', 'effect').\n" +
         "- Always return exactly 3 skills, in this order:\n" +
         "  1. A basic normal attack: type \"attack\", damage 100, cooldown 0, with a short natural name/description for this character.\n" +
         "  2. A block/defense skill: type \"defense\", damage 1 (it blocks 1 incoming attack), cooldown 2, with a natural name/description.\n" +
@@ -73,7 +76,7 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
       "You are the assistant for a mobile card-battle game. The admin gives you the CURRENT data of an " +
       "existing " + entityType + " (below) and a request about how to adjust it (name, stats, skills) in " +
       "Arabic or English. Reply with ONLY valid JSON matching the requested type. Do NOT wrap in markdown. " +
-      "Do NOT invent fields outside the schema.\n" + skillRules +
+      "Do NOT invent fields outside the schema.\n" + skillRules + langNote + "\n" +
       "If the admin asks to add/change skills, include them in the 'skills' array (works for characters, monsters, " +
       "weapons and companions). " +
       "Keep every field from the CURRENT data that the request " +
@@ -87,7 +90,7 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
     "description (name, stats, skills) in Arabic or English. You must reply with ONLY valid JSON " +
     "matching the requested type. Do NOT wrap in markdown. Do NOT invent fields outside the schema. " +
     "Use sensible balanced numbers.\n" + skillRules + charDefaults +
-    "Write ALL human-readable text fields (name, anime, quote, power name/description, skill names & descriptions) in Arabic unless the admin clearly requests another language.\n" +
+    langNote + "\n" +
     "If the admin asks for skills (attacks/block/abilities), ALWAYS include them in the 'skills' array — " +
     "this works for characters, monsters, weapons and companions alike. " +
     "Text fields may be in the same language as the request.\n\n" +
@@ -294,6 +297,7 @@ function enforceDefaultCharacterTemplate(fields: any): any {
   const divisionTypes: Record<string, boolean> = { defense: true, block: true };
   const isPlainAttack = (t3 === "attack" || t3 === "") && e3 === "";
   const isPlainBlock = (t3 === "defense" || t3 === "block") && e3 === "";
+  const isSigDamage = !(isPlainAttack || isPlainBlock);
   if (isPlainAttack || isPlainBlock) {
     // هجوم عادي أو دفاع/صد عادي — لا تصلح كمهارة مميزة (هذه الخانتان 1 و 2).
     // نستبدلها تلقائيًا بتأثير مميز حقيقي ذي ضرر قوي.
@@ -409,6 +413,15 @@ function applyRequestedEffectToSkill(fields: any, slotIndex: number, hint: { eff
   fields.skills[slotIndex] = sk;
 }
 
+// يحدد لغة طلب الأدمن: عربية أم لاتينية (إنجليزية أو لاتينية أخرى).
+// يُستخدم لاختيار لغة الناتج تلقائيًا بدلاً من الفرض الدائم على العربية.
+function isArabicPrompt(s: any): boolean {
+  const t = String(s || "");
+  const arabic = (t.match(/[\u0600-\u06FF]/g) || []).length;
+  const latin = (t.match(/[A-Za-z]/g) || []).length;
+  return arabic > 0 && arabic >= latin;
+}
+
 // هل النص أغلب أحرفه لاتينية (اكتشاف أسماء المهارات والوصف الإنجليزي)
 function isLatinDominant(s: any): boolean {
   const t = String(s || "");
@@ -522,7 +535,8 @@ Deno.serve(async (req) => {
     const finalPrompt = (research ? "WEB INFO about this character (use it to make the data accurate):\n" + research + "\n\n" : "") +
       (fullPrompt ? fullPrompt + "\n\nDescription:\n" + prompt : prompt);
     const isEdit = !!(existing && (typeof existing === "object"));
-    const systemText = systemPrompt(entity_type, isEdit);
+    const useArabic = isArabicPrompt(prompt);
+    const systemText = systemPrompt(entity_type, isEdit, useArabic);
     const requestText = buildFullPrompt(finalPrompt, entity_type, isEdit, isEdit ? existing : null);
     const raw = await generateText(systemText, requestText);
     const parsed = extractJson(raw);
@@ -547,8 +561,8 @@ Deno.serve(async (req) => {
       fields.background = background_url;
     }
     // ضمان العربية لكل النصوص القابلة للقراءة (أسماء وأوصاف مهارات...)
-    // لو ظهرت أي نصوص إنجليزية (شائع من النماذج) نعدّل توليدها بالعربية.
-    if (fields && typeof fields === "object") {
+    // فقط عند طلب العربية: لو ظهرت أي نصوص إنجليزية (شائع من النماذج) نعدّل توليدها بالعربية.
+    if (useArabic && fields && typeof fields === "object") {
       try {
         fields = await arabicizeFields(fields);
         fields = normalizeSkillNumbers(fields);
