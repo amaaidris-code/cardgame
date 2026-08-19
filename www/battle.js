@@ -1859,8 +1859,7 @@ function updateBattleScreen(){
         if(compName) compName.textContent = comp.name;
         setFighterImage(compImage, comp.image);
         if(compImage) compImage.classList.toggle("frozen-status", !!(comp.frozenTurns > 0));
-        // حالة موت المرافق: إظهار أقل سطوعًا للبطاقة
-        compCard.classList.toggle("companion-dead", comp.hp <= 0);
+        if(compCard) compCard.classList.toggle("companion-dead", comp.hp <= 0);
     }
 
     applyGlowColors();
