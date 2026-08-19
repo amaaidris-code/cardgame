@@ -2319,7 +2319,7 @@ async function loadCharacterProfile(){
         <div class="character-skill-item">
             <div class="character-skill-head">
                 <strong>${escapeHtml(s.name || "")}</strong>
-                <span class="skill-badge">${escapeHtml(s.type || "")}</span>
+                <span class="skill-badge">${escapeHtml(skillTypeLabel(s))}</span>
             </div>
             <div class="character-skill-meta">
                 <span>⚔️ الضرر: ${escapeHtml(String(dmgText))}</span>
@@ -7159,7 +7159,7 @@ async function loadCompanionSkillPool(companionId){
         if(row.dataset.skillId) existing.add(row.dataset.skillId);
     });
     let opts = pool.filter(s => !existing.has(s.id)).map(s =>
-        `<option value="${escapeAttr(s.id)}">${escapeHtml(s.name || '')} (${escapeHtml(s.type || '')}${s.damage ? ' · ' + s.damage : ''}${s.effect ? ' · ' + escapeHtml(s.effect) : ''})</option>`).join("");
+        `<option value="${escapeAttr(s.id)}">${escapeHtml(s.name || '')} (${escapeHtml(skillTypeLabel(s))}${s.damage ? ' · ' + s.damage : ''}${s.effect ? ' · ' + escapeHtml(s.effect) : ''})</option>`).join("");
     select.innerHTML = opts || '<option value="">لا مهارات متاحة</option>';
 }
 
@@ -7180,7 +7180,7 @@ async function renderCompanionEditableSkills(companionId){
     } else {
         box.innerHTML = '<div class="admin-skills-edit-list">' + skills.map(s => `
             <div class="admin-skill-edit-row" data-skill-id="${escapeAttr(s.id)}">
-                <span class="admin-skill-name">${escapeHtml(s.name || '')} · ${escapeHtml(s.type || '')}${s.damage > 0 ? ' · ' + s.damage : ''}${s.cooldown > 0 ? ' · تهدئة ' + s.cooldown : ''}${s.effect ? ' · ' + escapeHtml(s.effect) : ''}</span>
+                <span class="admin-skill-name">${escapeHtml(s.name || '')} · ${escapeHtml(skillTypeLabel(s))}${s.damage > 0 ? ' · ' + s.damage : ''}${s.cooldown > 0 ? ' · تهدئة ' + s.cooldown : ''}${s.effect ? ' · ' + escapeHtml(s.effect) : ''}</span>
                 <button onclick="setCompanionSkillSlot('${companionId}','${s.id}',${s.slot} - 1)" title="تحريك لأعلى" ${s.slot <= 1 ? "disabled" : ""}>⬆️</button>
                 <button onclick="setCompanionSkillSlot('${companionId}','${s.id}',${s.slot} + 1)" title="تحريك لأسفل">⬇️</button>
                 <span class="admin-hint">خانة ${s.slot}</span>
@@ -8381,7 +8381,7 @@ function renderAIResult(json){
     const bg = json.background_url || f.background || "";
     const skillRows = (Array.isArray(f.skills) && f.skills.length)
         ? f.skills.map((s, i) => `
-            <li>${i+1}. ${escapeHtml(s.name)} — ${escapeHtml(s.type || "")} · ضرر ${escapeHtml(s.damage ?? 0)} · CD ${escapeHtml(s.cooldown ?? 0)} ${s.effect ? "· " + escapeHtml(s.effect) : ""}</li>`).join("")
+            <li>${i+1}. ${escapeHtml(s.name)} — ${escapeHtml(skillTypeLabel(s))} · ضرر ${escapeHtml(s.damage ?? 0)} · CD ${escapeHtml(s.cooldown ?? 0)} ${s.effect ? "· " + escapeHtml(s.effect) : ""}</li>`).join("")
         : "<li>—</li>";
 
     result.innerHTML = `

@@ -25,10 +25,10 @@ const CEREBRAS_MODELS = [
 ].filter((m): m is string => !!m && m.trim() !== "");
 
 const SCHEMAS = {
-  character: '{"name":"string","anime":"string","hp":"number 40..1000","atk":"number 40..1000","level":"number 1..1000 (default 1)","quote":"string","power_name":"string","power_description":"string","gold_prize":"number 0..5000","glow_color":"hex color string like #ff0000 (optional)","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number of turns 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy| empty string","description":"string optional"}]}',
-  monster: '{"name":"string","anime":"string","hp":"number 100..2000","atk":"number 80..1000","level":"number 1..1000 (default 1)","quote":"string","power_name":"string","power_description":"string","gold_prize":"number 0..5000","glow_color":"hex color string like #ff0000 (optional)","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number of turns 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy| empty string","description":"string optional"}]}',
-  weapon: '{"name":"string","description":"string","price":"number 100..10000","max_durability":"number 1..200","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number of turns 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy| empty string","description":"string optional"}]}',
-  companion: '{"name":"string","description":"string","price":"number 0..20000","base_hp":"number 50..500","base_atk":"number 20..300","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number of turns 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy| empty string","description":"string optional"}]}',
+  character: '{"name":"string","anime":"string","hp":"number 40..1000","atk":"number 40..1000","level":"number 1..1000 (default 1)","quote":"string","power_name":"string","power_description":"string","gold_prize":"number 0..5000","glow_color":"hex color string like #ff0000 (optional)","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number of turns 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy|freeze|seal|unseal|shadow|unblockable|lifesteal| empty string","description":"string optional"}]}',
+  monster: '{"name":"string","anime":"string","hp":"number 100..2000","atk":"number 80..1000","level":"number 1..1000 (default 1)","quote":"string","power_name":"string","power_description":"string","gold_prize":"number 0..5000","glow_color":"hex color string like #ff0000 (optional)","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number of turns 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy|freeze|seal|unseal|shadow|unblockable|lifesteal| empty string","description":"string optional"}]}',
+  weapon: '{"name":"string","description":"string","price":"number 100..10000","max_durability":"number 1..200","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number of turns 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy|freeze|seal|unseal|shadow|unblockable|lifesteal| empty string","description":"string optional"}]}',
+  companion: '{"name":"string","description":"string","price":"number 0..20000","base_hp":"number 50..500","base_atk":"number 20..300","skills":[{"name":"string","type":"attack|defense|special","damage":"number 0..999","cooldown":"number of turns 0..20","effect":"control|reflect|absorb|heal|shield|poison|steal|copy|freeze|seal|unseal|shadow|unblockable|lifesteal| empty string","description":"string optional"}]}',
   potion: '{"name":"string","description":"string","effect_type":"heal|heal_percent|reset_cooldown|atk_boost|shield|skill","effect_value":"number 0..10000","price":"number 0..5000"}'
 };
 
@@ -39,7 +39,8 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
     "- Non-damage/effect skills — control, steal, copy, freeze/stun, seal, unseal, reflect, unblockable_reflect, shadow, delay_cooldown, hp_boost, atk_boost: their 'damage' field is a COUNT and the system forces it to exactly 1.\n" +
     "- Damage skills — normal attack, unblockable, poison, lifesteal/absorb, special: their 'damage' must be at least 100 (default 100 if unspecified) and a multiple of 50.\n" +
     "- Defense/block skills: 'damage' = how many attacks it can block, the system forces it to exactly 1.\n" +
-    "- 'cooldown' is measured in TURNS, not seconds (cooldown 1 = reusable after the fighter takes 1 of their own turns).\n";
+    "- 'cooldown' is measured in TURNS, not seconds (cooldown 1 = reusable after the fighter takes 1 of their own turns).\n" +
+    "- If the admin EXPLICITLY asks for a specific skill type or effect (poison, lifesteal/absorb, steal, copy, control, freeze/stun, reflect, seal, shadow, unblockable, defense, etc.), you MUST honor it exactly: set exactly those values in the skill's 'effect' and 'type' and give the skill a matching name/description. NEVER turn an explicitly requested effect into a plain attack with an empty 'effect'.\n";
   const charDefaults =
     (entityType === "character" && !isEdit)
       ? "\n\nNEW CHARACTER DEFAULT TEMPLATE (apply these ONLY when the admin does not specify the stats or the " +
@@ -49,11 +50,13 @@ function systemPrompt(entityType: string, isEdit: boolean): string {
         "  1. A basic normal attack: type \"attack\", damage 100, cooldown 0, with a short natural name/description for this character.\n" +
         "  2. A block/defense skill: type \"defense\", damage 1 (it blocks 1 incoming attack), cooldown 2, with a natural name/description.\n" +
 "  3. ONE unique signature skill of this character — the famous ability it truly uses in its anime/manhwa/manga. " +
-        "     It can be EITHER a powerful damaging move (type \"special\", or unblockable/poison — the system forces its damage to 150) " +
-        "     OR an effect move the character is known for (control/steal/copy/freeze/stun/reflect/shadow — the system forces its damage to 1). " +
-        "     Pick the one that matches the character: e.g. Goku → Kamehameha (damage), Kakashi → Sharingan Copy (copy), " +
-        "     Asta → reflect or unblockable attack (damage), Shinobu → poison (damage), Sung Jin-woo → Monarch's domain. " +
-        "     NEVER a plain normal attack (that is slot 1) and NEVER a plain block (that is slot 2). " +
+        "     It MUST be a real effect skill with a non-empty 'effect' value. Give it EITHER a damaging effect " +
+        "     (poison, lifesteal, unblockable — the system forces its damage to 150) OR a non-damaging effect " +
+        "     (steal, copy, control, freeze/stun, reflect, seal, shadow, atk_boost, hp_boost — the system forces its damage to 1). " +
+        "     Pick the effect that matches the character: e.g. Kakashi → Sharingan Copy (copy), Asta → unblockable attack, " +
+        "     Shinobu → poison, Sung Jin-woo → Monarch's Domain (shadow), a vampire/healer → lifesteal. " +
+        "     NEVER a plain normal attack, NEVER a plain block (those are slots 1 and 2), and NEVER an empty 'effect'. " +
+        "     If the admin EXPLICITLY requests a specific effect for this slot (poison, lifesteal, steal, copy, freeze, reflect, shadow, ...), use EXACTLY that effect. " +
         "     Its 'cooldown' is forced to 2; choose its type and effect to match that ability, " +
         "     and write its name/description from the anime.\n" +
         "- Every skill name and description must match the character's real abilities from the anime/manhwa.\n"
@@ -288,6 +291,15 @@ function enforceDefaultCharacterTemplate(fields: any): any {
     // والهجوم العادي العادي أو النوع الفارغ يُرقّى إلى special ليظل مهارة مميزة.
     skill3.damage = 150;
     if (t3 === "attack" || t3 === "") skill3.type = "special";
+    // الخانة الثالثة لا يجوز أن تبقى ضررًا صافيًا بلا تأثير — حينها لا تختلف عن
+    // الهجوم العادي (الخانة 1). إن لم يعيّن المساعد تأثيرًا نختار تلقائيًا
+    // تأثير ضرر حقيقيًا من تأثيرات النظام ليتمايز عنها.
+    if (String(skill3.effect || "").trim() === "") {
+      const fallbackEffects = ["poison", "lifesteal", "unblockable"];
+      const chosen = fallbackEffects[Math.floor(Math.random() * fallbackEffects.length)];
+      if (chosen === "unblockable") { skill3.unblockable = true; skill3.effect = ""; }
+      else skill3.effect = chosen;
+    }
   }
   skill3.cooldown = 2;
   fields.skills = [skill1, skill2, skill3];
@@ -324,6 +336,55 @@ function normalizeSkillNumbers(fields: any): any {
     return Object.assign({}, sk, { damage });
   });
   return fields;
+}
+
+// خريطة كلمات الطلب → تأثير المهارة. keywords تشمل العربية والإنجليزية.
+const EFFECT_HINTS: { effect: string; isDamage: boolean; keywords: string[] }[] = [
+  { effect: "unblockable", isDamage: true,  keywords: ["unblockable", "لا يصد", "لا تُصد", "لا يمكن صد", "غير قابل للصد"] },
+  { effect: "poison",      isDamage: true,  keywords: ["poison", "تسميم", "سم", "سموم"] },
+  { effect: "lifesteal",   isDamage: true,  keywords: ["lifesteal", "life steal", "leech", "امتصاص", "شفاء بالضرب", "سرقة حياة"] },
+  { effect: "steal",       isDamage: false, keywords: ["steal", "سرقة", "مفترس"] },
+  { effect: "copy",        isDamage: false, keywords: ["copy", "نسخ", "تقليد"] },
+  { effect: "control",     isDamage: false, keywords: ["control", "سيطرة", "تحكم", "توجيه الخصم"] },
+  { effect: "freeze",      isDamage: false, keywords: ["freeze", "stun", "تجميد", "شلل", "تثبيت"] },
+  { effect: "reflect",     isDamage: false, keywords: ["reflect", "انعكاس", "صد الضرر"] },
+  { effect: "seal",        isDamage: false, keywords: ["seal", "ختم"] },
+  { effect: "shadow",      isDamage: false, keywords: ["shadow", "الظل", "ظلال"] },
+  { effect: "absorb_atk",  isDamage: false, keywords: ["امتصاص قوة", "امتصاص الهجوم"] },
+  { effect: "absorb_hp",   isDamage: false, keywords: ["امتصاص صحة", "امتصاص الدم"] },
+  { effect: "atk_boost",   isDamage: false, keywords: ["رفع القوة", "زيادة الهجوم", "atk boost"] },
+  { effect: "hp_boost",    isDamage: false, keywords: ["استرجاع الصحة", "تعافي", "شفاء ذاتي"] }
+];
+
+// يبحث في طلب الأدمن عن كلمات تطلب نوع تأثير محدد لمهارة مميزة
+function detectRequestedEffects(prompt: string): { effect: string; isDamage: boolean }[] {
+  const text = (prompt || "").toLowerCase();
+  const found: { effect: string; isDamage: boolean }[] = [];
+  for (const hint of EFFECT_HINTS) {
+    const matched = hint.keywords.some(k => text.includes(k.toLowerCase()));
+    if (matched) found.push({ effect: hint.effect, isDamage: hint.isDamage });
+  }
+  return found;
+}
+
+// يطبّق التأثير الذي طلبه الأدمن على المهارة (افتراضيًا الخانة الثالثة المميزة)
+function applyRequestedEffectToSkill(fields: any, slotIndex: number, hint: { effect: string; isDamage: boolean }): void {
+  if (!fields || !Array.isArray(fields.skills) || !fields.skills[slotIndex]) return;
+  const sk = fields.skills[slotIndex] && typeof fields.skills[slotIndex] === "object"
+    ? Object.assign({}, fields.skills[slotIndex])
+    : { name: "هجوم الظل", description: "" };
+  if (hint.effect === "unblockable") {
+    sk.unblockable = true;
+    sk.effect = "";
+    sk.damage = 150;
+    sk.type = "special";
+  } else {
+    sk.effect = hint.effect;
+    sk.unblockable = false;
+    sk.type = "special";
+    sk.damage = hint.isDamage ? 150 : 1;
+  }
+  fields.skills[slotIndex] = sk;
 }
 
 Deno.serve(async (req) => {
@@ -369,6 +430,10 @@ Deno.serve(async (req) => {
     // الشخصيات الجديدة فقط: صحّح قالب المهارات الافتراضي برمجيًا لو أخطأ النموذج
     // (هجوم عادي 100/تهدئة 0، صد 1/تهدئة 2، مهارة مميزة) — لا تطبق على التعديل أو الوحوش
     if (!isEdit && entity_type === "character" && fields && typeof fields === "object") {
+      // لو طلب الأدمن صراحةً نوع تأثير للمهارة المميزة (سم/امتصاص/سرقة/نسخ/...)
+      // نطبّقه على الخانة الثالثة بغضّ النظر عمّا أعاده النموذج.
+      const requested = detectRequestedEffects(prompt);
+      if (requested.length > 0) applyRequestedEffectToSkill(fields, 2, requested[0]);
       fields = enforceDefaultCharacterTemplate(fields);
       fields = normalizeSkillNumbers(fields);
     }
