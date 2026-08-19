@@ -3042,7 +3042,20 @@ async function loadAdminSkillRules(){
             return;
         }
 
+        let playersWithPending = new Set();
+        pending.forEach(r => {
+            if(r.username) playersWithPending.add(r.username);
+        });
+
+        let warningHtml = "";
+        if(playersWithPending.size > 0){
+            let playersList = Array.from(playersWithPending).slice(0, 5).map(p => `<span class="admin-hint">${p}</span>`).join(", ");
+            warningHtml = '<p class="admin-warning">تنبيه: بعض اللاعبين لديهم طلبات مهارات معلّقة بالفعل.</p>' +
+                (playersWithPending.size > 5 ? `<p class="admin-hint">(${playersWithPending.size} لاعب)</p>` : "");
+        }
+
         box.innerHTML =
+            warningHtml +
             '<p class="admin-hint">طلبات مهارات معلّقة من اللاعبين. عند الموافقة تُنشأ مهارة جديدة وتُربط بالشخصية تلقائيًا.</p>' +
             pending.map(renderSkillRequestCard).join("");
 
@@ -6950,7 +6963,20 @@ async function loadAdminCompanionSkillRequests(){
             box.innerHTML = '<p class="admin-hint">لا توجد طلبات مهارات مرافق معلّقة الآن.</p>';
             return;
         }
-        box.innerHTML = pending.map(renderCompanionSkillRequestCard).join("");
+
+        let playersWithPending = new Set();
+        pending.forEach(r => {
+            if(r.username) playersWithPending.add(r.username);
+        });
+
+        let warningHtml = "";
+        if(playersWithPending.size > 0){
+            let playersList = Array.from(playersWithPending).slice(0, 5).map(p => `<span class="admin-hint">${p}</span>`).join(", ");
+            warningHtml = '<p class="admin-warning">تنبيه: بعض اللاعبين لديهم طلبات مهارات مرافق معلّقة بالفعل.</p>' +
+                (playersWithPending.size > 5 ? `<p class="admin-hint">(${playersWithPending.size} لاعب)</p>` : "");
+        }
+
+        box.innerHTML = warningHtml + pending.map(renderCompanionSkillRequestCard).join("");
     }catch(e){ console.error(e); box.innerHTML = "حدث خطأ في تحميل الطلبات"; }
 }
 
