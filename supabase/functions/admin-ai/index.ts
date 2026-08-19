@@ -100,7 +100,10 @@ function buildFullPrompt(prompt: string, entityType: string, isEdit: boolean, ex
 async function callGemini(apiKey: string, systemText: string, fullPrompt: string): Promise<string> {
   const body = {
     contents: [{ role: "user", parts: [{ text: systemText + "\n\n" + fullPrompt }] }],
-    generationConfig: { temperature: 0.7, maxOutputTokens: 2048, responseMimeType: "application/json" }
+    generationConfig: { temperature: 0.7, maxOutputTokens: 2048, responseMimeType: "application/json" },
+    // Grounding with Google Search: يبحث جوجل فعليًا قبل توليد الإجابة ليستطيع
+    // المساعد معرفة قدرات الشخصيات الحقيقية بدل الاعتماد على ذاكرته فقط.
+    tools: [{ googleSearch: {} }]
   };
   let lastErr = "";
   const attempts: string[] = [];
