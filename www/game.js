@@ -2721,12 +2721,13 @@ async function loadAdminMyCharacters(){
 
     box.innerHTML = "جاري التحميل...";
 
+    // تحميل الشخصيات الحصرية للأدمن + الشخصيات المنتظرة للموافقة
     let {data:list, error} =
 
     await supabaseClient
     .from("characters")
     .select("*")
-    .eq("admin_only", true);
+    .or("admin_only.eq.true,status.eq.pending");
 
     if(error){
 
@@ -2738,7 +2739,7 @@ async function loadAdminMyCharacters(){
 
     }
 
-    box.innerHTML = renderAdminCharacterCards(list, "لم تصمم أي شخصية خاصة بعد. اذهب للوحة الإدارة الرئيسية وفعّل خانة 🔒 عند الإضافة");
+    box.innerHTML = renderAdminCharacterCards(list, "لا توجد شخصيات بعد");
 
     let screenBox = document.getElementById("admin-my-characters-screen-content");
 
@@ -3235,13 +3236,13 @@ function renderAdminCharacterCards(list, emptyMessage){
 
                 <p class="admin-character-stats">❤️ ${character.current_hp != null ? character.current_hp : (character.hp || 0)} &nbsp;·&nbsp; ⚔️ ${character.current_atk != null ? character.current_atk : (character.atk || 0)} &nbsp;·&nbsp; LV ${character.current_level != null ? character.current_level : (character.level || 1)}</p>
 
-                <p class="admin-character-owner">${character.admin_only ? "🔒 خاصة بالأدمن" : (character.is_monster ? "👹 وحش PvE" : (character.owner_id ? "🔴 مأخوذة (لدى لاعب)" : "🟢 متاحة للاختيار"))}</p>
+                <p class="admin-character-owner">${character.admin_only ? "🔒 خاصة بالأدمن" : (character.is_monster ? "👹وحش PvE" : (character.owner_id ? "🔴مأخوذة (لدى لاعب)" : "🟢متاحة للاختيار"))}</p>
 
             </div>
 
             <div class="admin-character-actions">
 
-                ${character.admin_only ? `<button onclick="playAdminCharacter('${character.id}')">🎮 العب بها</button>` : ""}
+                ${character.status === "pending" ? `<button onclick="approveCharacter('${character.id}')">✅ قبول</button><button onclick="rejectCharacter('${character.id}')">❌ رفض</button>` : (character.admin_only ? `<button onclick="playAdminCharacter('${character.id}')">🎮 العب بها</button>` : "")
 
                 <button onclick="openEditCharacterModal('${character.id}')">✏️ تعديل</button>
 

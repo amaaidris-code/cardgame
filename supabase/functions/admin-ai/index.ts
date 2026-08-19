@@ -570,6 +570,10 @@ Deno.serve(async (req) => {
         fields = normalizeSkillNumbers(fields);
       } catch (e) {}
     }
+    // للشخصيات الجديدة: تضع الحالة pending awaiting approval من الأدمن
+    if (!isEdit && entity_type === "character" && fields && typeof fields === "object") {
+      fields.status = "pending";
+    }
     return json({ ok: true, v: "26", entity_type, fields, image_url: image_url || null, background_url: background_url || null, isEdit, entity_id: entity_id || null }, 200);
   } catch (e) {
     const msg = (e && e.message) ? e.message : "خطأ في توليد المحتوى";
