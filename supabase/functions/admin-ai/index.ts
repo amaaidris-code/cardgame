@@ -110,6 +110,38 @@ function extractJson(text: string): any {
   return JSON.parse(clean);
 }
 
+// يفرض قواعد أرقام المهارات على أي JSON قادم من النموذج مهما قال المساعد:
+// مهارات التأثير/العدّ (control/steal/copy/freeze/reflect/defense...) = 1 على الأقل،
+// ومهارات الضرر (هجوم/خاص/سم...) = 100 على الأقل ومضاعفات 50.
+function normalizeSkillNumbers(fields: any): any {
+  if (!fields || !Array.isArray(fields.skills)) return fields;
+  const countEffects: Record<string, boolean> = {
+    control: true, steal: true, copy: true, freeze: true, "stun": true,
+    seal: true, unseal: true, reflect: true, shadow: true,
+    delay_cooldown: true, hp_boost: true, atk_boost: true,
+    consecutive_turns: true, absorb_atk: true, absorb_hp: true
+  };
+  const divisionTypes: Record<string, boolean> = { defense: true, block: true };
+  fields.skills = fields.skills.map((s: any) => {
+    const sk = s && typeof s === "object" ? s : {};
+    const eff = String(sk.effect || "").trim().toLowerCase();
+    const typ = String(sk.type || "").trim().toLowerCase();
+    let damage = Number(sk.damage);
+    if (sk.damage == null || sk.damage === "" || !isFinite(damage)) damage = 0;
+    damage = Math.max(0, Math.round(damage));
+    if (divisionTypes[eff] || divisionTypes[typ]) {
+      damage = Math.max(1, damage);
+    } else if (countEffects[eff] || countEffects[typ]) {
+      damage = Math.max(1, damage);
+    } else {
+      damage = Math.max(100, damage);
+      damage = Math.round(damage / 50) * 50;
+    }
+    return Object.assign({}, sk, { damage });
+  });
+  return fields;
+}
+
 Deno.serve(async (req) => {
   // CORS: يسمح لتطبيق الويب على Cloudflare Pages بالاتصال بالدالة
   const corsHeaders = {
@@ -147,9 +179,8 @@ Deno.serve(async (req) => {
     const fullPrompt = image_url ? "Image: " + image_url + "\n\nDescription:\n" + prompt : prompt;
     const isEdit = !!(existing && (typeof existing === "object"));
     const raw = await callGemini(apiKey, fullPrompt, entity_type, isEdit, isEdit ? existing : null);
-    const fields = extractJson(raw);
-
-    return json({ ok: true, entity_type, fields, image_url: image_url || null, isEdit, entity_id: entity_id || null }, 200);
+    const parsed = extractJson(raw);
+    return json({ ok: true, entity_type, fields: normalizeSkillNumbers(parsed), image_url: image_url || null, isEdit, entity_id: entity_id || null }, 200);
   } catch (e) {
     const msg = (e && e.message) ? e.message : "خطأ في توليد المحتوى";
     return json({ ok: false, error: msg }, 502);
