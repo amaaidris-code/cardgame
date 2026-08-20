@@ -266,10 +266,26 @@ function extractJson(text: string): any {
 //    تُفرض على 150) أو مهارة تأثير/عدّ تناسب الشخصية (copy/reflect/control/steal... تُفرض على 1).
 // تُطبَّق على أول 3 مهارات فقط، وتصحّح فقط الخانات التي أخطأ النموذج في نوعها —
 // فلو طلب الأدمن مهارات مختلفة صراحة تُحترم (لا نفرض الضرر/التقليل على مهارة ليست من النوع المتوقع).
+// اختيار ثابت (وليس عشوائيًا) لتأثير المهارة المميزة لكل شخصية: يعتمد على اسم
+// المهارة/الشخصية بحيث يكون متغيرًا بين الشخصيات لكن ثابتًا لكل شخصية عند
+// إعادة المحاولة، وليس دائمًا unblockable.
+function hashStr(s: string): number {
+  let h = 0;
+  for (const ch of s) { h = (h * 31 + (ch.codePointAt(0) || 0)) >>> 0; }
+  return h;
+}
+function pickSignatureEffect(name: string, effects: string[]): string {
+  if (!effects || effects.length === 0) return "unblockable";
+  return effects[hashStr(name) % effects.length];
+}
+
 function enforceDefaultCharacterTemplate(fields: any, excludedEffects: string[] = []): any {
   if (!fields || typeof fields !== "object" || !Array.isArray(fields.skills)) return fields;
   const skills = fields.skills;
-  if (skills.length < 3) return fields;
+  // نضمن وجود ثلاث خانات مهارات دائمًا: إن أعاد النموذج أقل من 3 نكمل
+  // بخانات فارغة فيُطبَّق قالب المهارة المميزة على الخانة الثالثة بدل أن
+  // تبقى هجومًا عاديًا (السلوك الذي كان يحدث سابقًا عند أقل من 3 مهارات).
+  while (skills.length < 3) skills.push({});
   const norm = (sk: any) => (sk && typeof sk === "object") ? Object.assign({}, sk) : {};
   const skill1 = norm(skills[0]);
   const t1 = String(skill1.type || "").trim().toLowerCase();
@@ -304,7 +320,7 @@ function enforceDefaultCharacterTemplate(fields: any, excludedEffects: string[] 
     skill3 = Object.assign({}, skill3, { type: "special" });
     const fallbackEffects = ["poison", "lifesteal", "unblockable"]
         .filter(e => !excludedEffects.includes(e));
-    const chosen = fallbackEffects[Math.floor(Math.random() * fallbackEffects.length)];
+    const chosen = pickSignatureEffect(skill3.name || fields.name || "skill", fallbackEffects);
     if (chosen === "unblockable") { skill3.unblockable = true; skill3.effect = ""; }
     else skill3.effect = chosen;
     skill3.damage = 150;
@@ -323,7 +339,7 @@ function enforceDefaultCharacterTemplate(fields: any, excludedEffects: string[] 
     skill3 = Object.assign({}, skill3, { type: "special" });
     const fallbackEffects = ["poison", "lifesteal", "unblockable"]
         .filter(e => !excludedEffects.includes(e));
-    const chosen = fallbackEffects[Math.floor(Math.random() * fallbackEffects.length)];
+    const chosen = pickSignatureEffect(skill3.name || fields.name || "skill", fallbackEffects);
     if (chosen === "unblockable") { skill3.unblockable = true; skill3.effect = ""; }
     else skill3.effect = chosen;
     skill3.damage = 150;
