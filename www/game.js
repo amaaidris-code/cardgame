@@ -1173,6 +1173,32 @@ function renderMonsterList(monsters){
 
         card.querySelector("button").onclick = () => startPVEBattle(monster.id);
 
+        // قفل الوحوش التي يتطلب مواجهتها مستوى أعلى من مستوى اللاعب
+        {
+        let monsterMin = Number(monster.min_level) || 0;
+
+        let myLevel = Number(monster.player_level) || 1;
+
+        if(monsterMin > 0 && myLevel < monsterMin){
+
+            card.classList.add("level-locked");
+
+            let btn = card.querySelector("button");
+
+            if(btn){
+
+                btn.textContent = "🔒 يتطلب مستوى " + monsterMin;
+
+                btn.disabled = true;
+
+                btn.onclick = null;
+
+            }
+
+        }
+
+        }
+
         box.appendChild(card);
 
     });
@@ -1211,6 +1237,231 @@ async function loadMonsterList(){
 
 }
 
+
+
+// ========================================
+// المهام اليومية
+// ========================================
+
+async function loadDailyQuests(){
+
+    let box = document.getElementById("daily-quests-list");
+
+    if(!box) return;
+
+    box.innerHTML = "جارٍ تحميل المهام...";
+
+    let token = localStorage.getItem("player_token");
+
+    if(!token){
+
+        box.innerHTML = "<p class='empty-card'>سجّل الدخول أولاً</p>";
+
+        return;
+
+    }
+
+    try{
+
+        let { data, error } =
+        await supabaseClient.rpc("daily_quests_list", { p_token: token });
+
+        if(error) throw error;
+
+        renderDailyQuests(data || []);
+
+    }catch(e){
+
+        box.innerHTML = "<p class='empty-card'>تعذر تحميل المهام</p>";
+
+    }
+
+}
+
+function renderDailyQuests(list){
+
+    let box = document.getElementById("daily-quests-list");
+
+    if(!box) return;
+
+    if(!list || list.length === 0){
+
+        box.innerHTML = "<p class='empty-card'>لا توجد مهام اليوم</p>";
+
+        return;
+
+    }
+
+    box.innerHTML = "";
+
+    list.forEach(q => {
+
+        let card = document.createElement("div");
+
+        let pct = Math.min(100, Math.round(100 * (q.progress || 0) / (q.target || 1)));
+
+        let stateHtml = "";
+
+        if(q.claimed){
+
+            stateHtml = "<p class='quest-done'>✅ تم التسليم</p>";
+
+        } else if(q.completed){
+
+            stateHtml = `<button class="quest-claim-btn" data-quest="${q.quest_key}">🎁 استلم ${q.reward} ذهب</button>`;
+
+        } else {
+
+            stateHtml = `<p class='quest-progress'>التقدم: ${q.progress || 0} / ${q.target}</p>`;
+        }
+
+        card.className = "character-card daily-quest-card"
+            + (q.claimed ? " quest-claimed" : (q.completed ? " quest-completed" : ""));
+
+        card.innerHTML = `
+
+            <div class="character-info">
+
+                <h3>${escapeHtml(q.title)}</h3>
+
+                <p>${escapeHtml(q.description)}</p>
+
+                <div class="quest-bar"><div class="quest-bar-fill" style="width:${pct}%"></div></div>
+
+                <p class="quest-reward">🎁 المكافأة: ${q.reward} ذهب</p>
+
+                ${stateHtml}
+
+            </div>
+
+        `;
+
+        box.appendChild(card);
+
+    });
+
+    box.querySelectorAll(".quest-claim-btn").forEach(btn => {
+
+        btn.onclick = () => claimDailyQuest(btn.getAttribute("data-quest"));
+
+    });
+
+}
+
+async function claimDailyQuest(questKey){
+
+    let token = localStorage.getItem("player_token");
+
+    if(!token) return;
+
+    try{
+
+        let { data, error } =
+        await supabaseClient.rpc("daily_quest_claim", { p_token: token, p_quest_key: questKey });
+
+        if(error) throw error;
+
+        alert("🎁 استلمت " + (data && data[0] ? data[0].gold_added : 0) + " ذهب!");
+
+        if(typeof updatePlayerInfo === "function") updatePlayerInfo();
+
+        loadDailyQuests();
+
+    }catch(e){
+
+        alert((e && e.message) ? e.message : "تعذر تسليم المهمة");
+
+    }
+
+}
+
+async function loadBestiary(){
+
+    let box = document.getElementById("bestiary-list");
+
+    if(!box) return;
+
+    box.innerHTML = "جارٍ تحميل الموسوعة...";
+
+    let token = localStorage.getItem("player_token");
+
+    if(!token){
+
+        box.innerHTML = "<p class='empty-card'>سجّل الدخول أولاً</p>";
+
+        return;
+
+    }
+
+    try{
+
+        let { data, error } =
+        await supabaseClient.rpc("get_bestiary", { p_token: token });
+
+        if(error) throw error;
+
+        renderBestiary(data || []);
+
+    }catch(e){
+
+        box.innerHTML = "<p class='empty-card'>تعذر تحميل الموسوعة</p>";
+
+    }
+
+}
+
+function renderBestiary(list){
+
+    let box = document.getElementById("bestiary-list");
+
+    if(!box) return;
+
+    if(!list || list.length === 0){
+
+        box.innerHTML = "<p class='empty-card'>لا توجد وحوش مسجلة بعد</p>";
+
+        return;
+
+    }
+
+    box.innerHTML = "";
+
+    list.forEach(m => {
+
+        let card = document.createElement("div");
+
+        card.className = "character-card bestiary-card"
+            + (m.defeated ? " bestiary-defeated" : "");
+
+        let stamp =
+            m.defeated ? "✔️ مُهزوم"
+            : (m.seen ? "👁️ شوهد" : "❓ مجهول");
+
+        card.innerHTML = `
+
+            <div class="character-info">
+
+                <h3>${escapeHtml(m.name)} <small>${stamp}</small></h3>
+
+                <p>مستوى ${m.level || 0} · ❤️ ${m.hp || 0} · ⚔️ ${m.atk || 0}</p>
+
+                ${m.defeats > 0 ? `<p>هزائم: ${m.defeats}</p>` : ""}
+
+            </div>
+
+            <div class="admin-character-actions">
+
+                <button onclick="startPVEBattle('${m.id}')">⚔️ قتال</button>
+
+            </div>
+
+        `;
+
+        box.appendChild(card);
+
+    });
+
+}
 
 
 // ========================================
@@ -1543,17 +1794,61 @@ async function chooseCharacter(character_id){
 
 
 
-    alert(
-    "ط·آ·ط¹آ¾ط·آ¸أ¢â‚¬آ¦ ط·آ·ط¢آ§ط·آ·ط¢آ®ط·آ·ط¹آ¾ط·آ¸ط¸آ¹ط·آ·ط¢آ§ط·آ·ط¢آ± " + character.name
+alert(
+    "تم اختيار " + character.name
     );
 
+
+
+
+    beginPostChoiceFlow();
+
+
+
+}
+
+// بعد اختيار الشخصية: إن كانت هذه أول مرة ولم يُكمل اللاعب التدريب،
+// تبدأ المهمة التدريبية قبل فتح القائمة الرئيسية
+async function beginPostChoiceFlow(){
+
+    let token =
+    localStorage.getItem(
+        "player_token"
+    );
+
+
+    if(token){
+
+        try{
+
+            let { data } =
+            await supabaseClient
+            .rpc("get_tutorial_done", {
+                p_token: token
+            });
+
+            let done =
+            !!(data && data === true);
+
+            if(!done
+            && typeof startTutorialBattle === "function"){
+
+                startTutorialBattle();
+
+                return;
+
+            }
+
+        }catch(e){
+            // تجاهل أي خطأ وادخل القائمة مباشرة
+        }
+
+    }
 
 
     openScreen(
         "home-screen"
     );
-
-
 
 }
 
@@ -8384,6 +8679,7 @@ function showUpdatePrompt(manifest, installedVersion, latestVersion, isRequired)
 if(document.readyState === "loading"){
     document.addEventListener("DOMContentLoaded", function(){
         setTimeout(checkForAppUpdate, 1500);
+        if(typeof initBattleSpeed === "function") initBattleSpeed();
     });
 }else{
     setTimeout(checkForAppUpdate, 1500);

@@ -130,6 +130,7 @@ const Social = (function(){
                     </div>
                     <div class="friend-actions">
                         <button class="friend-msg-btn" onclick="Social.openDm('${f.friend_id}','${escapeAttr(f.username)}')">💬</button>
+                        <button class="friend-msg-btn" title="تحدٍّ (مبارزة)" onclick="Social.challengeFriend('${f.friend_id}')">⚔️</button>
                         <button class="friend-rm-btn" onclick="Social.removeFriend('${f.friend_id}')">🗑️</button>
                     </div>
                 </div>`).join("");
@@ -276,6 +277,25 @@ const Social = (function(){
             await supabaseClient.rpc("friend_remove", { p_token: getToken(), p_friend_id: friendId });
             loadFriends();
         }catch(e){ alert(e.message || "تعذر حذف الصديق"); }
+    }
+
+    // ---------- مبارزة صديق ----------
+    async function challengeFriend(friendId){
+        try{
+            // نفتح الردهة أولًا (يبدأ الاستطلاع) ثم نرسل التحدي لنبقى بوضع الانتظار
+            if(typeof openPVPLobby === "function"){
+                await openPVPLobby();
+            } else {
+                if(typeof openScreen === "function") openScreen("pvp-lobby-screen");
+            }
+            if(typeof pvpSendChallenge === "function"){
+                await pvpSendChallenge(friendId);
+            } else {
+                alert("نظام المبارزات غير متاح حاليًا");
+            }
+        }catch(e){
+            alert((e && e.message) ? e.message : "تعذر إرسال التحدي");
+        }
     }
 
     // ---------- private chat ----------
@@ -471,6 +491,7 @@ const Social = (function(){
         cancelRequest,
         respond,
         removeFriend,
+        challengeFriend,
         doSearch,
         openDm,
         closeDm,

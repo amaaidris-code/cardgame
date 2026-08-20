@@ -58,7 +58,7 @@ async function loadGates() {
                 d.repeat_type === "daily" ? `يوميًا (${d.max_attempts})` :
                 (d.repeat_type === "total" ? `إجماليًا (${d.max_attempts})` : "غير محدود");
             html += `
-            <div class="character-card dungeon-card">
+            <div class="character-card dungeon-card" data-id="${d.id}">
                 <div class="admin-character-info">
                     <h3>${escapeHtml(d.name)} <span class="dungeon-grade">${escapeHtml(d.grade)}</span></h3>
                     <p class="admin-character-anime">${names.length} وحوش: ${names.join(" → ")}</p>
@@ -70,6 +70,31 @@ async function loadGates() {
             </div>`;
         });
         box.innerHTML = html;
+
+        // قفل الزنازين التي يتطلب دخولها مستوى أعلى من مستوى اللاعب
+        box.querySelectorAll(".dungeon-card").forEach(card => {
+
+            let id = card.getAttribute("data-id");
+
+            let d = (gatesCache || []).find(x => x.id === id);
+
+            if(!d) return;
+
+            let dMin = Number(d.min_level) || 0;
+
+            let myLvl = Number(d.player_level) || 1;
+
+            if(dMin > 0 && myLvl < dMin){
+
+                card.classList.add("level-locked");
+
+                let b = card.querySelector("button");
+
+                if(b){ b.textContent = "🔒 يتطلب مستوى " + dMin; b.disabled = true; }
+
+            }
+
+        });
     } catch (e) {
         console.log("loadGates error", e);
         box.innerHTML = "<p class='empty-card'>حدث خطأ في تحميل الزنازين</p>";
@@ -80,6 +105,12 @@ function startDungeon(dungeonId) {
     let d = (gatesCache || []).find(x => x.id === dungeonId);
     if (!d) {
         alert("الزنزانة غير متاحة");
+        return;
+    }
+    let dMin = Number(d.min_level) || 0;
+    let myLvl = Number(d.player_level) || 1;
+    if (dMin > 0 && myLvl < dMin) {
+        alert("لا يمكن دخول هذه الزنزانة، يتطلب مستوى " + dMin + " على الأقل");
         return;
     }
     startDungeonBattle(d);

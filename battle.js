@@ -21,6 +21,9 @@ let battle = {
 
     finished: false,
 
+    // مضاعِف سرعة حركة المعركة (الرسوم المتحركة) — لا يمسّ وقت قرار اللاعب
+    speedMult: 1,
+
     turnInterval: null,
 
     companion: null,
@@ -151,7 +154,58 @@ function markEnemySkillUsed(skill){
 
 function wait(ms){
 
-    return new Promise(resolve => setTimeout(resolve, ms));
+    let m = battle && battle.speedMult ? battle.speedMult : 1;
+
+    return new Promise(resolve => setTimeout(resolve, ms * m));
+
+}
+
+
+// ========================================
+// تبديل سرعة المعركة (رسوم متحركة أسرع) — لا يمسّ وقت قرار اللاعب
+// ========================================
+
+function initBattleSpeed(){
+
+    try{
+
+        let saved = localStorage.getItem("battle_speed_x");
+
+        battle.speedMult = (saved === "2") ? 0.45 : 1;
+
+    }catch(e){ battle.speedMult = 1; }
+
+    updateBattleSpeedButton();
+
+}
+
+function toggleBattleSpeed(){
+
+    battle.speedMult = (battle.speedMult === 1) ? 0.45 : 1;
+
+    try{
+
+        localStorage.setItem("battle_speed_x", battle.speedMult === 1 ? "1" : "2");
+
+    }catch(e){}
+
+    updateBattleSpeedButton();
+
+    if(typeof addBattleLog === "function"){
+
+        addBattleLog(battle.speedMult === 1 ? "🐢 سرعة المعركة: عادية" : "⚡ سرعة المعركة: سريعة");
+
+    }
+
+}
+
+function updateBattleSpeedButton(){
+
+    document.querySelectorAll(".battle-speed-btn").forEach(btn => {
+
+        btn.textContent = (battle.speedMult === 1) ? "🐢 x1" : "⚡ x2";
+
+    });
 
 }
 
@@ -1176,6 +1230,8 @@ async function startPVEBattle(monsterId){
     // حتى لا تتجمد المعركة إن بدأ دور المرافق أولًا
     battle.turnOwner = "player";
 
+    battle.guardEnemyAct = false;
+
     battle.companionView = false;
 
     battle.finished = false;
@@ -1690,6 +1746,16 @@ async function startDungeonMonster(monsterId){
     // كل وحش جديد يبدأ أيضًا بدور اللاعب (الشخصية) وليس المرافق
     battle.turnOwner = "player";
 
+    battle.guardEnemyAct = false;
+
+    if(battle.botRaceTimeout){
+
+        clearTimeout(battle.botRaceTimeout);
+
+        battle.botRaceTimeout = null;
+
+    }
+
     battle.companionView = false;
 
     battle.raceWon = false;
@@ -1932,6 +1998,8 @@ function renderFighterStatusBadge(idPrefix, fighter){
 
     if((fighter.absorbHits || 0) > 0) badges.push("🧲×" + fighter.absorbHits);
 
+    if((fighter.poisonTurns || 0) > 0 && (fighter.poisonDamage || 0) > 0) badges.push("☠️" + fighter.poisonDamage + "×" + fighter.poisonTurns);
+
     let key = badges.join("|");
 
     if(el.dataset.renderedKey === key) return;
@@ -2098,6 +2166,16 @@ async function startCountdownAndRace(prefix){
     let countOverlay = document.getElementById(prefix + "-count-overlay");
 
     battle.phase = "countdown";
+
+    if(battle.botRaceTimeout){
+
+        clearTimeout(battle.botRaceTimeout);
+
+        battle.botRaceTimeout = null;
+
+    }
+
+    battle.guardEnemyAct = false;
 
     timerBox.textContent = "";
 
@@ -2322,6 +2400,12 @@ function processTurn(){
         } else {
             poisonedFighter.hp = Math.max(0, poisonedFighter.hp - poisonDmg);
             addBattleLog(`☠️ ${poisonedFighter.name} يتلقى ${poisonDmg} ضرر سُم! (متبقي ${poisonedFighter.poisonTurns} ${poisonedFighter.poisonTurns === 1 ? "دور" : "أدوار"})`);
+            let poisonPrefix =
+            (poisonedFighter === battle.player || poisonedFighter === battle.companion)
+            ? battle.prefix + "-player"
+            : battle.prefix + "-enemy";
+            showDamagePopup(poisonPrefix, poisonDmg, false, false, true);
+            showBattleEffectBanner(battle.prefix, `☠️ ضرر السم: -${poisonDmg}`, "poison");
             updateBattleScreen();
             if(poisonedFighter.hp <= 0){
                 battle.finished = true;
@@ -2359,6 +2443,8 @@ function processTurn(){
             : (battle.turnOwner === "companion") ? "enemy"
             : "enemy";
 
+            battle.guardEnemyAct = false;
+
             processTurn();
 
         }, 900);
@@ -2380,13 +2466,36 @@ function processTurn(){
 
     if(battle.turnOwner === "enemy"){
 
+        // حارس ضد دور خصم مكرر: إذا دخلنا هنا والخصم ما زال مجدولاً بالفعل
+        // (مرّ سيناريو سباق/انتقال يقود إلى تنفيذين متتاليين لدور الخصم)،
+        // نتجاهل التنفيذ المكرر ونمرر الدور للاعب بدل أن يهاجم الخصم مرتين.
+        if(battle.guardEnemyAct){
+
+            battle.guardEnemyAct = false;
+
+            battle.turnOwner = "player";
+
+            addBattleLog("تم تجاهل دور خصم مكرر (إصلاح دورين للخصم)");
+
+            processTurn();
+
+            return;
+
+        }
+
+        battle.guardEnemyAct = true;
+
         enemyAct();
 
     } else if(companionTurn){
 
+        battle.guardEnemyAct = false;
+
         companionTurnPlay();
 
     } else {
+
+        battle.guardEnemyAct = false;
 
         // إذا كان اللاعب ميتًا ولا يزال المرافق حيًّا، الدور ينتقل للمرافق
         if(battle.player.hp <= 0 && companionIsAlive()){
@@ -2408,6 +2517,11 @@ function processTurn(){
         renderPotionBar("pve");
 
         startTurnTimer();
+
+        // وضع التدريب: في أول دور للاعب ننتقل لخطوة "اضغط على مهارة"
+        if(battle.tutorialActive && battle.tutorialStage <= 0){
+            tutorialSetStage(1);
+        }
 
     }
 
@@ -2439,6 +2553,10 @@ function pveEndTurn(owner){
         battle.turnOwner = owner;
 
         addBattleLog(`⚡ دور إضافي! ${fighter.name} يستمر في الدور (متبقي ${fighter.extraTurns})`);
+
+        // دور إضافي شرعي للخصم (مهارة "الأدوار المتتالية") — نجيز تنفيذ دور
+        // الخصم التالي، فالرفض هنا سيمنع المهارة من العمل أصلًا
+        battle.guardEnemyAct = false;
 
         setTimeout(processTurn, 900);
 
@@ -3745,6 +3863,10 @@ function playerConsumeTurn(skill, target){
 
     resolveAction(battle.player, defender, skill);
 
+    if(battle.tutorialActive && battle.tutorialStage < 2){
+        tutorialSetStage(2);
+    }
+
     if(checkBattleEnd()) return;
 
     pveEndTurn("player");
@@ -3789,7 +3911,7 @@ function playerUsePoisonSkill(skill){
 
         addBattleLog(`☠️ ${defender.name} مسموم! سيتلقى ${poisonDmg} ضرر سُم إضافي لمدة ${remainingTurns} ${remainingTurns === 1 ? "دور" : "أدوار"}`);
 
-        showBattleEffectBanner(battle.prefix, `☠️ ${defender.name} مسموم!`, "info");
+        showBattleEffectBanner(battle.prefix, `☠️ ${defender.name} مسموم!`, "poison");
 
     } else if(defender.hp > 0){
 
@@ -4010,6 +4132,52 @@ async function enemyAct(){
     || reflectChoice
     || enemy.skills.find(s => s.type === "attack" && !isSkillSealed(enemy, s));
 
+    // وضع التدريب: يسير المتدرب وفق تسلسل ثابت (هجوم عادي ← لا تُصدّ ← سم)
+    // حتى يتعلم اللاعب تمييز كل نوع بصريًا قبل ترك المعركة حرة
+    if(battle.tutorialActive && !battle.tutorialScriptDone){
+
+        let tSeq = [];
+
+        let tAtk = enemy.skills.find(s => s.type === "attack");
+
+        let tUnblock = enemy.skills.find(s => s.unblockable);
+
+        let tPoison = enemy.skills.find(s => s.effect === "poison");
+
+        tSeq = [tAtk, tUnblock, tPoison].filter(Boolean);
+
+        if(battle.tutorialScriptIndex < tSeq.length){
+
+            chosen = tSeq[battle.tutorialScriptIndex];
+
+            battle.tutorialScriptIndex++;
+
+            if(chosen.unblockable){
+
+                tutorialSetStage(3);
+
+            } else if(chosen.effect === "poison"){
+
+                tutorialSetStage(4);
+
+            } else {
+
+                tutorialSetStage(2);
+
+            }
+
+            if(battle.tutorialScriptIndex >= tSeq.length){
+
+                battle.tutorialScriptDone = true;
+
+                tutorialSetStage(5);
+
+            }
+
+        }
+
+    }
+
     // إصلاح ثغرة: إذا لم يدافع الخصم عن آخر ضربة تلقاها (اختار أي فعل آخر)
     // تُصبح تلك الضربة "فائتة" ولا يجوز إلغاؤها لاحقًا بعد أدوار قادمة —
     // وإلا يرجع دمه من العدم في جولة لاحقة دون أي ضربة جديدة فعلية.
@@ -4074,7 +4242,7 @@ async function enemyAct(){
 
             addBattleLog(`☠️ ${enemyVictim.name} مسموم! سيتلقى ${poisonDmg} ضرر سُم إضافي لمدة ${remainingTurns} ${remainingTurns === 1 ? "دور" : "أدوار"}`);
 
-            showBattleEffectBanner(battle.prefix, `☠️ ${enemyVictim.name} مسموم!`, "info");
+            showBattleEffectBanner(battle.prefix, `☠️ ${enemyVictim.name} مسموم!`, "poison");
 
         } else if(enemyVictim.hp > 0){
 
@@ -5454,11 +5622,23 @@ function resolveAction(attacker, defender, skill, trackUsed = true, isReflectedH
 
     } else if(dmg > 0){
 
-        showBattleEffectBanner(
-            battle.prefix,
-            iAmDefender ? `💥 تعرّضتَ لهجوم! -${dmg}` : `⚔️ ضربة موفّقة! -${dmg}`,
-            "hit"
-        );
+        if(skill.unblockable){
+
+            showBattleEffectBanner(
+                battle.prefix,
+                iAmDefender ? `💥💢 ضربة لا تُصدّ! -${dmg}` : `💢💥 ضربة لا تُصدّ! -${dmg} على الخصم!`,
+                "unblockable"
+            );
+
+        } else {
+
+            showBattleEffectBanner(
+                battle.prefix,
+                iAmDefender ? `💥 تعرّضتَ لهجوم! -${dmg}` : `⚔️ ضربة موفّقة! -${dmg}`,
+                "hit"
+            );
+
+        }
 
     }
 
@@ -5482,7 +5662,9 @@ function resolveAction(attacker, defender, skill, trackUsed = true, isReflectedH
 
     } else {
 
-        addBattleLog(`${attacker.name} استخدم ${skill.name} → ${dmg} ضرر`);
+        addBattleLog(skill.unblockable
+            ? `${attacker.name} استخدم ${skill.name} → ${dmg} ضرر لا يُصدّ! 💢`
+            : `${attacker.name} استخدم ${skill.name} → ${dmg} ضرر`);
 
     }
 
@@ -7788,11 +7970,41 @@ function endBattle(playerWon){
 
     clearTurnTimer();
 
+    // المهمة التدريبية: شاشة إتمام/إعادة منفصلة بدل تدفق الجوائز العادي
+    if(battle.tutorialActive){
+
+        tutorialFinish(playerWon);
+
+        return;
+
+    }
+
     // انتصار اللاعب: يُضاف الوحش المهزوم إلى مخزون الظل ليُستدعى لاحقًا
     // بمهارة "الظل" في نزالات قادمة
     if(playerWon && battle.enemy){
 
         pveAddDefeatedToShadowPool(battle.enemy);
+
+    }
+
+    // تُحدّث الموسوعة: هذا الوحش شوهد، وهُزم إن فزت بالمعركة
+    if(battle.enemy){
+
+        let bTok = localStorage.getItem("player_token");
+
+        if(bTok){
+
+            supabaseClient
+            .rpc("bestiary_upsert", {
+                p_token: bTok,
+                p_character_id: battle.enemy.id,
+                p_seen: true,
+                p_defeated: !!playerWon
+            })
+            .then(() => {})
+            .catch(() => {});
+
+        }
 
     }
 
@@ -8016,7 +8228,7 @@ function hideBattleResult(prefix){
 // تأثيرات بصرية (اهتزاز + رقم داميج طائر)
 // ========================================
 
-function showDamagePopup(targetPrefix, amount, isHeal, isUnblockable){
+function showDamagePopup(targetPrefix, amount, isHeal, isUnblockable, isPoison){
 
     let img = document.getElementById(targetPrefix + "-image");
 
@@ -8030,7 +8242,7 @@ function showDamagePopup(targetPrefix, amount, isHeal, isUnblockable){
 
     let popup = document.createElement("div");
 
-    popup.className = "damage-popup" + (isHeal ? " heal" : "") + (isUnblockable ? " unblockable" : "");
+    popup.className = "damage-popup" + (isHeal ? " heal" : "") + (isUnblockable ? " unblockable" : "") + (isPoison ? " poison" : "");
 
     popup.textContent = (isHeal ? "+" : "-") + amount;
 
@@ -8148,3 +8360,350 @@ function setTurnIndicatorText(elId, text, cssClass){
 }
 
 
+// ========================================
+// المهمة التدريبية (Tutorial)
+// معركة موجّهة بعد اختيار الشخصية لأول مرة لتعليم اللاعب الأساسيات
+// ========================================
+
+const TUTORIAL_MONSTER_ID = "00000000-0000-0000-0000-0000000000a1";
+
+const TUTORIAL_STEPS = [
+    "👋 أهلاً بك في المهمة التدريبية! هذه معركة ستعلمك أساسيات القتال. اضغط (بعدين ▸) للمتابعة.",
+    "🟢 دورك الآن. اضغط على إحدى المهارات أسفل الشاشة لتضرب المتدرب.",
+    "💥 ضربة عادية! لاحظ الرقم الأبيض فوق بطاقة الخصم واهتزاز الساحة.",
+    "💥💢 ضربة لا تُصدّ! لاحظ الوميض البرتقالي والرقم البرتقالي الكبير — لا يمكن الدفاع عنها أو صدّها!",
+    "☠️ لقد أُصبت بالسم! لاحظ الشارة الخضراء فوق البطاقة وضرر السم الأخضر الذي يظهر كل دور.",
+    "🎯 الآن قاتل بحرية واقهر المتدرب لتُكمل الطريق!"
+];
+
+function ensureTutorialGuide(){
+
+    let screen = document.getElementById("pve-battle-screen");
+
+    if(!screen) return;
+
+    let guide = document.getElementById("tutorial-guide");
+
+    if(guide){
+
+        guide.style.display = "flex";
+
+        return guide;
+
+    }
+
+    guide = document.createElement("div");
+
+    guide.id = "tutorial-guide";
+
+    guide.className = "tutorial-guide";
+
+    guide.innerHTML = `
+        <div class="tutorial-guide-box">
+            <div id="tutorial-guide-text" class="tutorial-guide-text"></div>
+            <div class="tutorial-guide-actions">
+                <button id="tutorial-guide-next" type="button">بعدين ▸</button>
+                <button id="tutorial-guide-skip" type="button">تخطّي التدريب</button>
+            </div>
+        </div>`;
+
+    screen.appendChild(guide);
+
+    guide.querySelector("#tutorial-guide-next").onclick = () => {
+        if(battle.tutorialStage < TUTORIAL_STEPS.length - 1){
+            tutorialSetStage(battle.tutorialStage + 1);
+        } else {
+            guide.style.display = "none";
+        }
+    };
+
+    guide.querySelector("#tutorial-guide-skip").onclick = () => {
+
+        tutorialSkip();
+
+    };
+
+    return guide;
+
+}
+
+function tutorialSetStage(n){
+
+    if(!battle.tutorialActive) return;
+
+    if(battle.tutorialStage !== undefined && n < battle.tutorialStage) return;
+
+    battle.tutorialStage = n;
+
+    let guide = ensureTutorialGuide();
+
+    let text = TUTORIAL_STEPS[n] || "";
+
+    let textEl = document.getElementById("tutorial-guide-text");
+
+    if(textEl) textEl.textContent = text;
+
+    if(guide) guide.style.display = "flex";
+
+}
+
+function tutorialHideGuide(){
+
+    let guide = document.getElementById("tutorial-guide");
+
+    if(guide) guide.style.display = "none";
+
+}
+
+// تخطّي التدريب: يُعلَّم كمكتمل ويُذهب للقائمة
+async function tutorialSkip(){
+
+    battle.tutorialActive = false;
+
+    battle.finished = true;
+
+    clearTurnTimer();
+
+    tutorialHideGuide();
+
+    let token = localStorage.getItem("player_token");
+
+    if(token){
+
+        try{
+            await supabaseClient.rpc("tutorial_complete", { p_token: token });
+            if(typeof updatePlayerInfo === "function") updatePlayerInfo();
+        }catch(e){}
+
+    }
+
+    openScreen("home-screen");
+
+}
+
+// إنهاء التدريب عند الفوز/الخسارة
+async function tutorialFinish(won){
+
+    battle.tutorialCompleted = true;
+
+    battle.tutorialActive = false;
+
+    tutorialHideGuide();
+
+    let token = localStorage.getItem("player_token");
+
+    let arena = document.querySelector("#pve-battle-screen .battle-arena");
+
+    let overlay = document.createElement("div");
+
+    overlay.className = "battle-result-overlay";
+
+    if(won){
+
+        overlay.innerHTML = `
+            <h2>🎉 أتقنت الأساسيات!</h2>
+            <p>لقد تعلمت: الهجوم، الدفاع، الضربة لا تُصدّ، والسم.</p>
+            <p id="tutorial-reward-line">جاري تسليم مكافأة التدريب...</p>
+            <button id="tutorial-finish-back-btn">🛡️ ابدأ مغامرتك</button>
+        `;
+
+        if(arena) arena.appendChild(overlay);
+
+        overlay.querySelector("#tutorial-finish-back-btn").onclick = () => {
+
+            overlay.remove();
+
+            clearDungeonState();
+
+            openScreen("home-screen");
+
+        };
+
+        if(token){
+
+            try{
+                let { data, error } = await supabaseClient.rpc("tutorial_complete", { p_token: token });
+                let line = document.getElementById("tutorial-reward-line");
+                if(line){
+                    if(!error){
+                        line.textContent = "🪙 +100 ذهب كمكافأة بداية!";
+                    } else {
+                        line.textContent = "تم إنهاء التدريب بنجاح!";
+                    }
+                }
+                if(typeof updatePlayerInfo === "function") updatePlayerInfo();
+            }catch(e){
+                let line = document.getElementById("tutorial-reward-line");
+                if(line) line.textContent = "تم إنهاء التدريب بنجاح!";
+            }
+
+        } else {
+
+            let line = document.getElementById("tutorial-reward-line");
+
+            if(line) line.textContent = "تم إنهاء التدريب بنجاح!";
+
+        }
+
+    } else {
+
+        overlay.innerHTML = `
+            <h2>💪 خسرتَ المتدرب!</h2>
+            <p>لا بأس! حاول مرة أخرى لتتقن القتال.</p>
+            <button id="tutorial-retry-btn">🔄 إعادة التدريب</button>
+            <button id="tutorial-skip-btn">تخطّي</button>
+        `;
+
+        if(arena) arena.appendChild(overlay);
+
+        overlay.querySelector("#tutorial-retry-btn").onclick = () => {
+
+            overlay.remove();
+
+            startTutorialBattle();
+
+        };
+
+        overlay.querySelector("#tutorial-skip-btn").onclick = () => {
+
+            overlay.remove();
+
+            tutorialSkip();
+
+        };
+
+    }
+
+}
+
+// بدء المهمة التدريبية (تقريبًا مثل startPVEBattle لكن على وحش التدريب)
+async function startTutorialBattle(){
+
+    openScreen("pve-battle-screen");
+
+    resetBattleVisuals("pve");
+
+    battle.companion = null;
+
+    battle.companionLoaded = false;
+
+    let pc = await getActivePlayerCharacter();
+
+    if(!pc){
+
+        alert("لا توجد شخصية نشطة");
+
+        openScreen("home-screen");
+
+        return;
+
+    }
+
+    let skills = await loadCharacterSkills(pc.character_id);
+
+    if(skills.length === 0){
+
+        skills = [
+            {id:"default_atk", name:"هجوم عادي", type:"attack", damage:100, cooldown:0, effect:null},
+            {id:"default_def", name:"دفاع", type:"defense", damage:0, cooldown:2, effect:null}
+        ];
+    }
+
+    await loadSkillPageBackgrounds(pc.character_id);
+
+    let monsterRow = null;
+
+    await GameCache.fetchWithCache(
+        "tutorial_monster_row",
+        async () => {
+            let {data, error} =
+            await supabaseClient
+            .from("characters")
+            .select("*")
+            .eq("id", TUTORIAL_MONSTER_ID)
+            .single();
+            if(error) throw error;
+            return data;
+        },
+        (data) => { monsterRow = data; },
+        () => { monsterRow = null; },
+        60 * 60 * 1000
+    );
+
+    if(!monsterRow){
+
+        alert("تعذر تحميل المتدرب (تحتاج اتصالاً أول مرة)");
+
+        openScreen("home-screen");
+
+        return;
+
+    }
+
+    let monsterSkills = await loadCharacterSkills(TUTORIAL_MONSTER_ID);
+
+    battle.player = buildFighter(pc, skills, true);
+
+    battle.player.scaledAttackDamages = computeScaledAttackDamages(
+        battle.player.atk, battle.player.skills
+    );
+
+    battle.enemy = buildMonsterFighter(monsterRow, monsterSkills);
+
+    battle.prefix = "pve";
+
+    battle.monsterId = TUTORIAL_MONSTER_ID;
+
+    battle.currentMonsterId = TUTORIAL_MONSTER_ID;
+
+    battle.phase = "idle";
+
+    battle.turnOwner = "player";
+
+    battle.guardEnemyAct = false;
+
+    battle.companionView = false;
+
+    battle.finished = false;
+
+    battle.raceWon = false;
+
+    battle.raceButtonLockedUntil = 0;
+
+    battle.enemyUsedSkillsThisBattle = [];
+
+    battle.playerUsedSkills = [];
+
+    battle.dungeonId = null;
+
+    battle.tutorialActive = true;
+
+    battle.tutorialStage = 0;
+
+    battle.tutorialScriptIndex = 0;
+
+    battle.tutorialScriptDone = false;
+
+    battle.tutorialCompleted = false;
+
+    setTurnIndicatorText("pve-turn-indicator", "", null);
+
+    ensureLogBox("pve");
+
+    addBattleLog("🎓 بدأت المهمة التدريبية! اتبع التعليمات في منتصف الشاشة.");
+
+    renderUsedSkillsUI("pve");
+
+    hideBattleResult("pve");
+
+    await runIntroSequence("pve");
+
+    tutorialSetStage(0);
+
+    await startCountdownAndRace("pve");
+
+    tutorialSetStage(0);
+
+    tutorialSetStage(1);
+
+}

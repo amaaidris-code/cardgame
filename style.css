@@ -596,6 +596,328 @@ color:#999;
 
 }
 
+/* غلاف مهمة التدريب */
+.tutorial-guide{
+
+    position: fixed;
+
+    left: 0;
+
+    right: 0;
+
+    top: 46%;
+
+    display: none;
+
+    align-items: center;
+
+    justify-content: center;
+
+    z-index: 1200;
+
+    padding: 0 5%;
+
+    pointer-events: none;
+
+}
+
+.tutorial-guide-box{
+
+    pointer-events: auto;
+
+    max-width: 460px;
+
+    width: 100%;
+
+    background: rgba(20, 24, 36, 0.92);
+
+    border: 1px solid rgba(59, 130, 246, 0.6);
+
+    border-radius: 16px;
+
+    padding: 16px 18px;
+
+    box-shadow: 0 10px 34px rgba(0,0,0,0.55), 0 0 24px rgba(59,130,246,0.35);
+
+    backdrop-filter: blur(4px);
+
+}
+
+.tutorial-guide-text{
+
+    color: #e2e8f0;
+
+    font-size: 15px;
+
+    line-height: 1.8;
+
+    min-height: 44px;
+
+}
+
+.tutorial-guide-actions{
+
+    display: flex;
+
+    gap: 10px;
+
+    justify-content: center;
+
+    margin-top: 12px;
+
+}
+
+.tutorial-guide-actions button{
+
+    border: none;
+
+    padding: 9px 16px;
+
+    border-radius: 10px;
+
+    font-size: 14px;
+
+    cursor: pointer;
+
+}
+
+#tutorial-guide-next{
+
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+
+    color: #fff;
+
+}
+
+#tutorial-guide-skip{
+
+    background: rgba(255,255,255,0.1);
+
+    color: #cbd5e1;
+
+}
+
+/* بطاقات/أزرار مقفلة بسبب مستوى غير كافٍ */
+.level-locked{
+
+    opacity: 0.6;
+
+    filter: grayscale(0.55);
+
+    position: relative;
+
+}
+
+.level-locked::after{
+
+    content: "🔒";
+
+    position: absolute;
+
+    top: 8px;
+
+    right: 8px;
+
+    font-size: 22px;
+
+    z-index: 2;
+
+    text-shadow: 0 2px 6px rgba(0,0,0,0.6);
+
+}
+
+.level-locked button[disabled]{
+
+    cursor: not-allowed;
+
+    opacity: 0.7;
+
+}
+
+/* بطاقة الموسوعة */
+.bestiary-card small{
+
+    display: block;
+
+    color: #fbbf24;
+
+    font-size: 13px;
+
+    margin-top: 2px;
+
+}
+
+.bestiary-card.bestiary-defeated{
+
+    border-color: rgba(74, 222, 128, 0.55);
+
+}
+
+.bestiary-card.bestiary-defeated small{
+
+    color: #4ade80;
+
+}
+
+.bestiary-card .admin-character-actions button{
+
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+
+    color: #fff;
+
+}
+
+/* المهام اليومية */
+.daily-quest-card .quest-bar{
+
+    height: 8px;
+
+    background: rgba(255,255,255,0.12);
+
+    border-radius: 6px;
+
+    overflow: hidden;
+
+    margin: 6px 0;
+
+}
+
+.daily-quest-card .quest-bar-fill{
+
+    height: 100%;
+
+    background: linear-gradient(90deg, #3b82f6, #a78bfa);
+
+    border-radius: 6px;
+
+    transition: width .4s ease;
+
+}
+
+.daily-quest-card .quest-reward{ color: #fbbf24; font-weight: bold; }
+
+.daily-quest-card .quest-progress{ color: #cbd5e1; font-size: 13px; }
+
+.daily-quest-card .quest-done{ color: #4ade80; font-weight: bold; }
+
+.daily-quest-card.quest-completed{ border-color: rgba(163, 230, 53, 0.6); }
+
+.daily-quest-card.quest-claimed{ opacity: 0.75; }
+
+.quest-claim-btn{
+
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+
+    color: #fff;
+
+    border: none;
+
+    border-radius: 8px;
+
+    padding: 8px 14px;
+
+    font-size: 14px;
+
+    cursor: pointer;
+
+}
+
+.quest-claim-btn:active{ transform: scale(.96); }
+
+/* تلميحات (Tooltips) للأزرار */
+[data-tip]{
+
+    position: relative;
+
+}
+
+[data-tip]::after{
+
+    content: attr(data-tip);
+
+    position: absolute;
+
+    left: 50%;
+
+    bottom: calc(100% + 8px);
+
+    transform: translateX(-50%) translateY(4px);
+
+    background: rgba(10, 14, 22, 0.95);
+
+    color: #f1f5f9;
+
+    font-size: 12px;
+
+    line-height: 1.4;
+
+    padding: 6px 10px;
+
+    border-radius: 8px;
+
+    white-space: nowrap;
+
+    max-width: 220px;
+
+    text-align: center;
+
+    box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+
+    border: 1px solid rgba(59,130,246,0.4);
+
+    opacity: 0;
+
+    pointer-events: none;
+
+    visibility: hidden;
+
+    z-index: 900;
+
+    transition: opacity .18s ease, transform .18s ease, visibility .18s;
+
+}
+
+[data-tip]:hover::after{
+
+    opacity: 1;
+
+    visibility: visible;
+
+    transform: translateX(-50%) translateY(0);
+
+}
+
+/* زر سرعة المعركة */
+.battle-speed-btn{
+
+    display: block;
+
+    margin: 0 auto 8px auto;
+
+    background: rgba(59, 130, 246, 0.18);
+
+    border: 1px solid rgba(59, 130, 246, 0.6);
+
+    color: #bfdbfe;
+
+    border-radius: 10px;
+
+    padding: 6px 14px;
+
+    font-size: 13px;
+
+    font-weight: bold;
+
+    cursor: pointer;
+
+}
+
+.battle-speed-btn:active{
+
+    transform: scale(0.95);
+
+}
+
 
 .form-box label {
 
@@ -4779,6 +5101,32 @@ color:#ffc04d;
 border-color: rgba(255,140,0,0.6);
 
 box-shadow: 0 6px 24px rgba(0,0,0,0.5), 0 0 18px rgba(255,120,0,0.4);
+
+}
+
+/* شارة ضرر السم: خضراء سامة حتى يتميز عن الضرر العادي والضربة لا تُصدّ */
+
+.battle-effect-banner.effect-poison{
+
+color:#a3e635;
+
+border-color: rgba(163,230,53,0.6);
+
+box-shadow: 0 6px 24px rgba(0,0,0,0.5), 0 0 18px rgba(163,230,53,0.5);
+
+}
+
+/* رقم الداميج لضرر السم: أخضر سام ليتميز عن الأبيض العادي والبرتقالي للا يُصدّ */
+
+.damage-popup.poison{
+
+color:#a3e635;
+
+font-size:30px;
+
+text-shadow: 0 0 12px rgba(163,230,53,1), 0 0 26px rgba(80,160,20,0.9);
+
+animation: floatUpUnblockable 1s ease-out forwards;
 
 }
 

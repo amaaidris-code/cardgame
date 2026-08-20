@@ -857,44 +857,44 @@ lang="ar">
 🛠️ العودة للوحة الإدارة
 </button>
 
-                <button onclick="openChat()">
+                <button onclick="openChat()" data-tip="الدردشة مع اللاعبين والمجموعات">
 💬 الدردشة
 <span id="chat-notify-badge" class="menu-chat-badge" style="display:none;"></span>
 </button>
 
-                <button onclick="Social.open()">
+                <button onclick="Social.open()" data-tip="إدارة قائمة الأصدقاء والمراسلة الخاصة">
 🤝 الأصدقاء
 <span id="friends-notify-badge" class="menu-chat-badge" style="display:none;"></span>
 </button>
 
-                <button onclick="Clans.open()">
+                <button onclick="Clans.open()" data-tip="انضم أو أنشئ عصابة وعملوا معًا">
 🛡️ العصابة
 </button>
 
-                <button onclick="openScreen('character-profile-screen')">
+                <button onclick="openScreen('character-profile-screen')" data-tip="عرض شخصيتك ومعلوماتها">
 👤 شخصيتي
 </button>
 
-                <button onclick="openScreen('upgrade-screen')">
+                <button onclick="openScreen('upgrade-screen')" data-tip="ارفع مستوى شخصيتك وقوّها بالذهب" >
     ⬆️ تطوير الشخصية
 </button>
 
-                <button onclick="openScreen('companion-upgrade-screen')">
+                <button onclick="openScreen('companion-upgrade-screen')" data-tip="ارفع مستوى مرافقك">
     👥 تطوير المرافق
 </button>
 
 
-                <button onclick="openCollection()">
+                <button onclick="openCollection()" data-tip="استعرض بطاقاتك ومجموعتك">
     🎴 مجموعتي
 </button>
 
 
-                <button onclick="openScreen('battle-menu-screen')">
+                <button onclick="openScreen('battle-menu-screen')" data-tip="اختر نوع المعركة: زنازين أو مواجهات فردية">
     ⚔️ المعارك
 </button>
 
 
-                <button onclick="openScreen('shop-screen')">
+                <button onclick="openScreen('shop-screen')" data-tip="اشترِ الأسلحة والجرع والمرافقين">
                     🛒 المتجر
                 </button>
                 
@@ -1318,6 +1318,16 @@ lang="ar">
 </button>
 
 
+<button onclick="openScreen('bestiary-screen'); loadBestiary();" data-tip="استعرض الوحوش التي هزمتها ورأيتها">
+📖 الموسوعة
+</button>
+
+
+<button onclick="openScreen('daily-quests-screen'); loadDailyQuests();" data-tip="أنجز المهام اليومية واجمع الذهب">
+🎯 المهام اليومية
+</button>
+
+
 </div>
 
 
@@ -1340,6 +1350,51 @@ lang="ar">
 <div id="gate-list">
 
 جاري تحميل الزنازين...
+
+</div>
+
+
+<button onclick="openScreen('battle-menu-screen')">
+↩️ العودة
+</button>
+
+
+</section>
+
+
+
+<section id="bestiary-screen" class="screen">
+
+<h2>
+📖 الموسوعة
+</h2>
+
+
+<div id="bestiary-list">
+
+جارٍ تحميل الموسوعة...
+
+</div>
+
+
+<button onclick="openScreen('battle-menu-screen')">
+↩️ العودة
+</button>
+
+
+</section>
+
+
+
+<section id="daily-quests-screen" class="screen">
+
+<h2>
+🎯 المهام اليومية
+</h2>
+
+<div id="daily-quests-list">
+
+جارٍ تحميل المهام...
 
 </div>
 
@@ -1431,6 +1486,10 @@ lang="ar">
 <h2>
 ⚔️ المعركة
 </h2>
+
+<button class="battle-speed-btn" type="button" onclick="toggleBattleSpeed()" data-tip="تبديل سرعة حركة المعركة (لا يغيّر وقت قرارك)">
+🐢 x1
+</button>
 
 
 <div class="battle-arena">
@@ -1692,6 +1751,10 @@ id="pvp-player-used-skills">
 <h2>
 ⚔️ المعركة
 </h2>
+
+<button class="battle-speed-btn" type="button" onclick="toggleBattleSpeed()" data-tip="تبديل سرعة حركة المعركة (لا يغيّر وقت قرارك)">
+🐢 x1
+</button>
 
 
 <div class="battle-arena">

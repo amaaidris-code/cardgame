@@ -21,7 +21,16 @@ let battle = {
 
     finished: false,
 
+    // مضاعِف سرعة حركة المعركة (الرسوم المتحركة) — لا يمسّ وقت قرار اللاعب
+    speedMult: 1,
+
     turnInterval: null,
+
+    companion: null,
+    companionLoaded: false,
+    // عرض المرافق في خانة اللاعب (مثل وضع السلاح): تُعرض صورة/اسم/صحة
+    // ومهارات المرافق مكان بطاقة اللاعب الحقيقية عند تفعيل أيقونته
+    companionView: false,
 
     raceWon: false,
 
@@ -145,7 +154,58 @@ function markEnemySkillUsed(skill){
 
 function wait(ms){
 
-    return new Promise(resolve => setTimeout(resolve, ms));
+    let m = battle && battle.speedMult ? battle.speedMult : 1;
+
+    return new Promise(resolve => setTimeout(resolve, ms * m));
+
+}
+
+
+// ========================================
+// تبديل سرعة المعركة (رسوم متحركة أسرع) — لا يمسّ وقت قرار اللاعب
+// ========================================
+
+function initBattleSpeed(){
+
+    try{
+
+        let saved = localStorage.getItem("battle_speed_x");
+
+        battle.speedMult = (saved === "2") ? 0.45 : 1;
+
+    }catch(e){ battle.speedMult = 1; }
+
+    updateBattleSpeedButton();
+
+}
+
+function toggleBattleSpeed(){
+
+    battle.speedMult = (battle.speedMult === 1) ? 0.45 : 1;
+
+    try{
+
+        localStorage.setItem("battle_speed_x", battle.speedMult === 1 ? "1" : "2");
+
+    }catch(e){}
+
+    updateBattleSpeedButton();
+
+    if(typeof addBattleLog === "function"){
+
+        addBattleLog(battle.speedMult === 1 ? "🐢 سرعة المعركة: عادية" : "⚡ سرعة المعركة: سريعة");
+
+    }
+
+}
+
+function updateBattleSpeedButton(){
+
+    document.querySelectorAll(".battle-speed-btn").forEach(btn => {
+
+        btn.textContent = (battle.speedMult === 1) ? "🐢 x1" : "⚡ x2";
+
+    });
 
 }
 
@@ -1028,6 +1088,7 @@ async function loadActiveCompanionFighter(){
             fighter.scaledAttackDamages = computeScaledAttackDamages(fighter.atk, fighter.skills);
             battle.companion = fighter;
             battle.companionLoaded = true;
+            renderPveCompanionIcon();
         }
     }catch(e){
         console.error("companion load error", e);
@@ -1165,7 +1226,13 @@ async function startPVEBattle(monsterId){
 
     battle.phase = "idle";
 
-    battle.turnOwner = null;
+    // تُفتتح أي مباراة جديدة دائمًا بالشخصية (دورٌ أول للاعب، وليس المرافق)
+    // حتى لا تتجمد المعركة إن بدأ دور المرافق أولًا
+    battle.turnOwner = "player";
+
+    battle.guardEnemyAct = false;
+
+    battle.companionView = false;
 
     battle.finished = false;
 
@@ -1585,6 +1652,9 @@ async function startDungeonBattle(dungeon){
     battle.companionLoaded = false;
     await loadActiveCompanionFighter();
 
+    // السلاح النشط يُحمَّل في الزنزانة أيضًا حتى تظهر أيقونته
+    loadPveWeapon();
+
     battle.prefix = "pve";
 
     battle.phase = "idle";
@@ -1673,7 +1743,20 @@ async function startDungeonMonster(monsterId){
 
     battle.finished = false;
 
-    battle.turnOwner = null;
+    // كل وحش جديد يبدأ أيضًا بدور اللاعب (الشخصية) وليس المرافق
+    battle.turnOwner = "player";
+
+    battle.guardEnemyAct = false;
+
+    if(battle.botRaceTimeout){
+
+        clearTimeout(battle.botRaceTimeout);
+
+        battle.botRaceTimeout = null;
+
+    }
+
+    battle.companionView = false;
 
     battle.raceWon = false;
 
@@ -1818,12 +1901,19 @@ function updateBattleScreen(){
     let playerImage = document.getElementById(prefix + "-player-image");
     let enemyImage = document.getElementById(prefix + "-enemy-image");
 
-    if(playerHp) playerHp.innerHTML = `${battle.player.hp} / ${battle.player.maxHp}`;
+    // المرافق: يُحدَّد قبل رسم بطاقة اللاعب لأنه في وضع "المرافق" يُعرض في
+    // نفس خانة اللاعب (مثل وضع السلاح)، وتُخفى البطاقة المستقلة
+    let comp = battle.companion;
+    let hasCompanion = !!(comp && comp.hp >= 0 && battle.companionLoaded);
+    let cardShowsCompanion = hasCompanion && battle.companionView;
+    let cardFighter = cardShowsCompanion ? comp : battle.player;
+
+    if(playerHp) playerHp.innerHTML = `${cardFighter.hp} / ${cardFighter.maxHp}`;
     if(enemyHp) enemyHp.innerHTML = `${battle.enemy.hp} / ${battle.enemy.maxHp}`;
 
     if(playerBar){
-        playerBar.style.width = (battle.player.hp / battle.player.maxHp * 100) + "%";
-        updateHpBarColor(playerBar, battle.player.hp, battle.player.maxHp);
+        playerBar.style.width = (cardFighter.maxHp > 0 ? cardFighter.hp / cardFighter.maxHp * 100 : 0) + "%";
+        updateHpBarColor(playerBar, cardFighter.hp, cardFighter.maxHp);
     }
 
     if(enemyBar){
@@ -1831,28 +1921,25 @@ function updateBattleScreen(){
         updateHpBarColor(enemyBar, battle.enemy.hp, battle.enemy.maxHp);
     }
 
-    if(playerName) playerName.textContent = battle.player.name;
+    if(playerName) playerName.textContent = cardFighter.name;
     if(enemyName) enemyName.textContent = battle.enemy.name;
 
-    setFighterImage(playerImage, battle.player.image);
+    setFighterImage(playerImage, cardFighter.image);
     setFighterImage(enemyImage, battle.enemy.image);
 
     // مؤشر بصري خفيف على المقاتل المجمّد
-    if(playerImage) playerImage.classList.toggle("frozen-status", !!(battle.player.frozenTurns > 0));
+    if(playerImage) playerImage.classList.toggle("frozen-status", !!(cardFighter.frozenTurns > 0));
     if(enemyImage) enemyImage.classList.toggle("frozen-status", !!(battle.enemy.frozenTurns > 0));
 
-    // المرافق: أظهر بطاقته وأحدث شريط صحته إن وُجد
-    let compCard = document.getElementById("pve-companion-card");
-    let comp = battle.companion;
-    let hasCompanion = !!(comp && comp.hp >= 0 && battle.companionLoaded);
-    if(compCard){
-        compCard.style.display = hasCompanion ? "" : "none";
-    }
+    // البطاقة المستقلة للمرافق: تُعرض فقط خارج وضع "المرافق" (حيث يُعرض
+    // المرافق في خانة اللاعب) لتجنّب تكرار العرض
+    let compCard = document.getElementById(prefix + "-companion-card");
+    if(compCard) compCard.style.display = (hasCompanion && !cardShowsCompanion) ? "" : "none";
     if(hasCompanion){
-        let compHp = document.getElementById("pve-companion-hp");
-        let compBar = document.getElementById("pve-companion-hp-bar");
-        let compName = document.getElementById("pve-companion-name");
-        let compImage = document.getElementById("pve-companion-image");
+        let compHp = document.getElementById(prefix + "-companion-hp");
+        let compBar = document.getElementById(prefix + "-companion-hp-bar");
+        let compName = document.getElementById(prefix + "-companion-name");
+        let compImage = document.getElementById(prefix + "-companion-image");
         if(compHp) compHp.innerHTML = `${comp.hp} / ${comp.maxHp}`;
         if(compBar){
             compBar.style.width = (comp.maxHp > 0 ? comp.hp / comp.maxHp * 100 : 0) + "%";
@@ -1863,6 +1950,8 @@ function updateBattleScreen(){
         if(compImage) compImage.classList.toggle("frozen-status", !!(comp.frozenTurns > 0));
         if(compCard) compCard.classList.toggle("companion-dead", comp.hp <= 0);
     }
+
+    renderPveCompanionIcon();
 
     applyGlowColors();
 
@@ -1881,7 +1970,12 @@ function renderStatusBadges(prefix){
 
     renderFighterStatusBadge(prefix + "-enemy", battle.enemy);
 
-    renderFighterStatusBadge(prefix + "-player", battle.player);
+    // في وضع المرافق تُعرض شارات المرافق في خانة اللاعب، وإلا شارات الشخصية
+    if(battle.companionView && battle.companion){
+        renderFighterStatusBadge(prefix + "-player", battle.companion);
+    } else {
+        renderFighterStatusBadge(prefix + "-player", battle.player);
+    }
 
     renderFighterStatusBadge("pve-companion", battle.companion);
 
@@ -1903,6 +1997,8 @@ function renderFighterStatusBadge(idPrefix, fighter){
     if((fighter.reflectMult || 0) > 0) badges.push("🔁×" + fighter.reflectMult);
 
     if((fighter.absorbHits || 0) > 0) badges.push("🧲×" + fighter.absorbHits);
+
+    if((fighter.poisonTurns || 0) > 0 && (fighter.poisonDamage || 0) > 0) badges.push("☠️" + fighter.poisonDamage + "×" + fighter.poisonTurns);
 
     let key = badges.join("|");
 
@@ -2070,6 +2166,16 @@ async function startCountdownAndRace(prefix){
     let countOverlay = document.getElementById(prefix + "-count-overlay");
 
     battle.phase = "countdown";
+
+    if(battle.botRaceTimeout){
+
+        clearTimeout(battle.botRaceTimeout);
+
+        battle.botRaceTimeout = null;
+
+    }
+
+    battle.guardEnemyAct = false;
 
     timerBox.textContent = "";
 
@@ -2294,6 +2400,12 @@ function processTurn(){
         } else {
             poisonedFighter.hp = Math.max(0, poisonedFighter.hp - poisonDmg);
             addBattleLog(`☠️ ${poisonedFighter.name} يتلقى ${poisonDmg} ضرر سُم! (متبقي ${poisonedFighter.poisonTurns} ${poisonedFighter.poisonTurns === 1 ? "دور" : "أدوار"})`);
+            let poisonPrefix =
+            (poisonedFighter === battle.player || poisonedFighter === battle.companion)
+            ? battle.prefix + "-player"
+            : battle.prefix + "-enemy";
+            showDamagePopup(poisonPrefix, poisonDmg, false, false, true);
+            showBattleEffectBanner(battle.prefix, `☠️ ضرر السم: -${poisonDmg}`, "poison");
             updateBattleScreen();
             if(poisonedFighter.hp <= 0){
                 battle.finished = true;
@@ -2331,6 +2443,8 @@ function processTurn(){
             : (battle.turnOwner === "companion") ? "enemy"
             : "enemy";
 
+            battle.guardEnemyAct = false;
+
             processTurn();
 
         }, 900);
@@ -2352,13 +2466,36 @@ function processTurn(){
 
     if(battle.turnOwner === "enemy"){
 
+        // حارس ضد دور خصم مكرر: إذا دخلنا هنا والخصم ما زال مجدولاً بالفعل
+        // (مرّ سيناريو سباق/انتقال يقود إلى تنفيذين متتاليين لدور الخصم)،
+        // نتجاهل التنفيذ المكرر ونمرر الدور للاعب بدل أن يهاجم الخصم مرتين.
+        if(battle.guardEnemyAct){
+
+            battle.guardEnemyAct = false;
+
+            battle.turnOwner = "player";
+
+            addBattleLog("تم تجاهل دور خصم مكرر (إصلاح دورين للخصم)");
+
+            processTurn();
+
+            return;
+
+        }
+
+        battle.guardEnemyAct = true;
+
         enemyAct();
 
     } else if(companionTurn){
 
+        battle.guardEnemyAct = false;
+
         companionTurnPlay();
 
     } else {
+
+        battle.guardEnemyAct = false;
 
         // إذا كان اللاعب ميتًا ولا يزال المرافق حيًّا، الدور ينتقل للمرافق
         if(battle.player.hp <= 0 && companionIsAlive()){
@@ -2367,7 +2504,14 @@ function processTurn(){
             return;
         }
 
-        // بداية دور اللاعب: يُسمح له باستخدام جرعة واحدة هذا الدور
+        // بداية دور اللاعب: دائمًا تبدأ بالتحكم بالشخصية (نتأكد من إيقاف
+        // عرض المرافق في خانة اللاعب حتى لا يعلق اللاعب على مرافق ميت
+        // أو عرض قديم، فيظهر باستمرار ويلعب بشخصيته)
+        battle.companionView = false;
+
+        renderPveCompanionIcon();
+
+        // يُسمح له باستخدام جرعة واحدة هذا الدور
         battle.potionUsedThisTurn = false;
 
         renderPotionBar("pve");
@@ -2405,6 +2549,10 @@ function pveEndTurn(owner){
 
         addBattleLog(`⚡ دور إضافي! ${fighter.name} يستمر في الدور (متبقي ${fighter.extraTurns})`);
 
+        // دور إضافي شرعي للخصم (مهارة "الأدوار المتتالية") — نجيز تنفيذ دور
+        // الخصم التالي، فالرفض هنا سيمنع المهارة من العمل أصلًا
+        battle.guardEnemyAct = false;
+
         setTimeout(processTurn, 900);
 
         return;
@@ -2417,6 +2565,8 @@ function pveEndTurn(owner){
         next = ("companion");
     } else if(owner === "companion"){
         next = ("enemy");
+        // نهاية دور المرافق: الخروج من عرض المرافق في خانة اللاعب
+        battle.companionView = false;
     } else {
         // بعد دور الخصم: اللاعب، أو المرافق إن كان اللاعب ميتًا
         next = (battle.player.hp > 0) ? "player" : "companion";
@@ -2596,6 +2746,13 @@ function renderSkillButtons(prefix){
     // نعرض مهارات السلاح وخلفياته بدل مهارات الشخصية
     if(battle.weaponView){
         renderWeaponSkillButtons(prefix);
+        return;
+    }
+
+    // عرض وضع "المرافق" في خانة اللاعب (مثل وضع السلاح): مهارات المرافق
+    // تظهر بدل مهارات الشخصية في نفس شريط المهارات
+    if(battle.companionView){
+        renderCompanionSkillButtonsInPlayerSlot(prefix);
         return;
     }
 
@@ -2836,6 +2993,55 @@ async function renderPveWeaponIcon(){
         ? `<img src="${escapeHtml(imgSrc)}" alt="">`
         : (inWeapon ? "🃏" : "⚔️");
     icon.style.display = "inline-flex";
+}
+
+// أيقونة المرافق في معركة PvE: تُظهر صورة المرافق، وعند الضغط يتحول عرض
+// المعركة إلى المرافق (صورة + مهارات في خانة اللاعب)، وتصبح الأيقونة صورة
+// الشخصية للعودة عند الضغط مرة أخرى — نفس سلوك أيقونة السلاح تمامًا
+function renderPveCompanionIcon(){
+
+    let icon = document.getElementById("pve-companion-icon");
+    if(!icon) return;
+
+    icon.style.display = "none";
+
+    let comp = battle.companion;
+    if(!(comp && battle.companionLoaded)) return;
+
+    let inCompanion = !!battle.companionView;
+    let imgSrc = inCompanion ? (battle.player.image || "") : (comp.image || "");
+    icon.innerHTML = imgSrc
+        ? `<img src="${escapeHtml(imgSrc)}" alt="">`
+        : (inCompanion ? "🃏" : "🐾");
+
+    icon.classList.toggle("companion-ready",
+        battle.turnOwner === "companion");
+    icon.classList.toggle("companion-dead-icon", comp.hp <= 0);
+
+    icon.style.display = "inline-flex";
+
+}
+
+// الضغط على أيقونة المرافق: يستبدل بطاقة اللاعب ببطاقة المرافق (صورة +
+// اسم + صحة + مهارات) مثل وضع السلاح، والضغطة التالية تعود للشخصية
+function pveToggleCompanionView(){
+
+    if(battle.finished) return;
+
+    let comp = battle.companion;
+
+    // منع الدخول لوضع المرافق إن كان المرافق ميتًا، لكن السماح دائمًا
+    // بالعودة إلى عرض/التحكم بالشخصية (لا يُحاصَر اللاعب في عرض المرافق)
+    if(!battle.companionView && (!comp || comp.hp <= 0)) return;
+
+    battle.companionView = !battle.companionView;
+
+    renderPveCompanionIcon();
+
+    updateBattleScreen();
+
+    renderSkillButtons("pve");
+
 }
 
 function pveToggleWeaponView(){
@@ -3249,12 +3455,25 @@ function companionIsAliveOrZero(){
     return !!(battle.companion && battle.companionLoaded);
 }
 
-// بداية دور المرافق: يرسم شريط مهارات المرافق ويبدأ المؤقّت
+// بداية دور المرافق: يُبدأ بعرض الشخصية ويُعامَج أيقونة المرافق (تنبض
+// للدلالة أن التحكم جاهز بالضغط عليها مثل وضع السلاح)
 function companionTurnPlay(){
 
     if(battle.finished) return;
 
     renderCompanionSkillButtons();
+
+    // كل دور جديد للمرافق يبدأ بعرض الشخصية؛ تَبْديل بطاقة المرافق فقط
+    // عند ضغط أيقونته
+    battle.companionView = false;
+
+    renderPveCompanionIcon();
+
+    setTurnIndicatorText(
+        "pve-turn-indicator",
+        "🐾 دور المرافق — اضغط على أيقونته للتحكم",
+        "companion-turn"
+    );
 
     startTurnTimer();
 
@@ -3436,6 +3655,51 @@ function buildCompanionSkillButton(skill){
 
 }
 
+// عرض مهارات المرافق في شريط مهارات اللاعب (خانة اللاعب) بنفس آلية
+// وضع السلاح: تُرسم مهارات المرافق بدل مهارات الشخصية في نفس الشريط
+function renderCompanionSkillButtonsInPlayerSlot(prefix){
+
+    let pagesEl = document.getElementById(prefix + "-player-skills-pages");
+    if(!pagesEl) return;
+    if(!battle.companion) return;
+
+    let container = pagesEl.closest(".skills-container");
+    let comp = battle.companion;
+    let skills = Array.isArray(comp.skills) ? comp.skills : [];
+    let pagesOfSkills = chunkSkills(skills, SKILLS_PER_PAGE);
+    let currentIndex = Number(pagesEl.dataset.activePage || 0);
+    currentIndex = Math.max(0, Math.min(currentIndex, pagesOfSkills.length - 1));
+
+    pagesEl.innerHTML = "";
+
+    pagesOfSkills.forEach((skillsChunk, i) => {
+        let pageDiv = document.createElement("div");
+        pageDiv.className = "skills-page" + (i === currentIndex ? " active" : "");
+        skillsChunk.forEach(skill => {
+            pageDiv.appendChild(buildCompanionSkillButton(skill));
+        });
+        pagesEl.appendChild(pageDiv);
+    });
+
+    pagesEl.dataset.activePage = String(currentIndex);
+
+    let dotsEl = container ? container.querySelector(".skill-dots") : null;
+    if(dotsEl){
+        if(pagesOfSkills.length <= 1){
+            dotsEl.style.display = "none";
+        } else {
+            dotsEl.style.display = "";
+            dotsEl.innerHTML = "";
+            pagesOfSkills.forEach((_, i) => {
+                let dot = document.createElement("span");
+                if(i === currentIndex) dot.classList.add("active");
+                dot.onclick = () => goToSkillsPage(prefix, i);
+                dotsEl.appendChild(dot);
+            });
+        }
+    }
+}
+
 // مستخدم مهارة المرافق؛ يدعم النطاق الأساسي (هجوم/دفاع/تعزيز/سُم/امتصاص)
 // عبر resolveAction والتأثيرات القياسية بناءً على نوع المهارة
 function handleCompanionSkillClick(skill){
@@ -3559,7 +3823,7 @@ function handleCompanionSkillClick(skill){
     if(!battle.companionUsedSkills.find(s => s.id === skill.id))
         battle.companionUsedSkills.push(skill);
 
-    renderCompanionSkillButtons();
+    renderSkillButtons(battle.prefix);
 
     updateBattleScreen();
 
@@ -3638,7 +3902,7 @@ function playerUsePoisonSkill(skill){
 
         addBattleLog(`☠️ ${defender.name} مسموم! سيتلقى ${poisonDmg} ضرر سُم إضافي لمدة ${remainingTurns} ${remainingTurns === 1 ? "دور" : "أدوار"}`);
 
-        showBattleEffectBanner(battle.prefix, `☠️ ${defender.name} مسموم!`, "info");
+        showBattleEffectBanner(battle.prefix, `☠️ ${defender.name} مسموم!`, "poison");
 
     } else if(defender.hp > 0){
 
@@ -3923,7 +4187,7 @@ async function enemyAct(){
 
             addBattleLog(`☠️ ${enemyVictim.name} مسموم! سيتلقى ${poisonDmg} ضرر سُم إضافي لمدة ${remainingTurns} ${remainingTurns === 1 ? "دور" : "أدوار"}`);
 
-            showBattleEffectBanner(battle.prefix, `☠️ ${enemyVictim.name} مسموم!`, "info");
+            showBattleEffectBanner(battle.prefix, `☠️ ${enemyVictim.name} مسموم!`, "poison");
 
         } else if(enemyVictim.hp > 0){
 
@@ -5303,11 +5567,23 @@ function resolveAction(attacker, defender, skill, trackUsed = true, isReflectedH
 
     } else if(dmg > 0){
 
-        showBattleEffectBanner(
-            battle.prefix,
-            iAmDefender ? `💥 تعرّضتَ لهجوم! -${dmg}` : `⚔️ ضربة موفّقة! -${dmg}`,
-            "hit"
-        );
+        if(skill.unblockable){
+
+            showBattleEffectBanner(
+                battle.prefix,
+                iAmDefender ? `💥💢 ضربة لا تُصدّ! -${dmg}` : `💢💥 ضربة لا تُصدّ! -${dmg} على الخصم!`,
+                "unblockable"
+            );
+
+        } else {
+
+            showBattleEffectBanner(
+                battle.prefix,
+                iAmDefender ? `💥 تعرّضتَ لهجوم! -${dmg}` : `⚔️ ضربة موفّقة! -${dmg}`,
+                "hit"
+            );
+
+        }
 
     }
 
@@ -5331,7 +5607,9 @@ function resolveAction(attacker, defender, skill, trackUsed = true, isReflectedH
 
     } else {
 
-        addBattleLog(`${attacker.name} استخدم ${skill.name} → ${dmg} ضرر`);
+        addBattleLog(skill.unblockable
+            ? `${attacker.name} استخدم ${skill.name} → ${dmg} ضرر لا يُصدّ! 💢`
+            : `${attacker.name} استخدم ${skill.name} → ${dmg} ضرر`);
 
     }
 
@@ -7645,6 +7923,27 @@ function endBattle(playerWon){
 
     }
 
+    // تُحدّث الموسوعة: هذا الوحش شوهد، وهُزم إن فزت بالمعركة
+    if(battle.enemy){
+
+        let bTok = localStorage.getItem("player_token");
+
+        if(bTok){
+
+            supabaseClient
+            .rpc("bestiary_upsert", {
+                p_token: bTok,
+                p_character_id: battle.enemy.id,
+                p_seen: true,
+                p_defeated: !!playerWon
+            })
+            .then(() => {})
+            .catch(() => {});
+
+        }
+
+    }
+
     renderSkillButtons(battle.prefix);
 
     addBattleLog(playerWon ? "لقد فزت بالمعركة!" : "لقد خسرت المعركة");
@@ -7865,7 +8164,7 @@ function hideBattleResult(prefix){
 // تأثيرات بصرية (اهتزاز + رقم داميج طائر)
 // ========================================
 
-function showDamagePopup(targetPrefix, amount, isHeal, isUnblockable){
+function showDamagePopup(targetPrefix, amount, isHeal, isUnblockable, isPoison){
 
     let img = document.getElementById(targetPrefix + "-image");
 
@@ -7879,7 +8178,7 @@ function showDamagePopup(targetPrefix, amount, isHeal, isUnblockable){
 
     let popup = document.createElement("div");
 
-    popup.className = "damage-popup" + (isHeal ? " heal" : "") + (isUnblockable ? " unblockable" : "");
+    popup.className = "damage-popup" + (isHeal ? " heal" : "") + (isUnblockable ? " unblockable" : "") + (isPoison ? " poison" : "");
 
     popup.textContent = (isHeal ? "+" : "-") + amount;
 
