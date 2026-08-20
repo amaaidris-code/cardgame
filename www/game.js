@@ -3516,11 +3516,13 @@ function renderAdminCharacterCards(list, emptyMessage){
 
                 <p class="admin-character-stats">❤️ ${character.current_hp != null ? character.current_hp : (character.hp || 0)} &nbsp;·&nbsp; ⚔️ ${character.current_atk != null ? character.current_atk : (character.atk || 0)} &nbsp;·&nbsp; LV ${character.current_level != null ? character.current_level : (character.level || 1)}</p>
 
-                <p class="admin-character-owner">${character.admin_only ? "🔒 خاصة بالأدمن" : (character.is_monster ? "👹 وحش PvE" : (character.owner_id ? "🔴 مأخوذة (لدى لاعب)" : "🟢 متاحة للاختيار"))}</p>
+                <p class="admin-character-owner">${character.status === "pending" && character.requested_by ? "⏳ طلب شخصية من لاعب (بانتظار موافقتك/رفضك)" : (character.admin_only ? "🔒 خاصة بالأدمن" : (character.is_monster ? "👹 وحش PvE" : (character.owner_id ? "🔴 مأخوذة (لدى لاعب)" : "🟢 متاحة للاختيار")))}</p>
 
             </div>
 
             <div class="admin-character-actions">
+
+                ${character.status === "pending" && character.requested_by ? `<button onclick="approveCharacterOrder('${character.id}')">✅ قبول الطلب</button><button onclick="rejectCharacterOrder('${character.id}')">❌ رفض الطلب</button>` : ""}
 
                 ${character.admin_only ? `<button onclick="playAdminCharacter('${character.id}')">🎮 العب بها</button>` : ""}
 
@@ -3537,6 +3539,61 @@ function renderAdminCharacterCards(list, emptyMessage){
     });
 
     return html;
+
+}
+
+
+// ========================================
+// موافقة/رفض طلب شخصية من لاعب (أمر الشخصية)
+// ========================================
+
+async function approveCharacterOrder(characterId){
+
+    let admin_token = localStorage.getItem("admin_token");
+
+    if(!admin_token){ alert("يجب تسجيل دخول الأدمن أولاً"); return; }
+
+    if(!confirm("قبول هذا الطلب؟ ستصبح الشخصية متاحة للاعب.")) return;
+
+    try{
+
+        let { error } = await supabaseClient
+            .rpc("admin_approve_character", { p_admin_token: admin_token, p_character_id: characterId });
+
+        if(error) throw error;
+
+        alert("تم قبول الشخصية");
+
+        loadAdminPanel();
+
+    }catch(e){
+        alert((e && e.message) ? e.message : "تعذر قبول الطلب");
+    }
+
+}
+
+async function rejectCharacterOrder(characterId){
+
+    let admin_token = localStorage.getItem("admin_token");
+
+    if(!admin_token){ alert("يجب تسجيل دخول الأدمن أولاً"); return; }
+
+    if(!confirm("رفض هذا الطلب؟ ستُرفض الشخصية ولن تصبح متاحة للاعب.")) return;
+
+    try{
+
+        let { error } = await supabaseClient
+            .rpc("admin_reject_character", { p_admin_token: admin_token, p_character_id: characterId });
+
+        if(error) throw error;
+
+        alert("تم رفض الطلب");
+
+        loadAdminPanel();
+
+    }catch(e){
+        alert((e && e.message) ? e.message : "تعذر رفض الطلب");
+    }
 
 }
 
