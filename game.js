@@ -1807,16 +1807,22 @@ function submitCharacterRequest(){
 async function sendCharacterRequest(){
 
 
-    let player_id =
+    let token =
     localStorage.getItem(
-        "player_id"
+        "player_token"
     );
+
+    if(!token){
+        alert("يجب تسجيل الدخول أولاً");
+        openScreen("login-screen");
+        return;
+    }
 
 
     let name =
     document
     .getElementById(
-        "request-character-name"
+        "requested-character-name"
     )
     .value
     .trim();
@@ -1826,7 +1832,7 @@ async function sendCharacterRequest(){
     let anime =
     document
     .getElementById(
-        "request-anime-name"
+        "requested-character-anime"
     )
     .value
     .trim();
@@ -1836,7 +1842,7 @@ async function sendCharacterRequest(){
     let note =
     document
     .getElementById(
-        "request-note"
+        "requested-character-notes"
     )
     .value
     .trim();
@@ -1845,11 +1851,11 @@ async function sendCharacterRequest(){
 
 
 
-    if(name==="" || anime===""){
+    if(!name || name === ""){
 
 
         alert(
-        "اكتب اسم الشخصية والأنمي"
+        "اكتب اسم الشخصية"
         );
 
 
@@ -1862,51 +1868,67 @@ async function sendCharacterRequest(){
 
 
 
-    let {error}=
+let submitBtn =
+    document.getElementById("requested-character-submit");
 
-    await supabaseClient
-    .from("character_requests")
-    .insert([{
+    if(submitBtn) submitBtn.disabled = true;
 
-        player_id:player_id,
+    try{
 
-        character_name:name,
+        // نستدعي دالة admin-ai على Supabase Edge Functions لتولّد الشخصية
+        // بمهاراتها تلقائيًا وتدرجها كطلب pending مرتبط باللاعب، والأدمن يقرر.
+        let prompt =
+            "أنشئ شخصية اسمُها \"" + name + "\""
+            + (anime ? " من أنمي " + anime : "")
+            + (note ? ". معلومات إضافية: " + note : "");
 
-        anime_name:anime,
-
-        notes:note
-
-    }]);
-
-
-
-
-
-
-    if(error){
-
-
-        alert(
-        error.message
+        let res =
+        await fetch(
+            SUPABASE_URL + "/functions/v1/admin-ai",
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    player_token: token,
+                    entity_type: "character",
+                    prompt: prompt
+                })
+            }
         );
 
+        let js = null;
+        try { js = await res.json(); } catch(e){ js = null; }
 
-        return;
+        if(res.ok && js && js.ok){
+
+            alert("تم إرسال طلبك! الشخصية قيد مراجعة الأدمن وستظهر لك عند الموافقة.");
+
+            ["requested-character-name","requested-character-anime","requested-character-notes"]
+            .forEach(id => { let el = document.getElementById(id); if(el) el.value = ""; });
+
+            openScreen("home-screen");
+
+            return;
+
+        }
+
+        // 409 = طلب سابق قيد المراجعة/معتمد
+        let msg = (js && js.error) ? js.error : "تعذر إرسال الطلب، حاول مرة أخرى لاحقًا";
+        alert(msg);
+
+    }catch(e){
+        alert((e && e.message) ? e.message : "خطأ في الاتصال، حاول لاحقًا");
+    }finally{
+
+        if(submitBtn) submitBtn.disabled = false;
 
     }
-
-
-
-
-
-
-    alert(
-    "تم إرسال الطلب"
-    );
-
-
 
 }
+
+
 // ========================================
 // تسجيل الخروج
 // ========================================
