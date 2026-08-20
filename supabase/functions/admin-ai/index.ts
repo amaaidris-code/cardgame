@@ -472,6 +472,112 @@ async function researchCharacterInfo(prompt: string): Promise<string | null> {
   return null;
 }
 
+// يبحث عن صورة حقيقية للشخصية من ويكيبيديا (الحقل thumbnail/originalimage يوفّره
+// ملخّص REST Summary) ليستخدمها إن لم يرفع المستخدم صورة بنفسه.
+async function findCharacterImage(prompt: string): Promise<string | null> {
+  const name = extractName(prompt);
+  const queries: string[] = [name, prompt].filter((q): q is string => !!q && q.trim() !== "").filter((q, i, a) => a.indexOf(q) === i);
+  for (const q of queries) {
+    if (!q) continue;
+    for (const wiki of ["en", "ar", "ja"]) {
+      try {
+        const url = "https://" + wiki + ".wikipedia.org/api/rest_v1/page/summary/" +
+          encodeURIComponent(String(q).replace(/ /g, "_"));
+        const res = await fetch(url, { headers: { "User-Agent": "CardGameAdminAI/1.0" } });
+        if (!res.ok) continue;
+        const s = await res.json();
+        const img = (s && s.originalimage && s.originalimage.source) || (s && s.thumbnail && s.thumbnail.source);
+        if (img && /^https?:\/\//i.test(String(img))) return String(img);
+      } catch { }
+    }
+  }
+  return null;
+}
+
+// يختار نوع المهارة الصحيح (مطابق لـ game.js في الجهة الأمامية) ثم يحوّله
+// إلى حقول قاعدة البيانات (type/effect/unblockable) مع تقريب الضرر حسب قيود DB.
+function aiSkillTypeChoice(sk: any): string {
+  const e = String((sk && sk.effect) || "").trim();
+  const effectAliases: Record<string, string> = {
+    "steal": "steal", "copy": "copy", "control": "control",
+    "reflect": "reflect", "shield": "defense", "heal": "hp_boost",
+    "poison": "poison", "atk_boost": "atk_boost", "freeze": "freeze",
+    "lifesteal": "lifesteal", "seal": "seal", "unseal": "unseal"
+  };
+  if (e && effectAliases[e] !== undefined) return effectAliases[e];
+  const t = String((sk && sk.type) || "attack").trim().toLowerCase();
+  const typeAliases: Record<string, string> = {
+    "attack": "attack", "defense": "defense", "special": "special",
+    "steal": "steal", "copy": "copy", "control": "control",
+    "unblockable": "unblockable", "freeze": "freeze",
+    "lifesteal": "lifesteal", "reflect": "reflect",
+    "seal": "seal", "unseal": "unseal", "poison": "poison",
+    "shadow": "shadow", "hp_boost": "hp_boost", "atk_boost": "atk_boost",
+    "delay_cooldown": "delay_cooldown",
+    "unblockable_reflect": "unblockable_reflect",
+    "consecutive_turns": "consecutive_turns",
+    "absorb_atk": "absorb_atk", "absorb_hp": "absorb_hp"
+  };
+  return typeAliases[t] || "attack";
+}
+
+function skillTypeChoiceToFields(choice: string): { type: string; effect: string | null; unblockable: boolean } {
+  let type = "attack", effect: string | null = null, unblockable = false;
+  if (choice === "steal") { type = "special"; effect = "steal"; }
+  else if (choice === "copy") { type = "special"; effect = "copy"; }
+  else if (choice === "control") { type = "special"; effect = "control"; }
+  else if (choice === "defense") { type = "defense"; }
+  else if (choice === "hp_boost") { type = "special"; effect = "hp_boost"; }
+  else if (choice === "atk_boost") { type = "special"; effect = "atk_boost"; }
+  else if (choice === "poison") { type = "special"; effect = "poison"; }
+  else if (choice === "unblockable") { type = "special"; unblockable = true; }
+  else if (choice === "freeze") { type = "special"; effect = "freeze"; }
+  else if (choice === "lifesteal") { type = "special"; effect = "lifesteal"; }
+  else if (choice === "reflect") { type = "special"; effect = "reflect"; }
+  else if (choice === "seal") { type = "special"; effect = "seal"; }
+  else if (choice === "unseal") { type = "special"; effect = "unseal"; }
+  else if (choice === "shadow") { type = "special"; effect = "shadow"; }
+  else if (choice === "delay_cooldown") { type = "special"; effect = "delay_cooldown"; }
+  else if (choice === "unblockable_reflect") { type = "special"; effect = "reflect"; unblockable = true; }
+  else if (choice === "consecutive_turns") { type = "special"; effect = "consecutive_turns"; }
+  else if (choice === "absorb_atk") { type = "special"; effect = "absorb_atk"; }
+  else if (choice === "absorb_hp") { type = "special"; effect = "absorb_hp"; }
+  return { type, effect, unblockable };
+}
+
+// يحوّل قائمة المهارات من اقتراح AI إلى صفوف جاهزة للإدراج في جداول skills
+// و character_skills (نفس منطق createSkillsForTarget في الواجهة الأمامية).
+function buildSkillRows(fields: any): any[] {
+  const skills = (fields && Array.isArray(fields.skills)) ? fields.skills : [];
+  const rows: any[] = [];
+  for (const sk of skills) {
+    const typeChoice = aiSkillTypeChoice(sk);
+    let damageRaw = Math.max(0, Math.round(Number(sk.damage) || 0));
+    if (typeChoice === "attack" || typeChoice === "unblockable" || typeChoice === "special") {
+      damageRaw = Math.round(damageRaw / 50) * 50;
+    }
+    let params: any = {};
+    try { if (sk.params && typeof sk.params === "object") params = Object.assign({}, sk.params); } catch (e) {}
+    if (typeChoice === "control") { params.control_count = damageRaw; damageRaw = 0; }
+    if (typeChoice === "poison" && params.poison_turns == null) { params.poison_turns = 2; }
+    const { type, effect, unblockable } = skillTypeChoiceToFields(typeChoice);
+    rows.push({
+      name: String(sk.name || "مهارة").slice(0, 60),
+      type,
+      damage: damageRaw,
+      cooldown: Math.max(0, Number(sk.cooldown) || 0),
+      effect,
+      unblockable,
+      description: String(sk.description || "").slice(0, 300),
+      color: (sk.color && /^#[0-9A-Fa-f]{6}$/.test(sk.color)) ? sk.color : null,
+      params,
+      stroke_color: (sk.stroke_color && /^#[0-9A-Fa-f]{6}$/.test(sk.stroke_color)) ? sk.stroke_color : null,
+      stroke_width: Math.max(0, Number(sk.stroke_width) || 0)
+    });
+  }
+  return rows;
+}
+
 // يضمن أن كل النصوص القابلة للقراءة عربية: لو ظهرت نصوص لاتينية (أسماء مهارات
 // إنجليزية مثلًا) نعيد توليد الحقول النصية نفسها بالعربية مع الحفاظ الحرفي
 // على الأرقام والأنواع (type/damage/cooldown/effect) دون إضافة أو حذف مهارات.
@@ -514,16 +620,40 @@ Deno.serve(async (req) => {
   try {
     if (req.method !== "POST") return json({ ok: false, error: "method not allowed" }, 405);
     const body = await req.json();
-    const { admin_token, entity_type, prompt, image_url, background_url, existing, entity_id } = body || {};
+    const { admin_token, player_token, entity_type, prompt, image_url, background_url, existing, entity_id } = body || {};
 
-    if (!admin_token || !prompt || !entity_type) {
+    const isPlayerOrder = !!player_token && !admin_token;
+    if (!prompt || !entity_type || (!admin_token && !player_token)) {
       return json({ ok: false, error: "bad request" }, 400);
+    }
+    if (isPlayerOrder && entity_type !== "character") {
+      return json({ ok: false, error: "اللاعبون يطلبون الشخصيات فقط" }, 400);
     }
 
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE);
-    const { data: adminId, error: authErr } = await supabase.rpc("admin_id_from_token", { p_token: admin_token });
-    if (authErr || !adminId) {
-      return json({ ok: false, error: "غير مصرح" }, 401);
+
+    // --- هوية الطالب: أدمن أو لاعب ---
+    let requesterId: string | null = null;
+    if (isPlayerOrder) {
+      const { data: pid, error: perr } = await supabase.rpc("player_id_from_token", { p_token: player_token });
+      if (perr || !pid) return json({ ok: false, error: "غير مصرح" }, 401);
+      requesterId = String(pid);
+      // طلب واحد فقط: منع اللاعب من طلب أكثر من شخصية ما دام لديه طلب قيد
+      // المراجعة أو تم اعتماده. الطلب المرفوض يسمح له بالمحاولة من جديد.
+      const { data: dup, error: dupErr } = await supabase
+        .from("characters")
+        .select("id")
+        .eq("requested_by", requesterId)
+        .in("status", ["pending", "approved"]);
+      if (dupErr) return json({ ok: false, error: dupErr.message || "تعذر التحقق من الطلب السابق" }, 500);
+      if (dup && dup.length > 0) {
+        return json({ ok: false, error: "لقد أرسلت طلب شخصية من قبل وهو قيد المراجعة أو معتمد بالفعل" }, 409);
+      }
+    } else {
+      const { data: adminId, error: authErr } = await supabase.rpc("admin_id_from_token", { p_token: admin_token });
+      if (authErr || !adminId) {
+        return json({ ok: false, error: "غير مصرح" }, 401);
+      }
     }
 
     const fullPrompt = [
@@ -558,6 +688,13 @@ Deno.serve(async (req) => {
     if (image_url && fields && typeof fields === "object") {
       fields.image = image_url;
     }
+    // لو لم تُرفع صورة، يبحث المساعد عن صورة حقيقية للشخصية من الويب بنفسه.
+    if (!fields.image) {
+      try {
+        const foundImage = await findCharacterImage(prompt);
+        if (foundImage) fields.image = foundImage;
+      } catch (e) {}
+    }
     // الخلفية المرفوعة من الأدمن تفوز كذلك على أي خلفية يقترحها النموذج.
     if (background_url && fields && typeof fields === "object") {
       fields.background = background_url;
@@ -570,6 +707,64 @@ Deno.serve(async (req) => {
         fields = normalizeSkillNumbers(fields);
       } catch (e) {}
     }
+
+    // --- أمر اللاعب: إدراج مباشر كشخصية pending مرتبطة باللاعب ---
+    if (isPlayerOrder) {
+      if (!fields || typeof fields !== "object" || !fields.name) {
+        return json({ ok: false, error: "لم ينجح التوليد، حاول من جديد" }, 502);
+      }
+      const cRow: any = {
+        name: String(fields.name || "").slice(0, 80),
+        anime: String(fields.anime || "").slice(0, 80),
+        identity_image: fields.image || null,
+        hp: Math.max(1, Math.round(Number(fields.hp) || 100)),
+        atk: Math.max(1, Math.round(Number(fields.atk) || 100)),
+        level: Math.max(1, Math.round(Number(fields.level) || 1)),
+        quote: String(fields.quote || "").slice(0, 300),
+        power_name: String(fields.power_name || "").slice(0, 100),
+        power_description: String(fields.power_description || "").slice(0, 500),
+        gold_prize: Math.max(0, Math.round(Number(fields.gold_prize) || 0)),
+        glow_color: (fields.glow_color && /^#[0-9A-Fa-f]{6}$/.test(fields.glow_color)) ? fields.glow_color : "#3b82ff",
+        is_monster: false,
+        admin_only: false,
+        available: false,
+        owner_id: null,
+        status: "pending",
+        requested_by: requesterId
+      };
+      const { data: created, error: cErr } = await supabase.from("characters").insert(cRow).select("id").single();
+      if (cErr || !created) {
+        return json({ ok: false, error: cErr ? cErr.message : "تعذر حفظ الشخصية" }, 500);
+      }
+      // مهارات مقترحة بواسطة AI — تُنشأ وتُربط مباشرة
+      const skillRows = buildSkillRows(fields);
+      let slot = 1;
+      for (const sk of skillRows) {
+        const { data: skillData, error: sErr } = await supabase.from("skills").insert({
+          name: sk.name,
+          type: sk.type,
+          damage: sk.damage,
+          cooldown: sk.cooldown,
+          effect: sk.effect,
+          unblockable: sk.unblockable,
+          description: sk.description,
+          color: sk.color,
+          params: sk.params,
+          stroke_color: sk.stroke_color,
+          stroke_width: sk.stroke_width
+        }).select("id").single();
+        if (sErr || !skillData) continue;
+        await supabase.from("character_skills").insert({
+          character_id: created.id,
+          skill_id: skillData.id,
+          slot
+        });
+        slot++;
+      }
+      return json({ ok: true, v: "26", entity_type, fields, image_url: fields.image || null, isEdit: false, entity_id: null, character_id: created.id, status: "pending" }, 200);
+    }
+
+    // --- وضع الأدمن الحالي: إرجاع الاقتراح دون إدراج ---
     // للشخصيات الجديدة: تضع الحالة pending awaiting approval من الأدمن
     if (!isEdit && entity_type === "character" && fields && typeof fields === "object") {
       fields.status = "pending";

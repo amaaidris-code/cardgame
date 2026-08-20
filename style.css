@@ -576,6 +576,26 @@ color:#999;
 
 }
 
+.pending-character-banner {
+
+    background: rgba(59, 130, 246, 0.15);
+
+    border: 1px solid rgba(59, 130, 246, 0.5);
+
+    color: #bfdbfe;
+
+    border-radius: 10px;
+
+    padding: 12px 14px;
+
+    margin: 10px 0;
+
+    font-size: 14px;
+
+    line-height: 1.6;
+
+}
+
 
 .form-box label {
 
