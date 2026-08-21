@@ -432,12 +432,13 @@ function applyRequestedEffectToSkill(fields: any, slotIndex: number, hint: { eff
 }
 
 // يحدد لغة طلب الأدمن: عربية أم لاتينية (إنجليزية أو لاتينية أخرى).
-// يُستخدم لاختيار لغة الناتج تلقائيًا بدلاً من الفرض الدائم على العربية.
+// إذا احتوى الطلب على أي حروف عربية (ويلتقي هذا مع طلبات اللاعبين العرب)،
+// ننتج النصوص بالعربية حتى لو كانت الأسماء اللاتينية عددًا أكبر، فهو الأكثر
+// توقعًا للاعب؛ وإلا نصبّ على اللغة اللاتينية للطلبات الإنجليزية البحتة.
 function isArabicPrompt(s: any): boolean {
   const t = String(s || "");
   const arabic = (t.match(/[\u0600-\u06FF]/g) || []).length;
-  const latin = (t.match(/[A-Za-z]/g) || []).length;
-  return arabic > 0 && arabic >= latin;
+  return arabic > 0;
 }
 
 // هل النص أغلب أحرفه لاتينية (اكتشاف أسماء المهارات والوصف الإنجليزي)
@@ -488,9 +489,43 @@ async function researchCharacterInfo(prompt: string): Promise<string | null> {
   return null;
 }
 
+// يبحث عن صورة حقيقية للشخصية في AniList (GraphQL عام مجاني بلا مفتاح، مثالي
+// لصور شخصيات الأنيمي/المانغا): يرجع صورة الشخصية أو صورة غلاف العمل عند العثور.
+async function findAniListImage(prompt: string): Promise<string | null> {
+  const name = extractName(prompt);
+  const queries: string[] = [name, prompt].filter((q): q is string => !!q && q.trim() !== "").filter((q, i, a) => a.indexOf(q) === i);
+  const graphqlQuery = `query ($search: String) {
+    Character(search: $search, sort: SEARCH_MATCH) { image { large } }
+    Media(search: $search, type: ANIME, sort: SEARCH_MATCH) { coverImage { extraLarge } }
+  }`;
+  for (const q of queries) {
+    if (!q) continue;
+    try {
+      const res = await fetch("https://graphql.anilist.co", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Accept": "application/json", "User-Agent": "CardGameAdminAI/1.0" },
+        body: JSON.stringify({ query: graphqlQuery, variables: { search: q } })
+      });
+      if (!res.ok) continue;
+      const j = await res.json();
+      const data = j && j.data;
+      const chrImg = data && data.Character && data.Character.image && data.Character.image.large;
+      const medImg = data && data.Media && data.Media.coverImage && data.Media.coverImage.extraLarge;
+      if (chrImg && /^https?:\/\//i.test(String(chrImg))) return String(chrImg);
+      if (medImg && /^https?:\/\//i.test(String(medImg))) return String(medImg);
+    } catch { }
+  }
+  return null;
+}
+
 // يبحث عن صورة حقيقية للشخصية من ويكيبيديا (الحقل thumbnail/originalimage يوفّره
 // ملخّص REST Summary) ليستخدمها إن لم يرفع المستخدم صورة بنفسه.
 async function findCharacterImage(prompt: string): Promise<string | null> {
+  // أولًا AniList (صور الأنيمي الحقيقية)، ثم ويكيبيديا احتياطًا.
+  try {
+    const anilist = await findAniListImage(prompt);
+    if (anilist) return anilist;
+  } catch { }
   const name = extractName(prompt);
   const queries: string[] = [name, prompt].filter((q): q is string => !!q && q.trim() !== "").filter((q, i, a) => a.indexOf(q) === i);
   for (const q of queries) {
